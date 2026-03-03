@@ -745,15 +745,22 @@ check_command codesign && {
         codesign --force --sign - "$fw" 2>&1 | grep -v '^$' || true
     done
 
-    # Explicitly sign all binaries and .so in the python venv
-    # codesign --deep skips binaries in Resources, so they must be signed explicitly
-    # since they were modified by install_name_tool
+    # Explicitly sign all binaries and .so in the python venv AND Python framework
+    # codesign --deep skips binaries in Resources (and non-standard Framework dirs like lib/)
+    # so they must be signed explicitly since they were modified by install_name_tool
     PYTHON_VENV_DEST="$DIST_DIR/Contents/Resources/python_venv"
+    PYTHON_FW_DEST="$DIST_DIR/Contents/Frameworks/Python.framework"
+    
+    echo "  - Explicitly signing Python extension binaries..."
+    for search_dir in "$PYTHON_VENV_DEST" "$PYTHON_FW_DEST"; do
+        if [ -d "$search_dir" ]; then
+            find "$search_dir" \( -name "*.so" -o -name "*.dylib" \) | while read -r so_file; do
+                codesign --force --sign - "$so_file" 2>/dev/null || true
+            done
+        fi
+    done
+    
     if [ -d "$PYTHON_VENV_DEST" ]; then
-        echo "  - Explicitly signing Python venv binaries..."
-        find "$PYTHON_VENV_DEST" \( -name "*.so" -o -name "*.dylib" \) | while read -r so_file; do
-            codesign --force --sign - "$so_file" 2>/dev/null || true
-        done
         # Sign python executables. We attempt to sign all files in bin/.
         # Text scripts (like pip) will fail cleanly and be ignored.
         find "$PYTHON_VENV_DEST/bin" -type f 2>/dev/null | while read -r bin_file; do
