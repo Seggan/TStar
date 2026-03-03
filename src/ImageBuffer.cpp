@@ -774,7 +774,7 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
 
         // 1. Calculate Stretch Parameters
         struct MtfParams { float shadow; float midtone; float norm; };
-        std::vector<MtfParams> params(3);
+        std::vector<MtfParams> params(std::max(3, m_channels));
         
         std::vector<ChStats> stats(m_channels);
         for (int c = 0; c < m_channels; ++c) stats[c] = computeStats(m_data, m_width, m_height, m_channels, c);
@@ -921,7 +921,7 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
     }
 
     // 1. Generate LUTs for each channel
-    std::vector<std::vector<float>> luts(3, std::vector<float>(LUT_SIZE));
+    std::vector<std::vector<float>> luts(std::max(3, m_channels), std::vector<float>(LUT_SIZE));
     
     if (overrideLUT && overrideLUT->size() == 3 && !overrideLUT->at(0).empty()) {
         luts = *overrideLUT;
@@ -1283,10 +1283,10 @@ bool ImageBuffer::save(const QString& filePath, const QString& format, BitDepth 
                  planarData = m_data; // Copy
              } else {
                  long planeSize = m_width * m_height;
-                 for (int i = 0; i < planeSize; ++i) {
-                     planarData[i] = m_data[i*3 + 0];             // R (Plane 1)
-                     planarData[i + planeSize] = m_data[i*3 + 1]; // G (Plane 2)
-                     planarData[i + 2*planeSize] = m_data[i*3 + 2];// B (Plane 3)
+                 for (int c = 0; c < m_channels; ++c) {
+                     for (long i = 0; i < planeSize; ++i) {
+                         planarData[c * planeSize + i] = m_data[i * m_channels + c];
+                     }
                  }
              }
 
@@ -1329,10 +1329,10 @@ bool ImageBuffer::save(const QString& filePath, const QString& format, BitDepth 
                  for(int i=0; i<(int)nelements; ++i) planarData[i] = m_data[i] * maxVal;
              } else {
                  long planeSize = m_width * m_height;
-                 for (int i = 0; i < planeSize; ++i) {
-                     planarData[i] = m_data[i*3 + 0] * maxVal;
-                     planarData[i + planeSize] = m_data[i*3 + 1] * maxVal;
-                     planarData[i + 2*planeSize] = m_data[i*3 + 2] * maxVal;
+                 for (int c = 0; c < m_channels; ++c) {
+                     for (long i = 0; i < planeSize; ++i) {
+                         planarData[c * planeSize + i] = m_data[i * m_channels + c] * maxVal;
+                     }
                  }
              }
              

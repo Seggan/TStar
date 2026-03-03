@@ -149,19 +149,21 @@ void CBEDialog::onApply() {
 
     // hips2fits interprets fov as the angular size of the LARGEST pixel dimension.
     // For a portrait image (height > width), fov must be fovY (not fovX).
-    double fov_to_send = std::max(fov_x, fov_y);
+    double fov_base = std::max(fov_x, fov_y);
 
     // Sanity-check: realistic astronomical images are 0.001° – 60°.
     // Out-of-range values indicate a bad or stale WCS.
-    if (fov_to_send < 0.001 || fov_to_send > 60.0) {
+    if (fov_base < 0.001 || fov_base > 60.0) {
         if (auto cb = getCallbacks())
             cb->logMessage(tr("WARNING: computed FoV (%1°) is out of range — "
                               "WCS may be stale. Re-plate-solving is recommended. "
-                              "Falling back to 1.0°.").arg(fov_to_send, 0, 'f', 4), 2);
-        fov_to_send = 1.0;
-        fov_x = fov_to_send;
-        fov_y = fov_to_send;
+                              "Falling back to 1.0°.").arg(fov_base, 0, 'f', 4), 2);
+        fov_base = 1.0;
+        fov_x = fov_base;
+        fov_y = fov_base;
     }
+
+    double fov_to_send = fov_base * m_paddingFactor;
 
     // Compute orientation parameters from WCS.
     // positionAngle() = PA of image Y-axis from North, East of North (CCW+).
@@ -174,8 +176,8 @@ void CBEDialog::onApply() {
     // Cap download size for reliability. The sky coverage (fov) stays the same;
     // the extractor resizes the reference to target dimensions before use.
     static const int MAX_HIPS_DIM = 2048;
-    int reqW = m_targetWidth;
-    int reqH = m_targetHeight;
+    int reqW = std::round(m_targetWidth * m_paddingFactor);
+    int reqH = std::round(m_targetHeight * m_paddingFactor);
     if (reqW > MAX_HIPS_DIM || reqH > MAX_HIPS_DIM) {
         double scale = std::min(static_cast<double>(MAX_HIPS_DIM) / reqW,
                                 static_cast<double>(MAX_HIPS_DIM) / reqH);
@@ -255,7 +257,7 @@ void CBEDialog::onHiPSImageReady(const ImageBuffer& refImg) {
     }
 
     // Launch interactive alignment dialog
-    ReferenceAlignDialog alignDlg(this, ref);
+    ReferenceAlignDialog alignDlg(this, ref, target, m_paddingFactor);
     if (alignDlg.exec() != QDialog::Accepted) {
         if (auto cb = getCallbacks())
             cb->logMessage(tr("Reference alignment cancelled. Background extraction aborted."), 2);

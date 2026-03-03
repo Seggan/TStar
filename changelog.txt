@@ -5,6 +5,8 @@ Version 1.7.3
 -------------
 - New powerful plate solving engine
 - Introduction to MARS-like background extraction tool
+- Now you can inspect R, G, B channels separtely
+- Improved Fits/Xisf loading to correctly display 4+ layer images
 
 Version 1.7.2
 -------------

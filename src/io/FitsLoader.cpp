@@ -59,8 +59,8 @@ bool FitsLoader::load(const QString& filePath, ImageBuffer& buffer, QString* err
     // Check if 3D (e.g. RGB or RGBA).  If NAXIS3 >= 3, treat as colour and
     // read only the first three planes
     int nChannels = 1;
-    if (naxis == 3) {
-        if (naxes[2] >= 3) nChannels = 3;
+    if (naxis >= 3) {
+        nChannels = naxes[2];
     }
     
     int width = naxes[0];
@@ -394,7 +394,7 @@ QMap<QString, FitsExtensionInfo> FitsLoader::listExtensions(const QString& fileP
         info.name = strlen(extname) > 0 ? QString::fromUtf8(extname) : QString::number(i - 1);
         info.width = naxes[0];
         info.height = naxes[1];
-        info.channels = (naxis >= 3 && naxes[2] == 3) ? 3 : 1;
+        info.channels = (naxis >= 3) ? naxes[2] : 1;
         info.bitpix = bitpix;
         
         // Determine dtype string
@@ -681,7 +681,7 @@ bool FitsLoader::loadMetadata(const QString& filePath, ImageBuffer& buffer, QStr
     
     fits_close_file(fptr, &status);
 
-    int nChannels = (naxis == 3 && naxes[2] == 3) ? 3 : 1;
+    int nChannels = (naxis >= 3) ? naxes[2] : 1;
     buffer = ImageBuffer(naxes[0], naxes[1], nChannels);
     buffer.setMetadata(meta);
     

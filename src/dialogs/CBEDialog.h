@@ -46,6 +46,7 @@ private:
     int  m_targetWidth    = 0;   // full-resolution target width (pixels)
     int  m_targetHeight   = 0;   // full-resolution target height (pixels)
     bool m_parityFlipped  = false; // reference needs horizontal flip before extraction
+    double m_paddingFactor = 2.0; // download larger area to allow rotation without clipping
 };
 
 #endif // CBEDIALOG_H
