@@ -17,8 +17,8 @@ echo "Target Directory: $PYTHON_VENV"
 echo ""
 echo "[STEP 1] Finding Python..."
 
-# Priority list of compatible Python versions
-COMPAT_VERSIONS=("3.13" "3.12" "3.11")
+# Priority list of compatible Python versions (avoiding 3.13+ for stable numpy/onnx wheels)
+COMPAT_VERSIONS=("3.12" "3.11")
 PYTHON_CMD=""
 
 # 1. Try specific versioned commands in PATH
@@ -47,14 +47,14 @@ if [ -z "$PYTHON_CMD" ] && command -v python3 &> /dev/null; then
     P3_MAJOR=$(echo "$P3_VER" | cut -d. -f1)
     P3_MINOR=$(echo "$P3_VER" | cut -d. -f2)
     
-    # If python3 is 3.11-3.13, we use it. If it's newer (3.14+), we avoid it.
-    if [ "$P3_MAJOR" -eq 3 ] && [ "$P3_MINOR" -ge 11 ] && [ "$P3_MINOR" -le 13 ]; then
+    # If python3 is 3.11-3.12, we use it. If it's newer (3.13+), we avoid it to ensure stable numpy<2.0 wheels.
+    if [ "$P3_MAJOR" -eq 3 ] && [ "$P3_MINOR" -ge 11 ] && [ "$P3_MINOR" -le 12 ]; then
         PYTHON_CMD="python3"
     fi
 fi
 
 if [ -z "$PYTHON_CMD" ]; then
-    echo "[ERROR] Compatible Python 3 (3.11, 3.12, or 3.13) not found!"
+    echo "[ERROR] Compatible Python 3 (3.11 or 3.12) not found!"
     echo "Install with: brew install python@3.12"
     exit 1
 fi
@@ -99,7 +99,7 @@ echo ""
 echo "[STEP 5] Installing dependencies..."
 
 PACKAGES=(
-    "numpy"
+    "numpy<2.0.0"
     "tifffile"
     "imagecodecs"
     "astropy"
