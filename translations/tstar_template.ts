@@ -850,6 +850,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Reference alignment cancelled. Background extraction aborted.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Reference image cache has been emptied.</source>
             <translation type="unfinished" />
         </message>
@@ -3575,7 +3579,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>About</source>
+            <source>About TStar</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3712,6 +3716,10 @@
         </message>
         <message>
             <source>Channel Operations</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Channel View</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3927,14 +3935,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>GraXpert Error</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>GraXpert cancelled.</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Header</source>
             <translation type="unfinished" />
         </message>
@@ -4064,6 +4064,10 @@
         </message>
         <message>
             <source>Mirror V</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Mono</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6739,10 +6743,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>RAR Result</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>RAR cancelled.</source>
             <translation type="unfinished" />
         </message>
@@ -6851,6 +6851,49 @@
         </message>
         <message>
             <source>The target image must be a color (RGB) image.</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>ReferenceAlignDialog</name>
+        <message>
+            <source>Align Reference Image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Auto-stretch Overlay</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Fine Rotation:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Flip Horizontal</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Flip Vertical</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Opacity:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Overlay (with Target):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Rotate 90° CCW</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Rotate 90° CW</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Show Original Overlay</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -8613,10 +8656,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Star Mask</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>StarNet Error</source>
             <translation type="unfinished" />
         </message>
@@ -8638,10 +8677,6 @@
         </message>
         <message>
             <source>StarNet++ Star Removal</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Starless</source>
             <translation type="unfinished" />
         </message>
         <message>

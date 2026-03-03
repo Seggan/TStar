@@ -61,7 +61,9 @@ public:
     bool hasImage() const;
     void startLongProcess() override;
     void endLongProcess() override;
-    void createNewImageWindow(const ImageBuffer& buffer, const QString& title, ImageBuffer::DisplayMode mode = ImageBuffer::Display_Linear);
+    void createNewImageWindow(const ImageBuffer& buffer, const QString& title,
+                              ImageBuffer::DisplayMode mode = ImageBuffer::Display_Linear,
+                              float autoStretchMedian = 0.25f, bool displayLinked = true);
     void pushUndo(); // Call before destructive actions
     
     // MainWindowCallbacks Implementation
@@ -249,16 +251,14 @@ private:
 
     // UI Elements
     class QComboBox* m_stretchCombo;
-    class QComboBox* m_autoStretchMedianCombo;
+    class QToolButton* m_autoStretchMedianBtn = nullptr;
+    float m_autoStretchMedianValue = 0.25f;
     class QToolButton* m_linkChannelsBtn;
     class QToolButton* m_invertBtn;
     class QToolButton* m_falseColorBtn;
     class QAction* m_linkViewsAction;
-    // Channel view buttons (R / G / B / RGB)
-    class QToolButton* m_channelRGBBtn = nullptr;
-    class QToolButton* m_channelRBtn   = nullptr;
-    class QToolButton* m_channelGBtn   = nullptr;
-    class QToolButton* m_channelBBtn   = nullptr;
+    // Channel view button (popup: RGB / R / G / B)
+    class QToolButton* m_channelViewBtn = nullptr;
     
     CustomMdiSubWindow* setupToolSubwindow(CustomMdiSubWindow* sub, QWidget* dlg, const QString& title);
     void centerToolWindow(CustomMdiSubWindow* sub);

@@ -3101,5 +3101,17 @@ TRANSLATIONS = {
     "R": {'it': 'R', 'es': 'R', 'fr': 'R', 'de': 'R'},
     "G": {'it': 'G', 'es': 'G', 'fr': 'G', 'de': 'G'},
     "B": {'it': 'B', 'es': 'B', 'fr': 'B', 'de': 'B'},
-    "RGB": {'it': 'RGB', 'es': 'RGB', 'fr': 'RGB', 'de': 'RGB'}
+    "RGB": {'it': 'RGB', 'es': 'RGB', 'fr': 'RGB', 'de': 'RGB'},
+    "Reference alignment cancelled. Background extraction aborted.": {'it': 'Allineamento di riferimento annullato. Estrazione sfondo interrotta.', 'es': 'Alineación de referencia cancelada. Extracción de fondo interrumpida.', 'fr': 'Alignement de référence annulé. Extraction de fond abandonnée.', 'de': 'Referenzausrichtung abgebrochen. Hintergrundextraktion abgebrochen.'},
+    "Channel View": {'it': 'Vista Canale', 'es': 'Vista de Canal', 'fr': 'Vue de Canal', 'de': 'Kanalansicht'},
+    "Mono": {'it': 'Mono', 'es': 'Mono', 'fr': 'Mono', 'de': 'Mono'},
+    "Align Reference Image": {'it': 'Allinea Immagine di Riferimento', 'es': 'Alinear Imagen de Referencia', 'fr': "Aligner l'Image de Référence", 'de': 'Referenzbild ausrichten'},
+    "Auto-stretch Overlay": {'it': 'Sovrapposizione Auto-stretch', 'es': 'Superposición Auto-stretch', 'fr': 'Superposition Auto-stretch', 'de': 'Auto-Stretch-Überlagerung'},
+    "Fine Rotation:": {'it': 'Rotazione Fine:', 'es': 'Rotación Fina:', 'fr': 'Rotation Fine :', 'de': 'Feinrotation:'},
+    "Flip Horizontal": {'it': 'Ribalta Orizzontalmente', 'es': 'Voltear Horizontalmente', 'fr': 'Retourner Horizontalement', 'de': 'Horizontal spiegeln'},
+    "Flip Vertical": {'it': 'Ribalta Verticalmente', 'es': 'Voltear Verticalmente', 'fr': 'Retourner Verticalement', 'de': 'Vertikal spiegeln'},
+    "Overlay (with Target):": {'it': 'Sovrapposizione (con Target):', 'es': 'Superposición (con Objetivo):', 'fr': 'Superposition (avec Cible) :', 'de': 'Überlagerung (mit Ziel):'},
+    "Rotate 90° CCW": {'it': 'Ruota 90° CCW', 'es': 'Girar 90° CCW', 'fr': 'Pivoter 90° CCW', 'de': '90° gegen den Uhrzeigersinn drehen'},
+    "Rotate 90° CW": {'it': 'Ruota 90° CW', 'es': 'Girar 90° CW', 'fr': 'Pivoter 90° CW', 'de': '90° im Uhrzeigersinn drehen'},
+    "Show Original Overlay": {'it': 'Mostra Sovrapposizione Originale', 'es': 'Mostrar Superposición Original', 'fr': 'Afficher Superposition Originale', 'de': 'Ursprüngliche Überlagerung anzeigen'}
 }

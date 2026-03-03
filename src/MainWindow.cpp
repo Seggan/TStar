@@ -400,10 +400,10 @@ MainWindow::MainWindow(QWidget *parent)
             m_headerPanel->setMetadata(v->getBuffer().metadata());
         } else if (!window) {
             m_headerPanel->clear();
-            // Reset AutoStretch median combo to default when no view is active
-            if (m_autoStretchMedianCombo) {
-                QSignalBlocker b(m_autoStretchMedianCombo);
-                m_autoStretchMedianCombo->setCurrentIndex(3); // 0.25 default
+            // Reset AutoStretch median button to default when no view is active
+            if (m_autoStretchMedianBtn) {
+                m_autoStretchMedianValue = 0.25f;
+                m_autoStretchMedianBtn->setText("0.25");
             }
         }
 
@@ -484,11 +484,10 @@ MainWindow::MainWindow(QWidget *parent)
                         if (idx >= 0) m_stretchCombo->setCurrentIndex(idx);
                         m_displayMode = v->getDisplayMode();
                     }
-                    if (m_autoStretchMedianCombo) {
-                        QSignalBlocker b(m_autoStretchMedianCombo);
-                        int idx = m_autoStretchMedianCombo->findData(v->getAutoStretchMedian());
-                        if (idx >= 0) m_autoStretchMedianCombo->setCurrentIndex(idx);
-                        else m_autoStretchMedianCombo->setCurrentIndex(3); // fallback to 0.25
+                    if (m_autoStretchMedianBtn) {
+                        float mv = v->getAutoStretchMedian();
+                        m_autoStretchMedianValue = mv;
+                        m_autoStretchMedianBtn->setText(QString::number(mv, 'f', 2));
                     }
                     if (m_linkChannelsBtn) {
                         QSignalBlocker b(m_linkChannelsBtn);
@@ -508,22 +507,19 @@ MainWindow::MainWindow(QWidget *parent)
     ));
                     }
 
-                    // Sync channel view buttons to new viewer state
-                    if (m_channelRGBBtn && m_channelRBtn && m_channelGBtn && m_channelBBtn) {
+                    // Sync channel view button to new viewer state
+                    if (m_channelViewBtn) {
                         bool isColor = (v->getBuffer().channels() == 3);
-                        m_channelRBtn->setEnabled(isColor);
-                        m_channelGBtn->setEnabled(isColor);
-                        m_channelBBtn->setEnabled(isColor);
-                        QSignalBlocker b1(m_channelRGBBtn), b2(m_channelRBtn),
-                                       b3(m_channelGBtn),  b4(m_channelBBtn);
+                        m_channelViewBtn->setEnabled(true);
                         if (!isColor) {
-                            m_channelRGBBtn->setChecked(true);
+                            m_channelViewBtn->setText(tr("Mono"));
+                            m_channelViewBtn->setEnabled(false);
                         } else {
                             switch (v->channelView()) {
-                                case ImageBuffer::ChannelRGB: m_channelRGBBtn->setChecked(true); break;
-                                case ImageBuffer::ChannelR:   m_channelRBtn->setChecked(true);   break;
-                                case ImageBuffer::ChannelG:   m_channelGBtn->setChecked(true);   break;
-                                case ImageBuffer::ChannelB:   m_channelBBtn->setChecked(true);   break;
+                                case ImageBuffer::ChannelRGB: m_channelViewBtn->setText(tr("RGB")); break;
+                                case ImageBuffer::ChannelR:   m_channelViewBtn->setText(tr("R"));   break;
+                                case ImageBuffer::ChannelG:   m_channelViewBtn->setText(tr("G"));   break;
+                                case ImageBuffer::ChannelB:   m_channelViewBtn->setText(tr("B"));   break;
                             }
                         }
                     }
@@ -660,44 +656,39 @@ MainWindow::MainWindow(QWidget *parent)
         updateDisplay();
     });
 
-    // Auto Stretch Target Median combo
-    m_autoStretchMedianCombo = new QComboBox();
-    m_autoStretchMedianCombo->setFixedWidth(45);
-    m_autoStretchMedianCombo->addItem("0.10", 0.10f);
-    m_autoStretchMedianCombo->addItem("0.15", 0.15f);
-    m_autoStretchMedianCombo->addItem("0.20", 0.20f);
-    m_autoStretchMedianCombo->addItem("0.25", 0.25f);
-    m_autoStretchMedianCombo->addItem("0.30", 0.30f);
-    m_autoStretchMedianCombo->addItem("0.35", 0.35f);
-    m_autoStretchMedianCombo->setCurrentIndex(3); // default 0.25
-    m_autoStretchMedianCombo->setToolTip(tr("Target Median for Auto Stretch"));
-    m_autoStretchMedianCombo->setStyleSheet(
-        "QComboBox { "
-        "   background-color: #333; "
-        "   color: #e0e0e0; "
-        "   border: 1px solid #555; "
-        "   border-radius: 4px; "
-        "   padding: 4px 10px; "
-        "} "
-        "QComboBox:hover { "
-        "   background-color: #444; "
-        "   border-color: #666; "
-        "} "
-        "QComboBox::drop-down { "
-        "   width: 0px; "
-        "} "
-        "QComboBox QAbstractItemView { "
-        "   background-color: #333; "
-        "   color: #e0e0e0; "
-        "   selection-background-color: #555; "
-        "}"
-    );
-    connect(m_autoStretchMedianCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this]([[maybe_unused]] int index){
-        float median = m_autoStretchMedianCombo->currentData().toFloat();
-        if (auto v = currentViewer()) {
-            v->setAutoStretchMedian(median);
+    // Auto Stretch Target Median — popup button (same size as channel button)
+    const QString popupBtnStyle =
+        "QToolButton { background-color:#333; color:#e0e0e0; border:1px solid #555;"
+        "  border-radius:3px; padding:2px 5px; font-size:11px; }"
+        "QToolButton:hover { background-color:#444; border-color:#666; }"
+        "QToolButton::menu-indicator { width:0; }";
+
+    m_autoStretchMedianBtn = new QToolButton(this);
+    m_autoStretchMedianBtn->setFixedWidth(45);
+    m_autoStretchMedianBtn->setText("0.25");
+    m_autoStretchMedianBtn->setPopupMode(QToolButton::InstantPopup);
+    m_autoStretchMedianBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_autoStretchMedianBtn->setToolTip(tr("Target Median for Auto Stretch"));
+    m_autoStretchMedianBtn->setStyleSheet(popupBtnStyle);
+
+    {
+        QMenu* medianMenu = new QMenu(this);
+        medianMenu->setStyleSheet(
+            "QMenu { background-color:#2b2b2b; color:#e0e0e0; border:1px solid #555; }"
+            "QMenu::item { padding:5px 20px; }"
+            "QMenu::item:selected { background-color:#444; }"
+        );
+        for (float v : {0.10f, 0.15f, 0.20f, 0.25f, 0.30f, 0.35f}) {
+            QString label = QString::number(v, 'f', 2);
+            QAction* a = medianMenu->addAction(label);
+            connect(a, &QAction::triggered, this, [this, v, label](){
+                m_autoStretchMedianValue = v;
+                m_autoStretchMedianBtn->setText(label);
+                if (auto viewer = currentViewer()) viewer->setAutoStretchMedian(v);
+            });
         }
-    });
+        m_autoStretchMedianBtn->setMenu(medianMenu);
+    }
     
     m_linkViewsAction = new QAction(tr("Link Views"), this);
     m_linkViewsAction->setCheckable(true);
@@ -779,61 +770,43 @@ MainWindow::MainWindow(QWidget *parent)
     
     // 5. Tools (Files)
 
-    // -- Channel view buttons: R / G / B / RGB --
-    // Styled to match the dark toolbar; exclusively checkable via QButtonGroup.
+    // -- Single channel-view popup button: RGB / R / G / B --
     {
-        const QString chanBtnStyle =
-            "QToolButton {"
-            "  background-color:#333; color:#e0e0e0; border:1px solid #555;"
-            "  border-radius:3px; padding:2px 5px; font-size:11px;"
-            "} "
-            "QToolButton:checked {"
-            "  background-color:#555; color:#fff; border-color:#888;"
-            "} "
-            "QToolButton:hover { background-color:#444; }"
-            "QToolButton:disabled { color:#666; border-color:#444; }";
+        m_channelViewBtn = new QToolButton(this);
+        m_channelViewBtn->setFixedWidth(45);
+        m_channelViewBtn->setText(tr("RGB"));
+        m_channelViewBtn->setPopupMode(QToolButton::InstantPopup);
+        m_channelViewBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        m_channelViewBtn->setToolTip(tr("Channel View"));
+        m_channelViewBtn->setStyleSheet(popupBtnStyle);
 
-        auto makeChannelBtn = [&](const QString& label) {
-            QToolButton* btn = new QToolButton(this);
-            btn->setText(label);
-            btn->setCheckable(true);
-            btn->setToolButtonStyle(Qt::ToolButtonTextOnly);
-            btn->setFixedWidth(label == tr("RGB") ? 44 : 28);
-            btn->setStyleSheet(chanBtnStyle);
-            mainToolbar->addWidget(btn);
-            return btn;
-        };
+        QMenu* chanMenu = new QMenu(this);
+        chanMenu->setStyleSheet(
+            "QMenu { background-color:#2b2b2b; color:#e0e0e0; border:1px solid #555; }"
+            "QMenu::item { padding:5px 20px; }"
+            "QMenu::item:selected { background-color:#444; }"
+        );
 
-        m_channelRGBBtn = makeChannelBtn(tr("RGB"));
-        m_channelRBtn   = makeChannelBtn(tr("R"));
-        m_channelGBtn   = makeChannelBtn(tr("G"));
-        m_channelBBtn   = makeChannelBtn(tr("B"));
-
-        auto* chanGroup = new QButtonGroup(this);
-        chanGroup->setExclusive(true);
-        chanGroup->addButton(m_channelRGBBtn);
-        chanGroup->addButton(m_channelRBtn);
-        chanGroup->addButton(m_channelGBtn);
-        chanGroup->addButton(m_channelBBtn);
-        m_channelRGBBtn->setChecked(true);
-
-        auto applyChannelView = [this](QToolButton* btn, ImageBuffer::ChannelView cv) {
-            connect(btn, &QToolButton::toggled, this, [this, cv](bool checked) {
-                if (checked) {
-                    if (auto v = currentViewer()) v->setChannelView(cv);
-                }
+        auto addChan = [&](const QString& label, ImageBuffer::ChannelView cv) {
+            QAction* a = chanMenu->addAction(label);
+            connect(a, &QAction::triggered, this, [this, label, cv](){
+                m_channelViewBtn->setText(label);
+                if (auto v = currentViewer()) v->setChannelView(cv);
             });
         };
-        applyChannelView(m_channelRGBBtn, ImageBuffer::ChannelRGB);
-        applyChannelView(m_channelRBtn,   ImageBuffer::ChannelR);
-        applyChannelView(m_channelGBtn,   ImageBuffer::ChannelG);
-        applyChannelView(m_channelBBtn,   ImageBuffer::ChannelB);
+        addChan(tr("RGB"), ImageBuffer::ChannelRGB);
+        addChan(tr("R"),   ImageBuffer::ChannelR);
+        addChan(tr("G"),   ImageBuffer::ChannelG);
+        addChan(tr("B"),   ImageBuffer::ChannelB);
+        m_channelViewBtn->setMenu(chanMenu);
+
+        mainToolbar->addWidget(m_channelViewBtn);
 
         { QWidget* s = new QWidget(this); s->setFixedWidth(4); mainToolbar->addWidget(s); }
     }
 
     // Add AutoStretch median selector (before display mode combo)
-    mainToolbar->addWidget(m_autoStretchMedianCombo);
+    mainToolbar->addWidget(m_autoStretchMedianBtn);
     { QWidget* s = new QWidget(this); s->setFixedWidth(3); mainToolbar->addWidget(s); }
 
     // Add Display Stretch Controls
@@ -1216,40 +1189,25 @@ MainWindow::MainWindow(QWidget *parent)
     mainToolbar->addWidget(settingsBtn);
     mainToolbar->addSeparator();
 
-    // Help Button
+    // Help Button (SVG icon, same style as Invert/FalseColor)
     QToolButton* helpBtn = new QToolButton(this);
-    helpBtn->setText(tr("Help"));
-    helpBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    helpBtn->setStyleSheet(settingsBtn->styleSheet());
+    helpBtn->setIcon(makeIcon("images/help.svg"));
+    helpBtn->setToolTip(tr("Help"));
     connect(helpBtn, &QToolButton::clicked, this, [this](){
         HelpDialog dlg(this);
-        
-        // Manual Centering to match other tools
         dlg.adjustSize();
-        QSize dlgSize = dlg.size();
         QRect mainGeom = this->geometry();
-        QPoint center = mainGeom.center();
-        int x = center.x() - dlgSize.width() / 2;
-        int y = center.y() - dlgSize.height() / 2;
-        
-        // Screen bounds check
-        if (auto scr = this->screen()) {
-             QRect screenGeom = scr->availableGeometry();
-             if (x < screenGeom.left()) x = screenGeom.left();
-             if (y < screenGeom.top()) y = screenGeom.top();
-        }
-        
-        dlg.move(x, y);
+        dlg.move(mainGeom.center() - QPoint(dlg.width() / 2, dlg.height() / 2));
         dlg.exec();
     });
     mainToolbar->addWidget(helpBtn);
     
     mainToolbar->addSeparator();
 
+    // About button — info.svg icon
     QToolButton* aboutBtn = new QToolButton(this);
-    aboutBtn->setText(tr("About"));
-    aboutBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    aboutBtn->setStyleSheet(settingsBtn->styleSheet()); // Re-use style
+    aboutBtn->setIcon(makeIcon("images/info.svg"));
+    aboutBtn->setToolTip(tr("About TStar"));
     connect(aboutBtn, &QToolButton::clicked, this, [this](){
         AboutDialog dlg(this, TStar::getVersion(), __DATE__); // Only Date
         
@@ -1404,7 +1362,21 @@ bool MainWindow::hasImage() const {
 }
 
 
-void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& title, ImageBuffer::DisplayMode mode) {
+// Helper: strip extension + trailing * from parent title, append suffix
+static QString buildChildTitle(const QString& parentTitle, const QString& suffix) {
+    QString t = parentTitle;
+    if (t.endsWith('*')) t.chop(1);
+    // Strip known image extensions
+    static const QStringList exts = {"fits","fit","tif","tiff","png","jpg","jpeg","xisf","bmp"};
+    int dot = t.lastIndexOf('.');
+    if (dot >= 0 && exts.contains(t.mid(dot+1).toLower()))
+        t = t.left(dot);
+    return t.trimmed() + suffix;
+}
+
+void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& title,
+                                      ImageBuffer::DisplayMode mode,
+                                      float autoStretchMedian, bool displayLinked) {
     ImageViewer* viewer = new ImageViewer(this); // Parent is temporary
     
     // Sync with current toolbar state, but allow override if mode is NOT linear (or if explicitly requested)
@@ -1412,7 +1384,8 @@ void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& 
     
     // In this app, Display_Linear is index 0. 
     // Change: caller can pass the desired mode.
-    viewer->setDisplayState(mode, m_displayLinked); 
+    viewer->setDisplayState(mode, displayLinked);
+    viewer->setAutoStretchMedian(autoStretchMedian);
     viewer->setBuffer(buffer, title);
     
     // Connect History Sync (live update of Undo/Redo menus)
@@ -1431,8 +1404,12 @@ void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& 
 
     
     connect(viewer, &ImageViewer::viewChanged, this, &MainWindow::propagateViewChange);
-    connect(viewer, &ImageViewer::requestNewView, this, [this](const ImageBuffer& img, const QString& title){
-        createNewImageWindow(img, title);
+    connect(viewer, &ImageViewer::requestNewView, this, [this, viewer](const ImageBuffer& img, const QString& title){
+        auto mode   = viewer->getDisplayMode();
+        auto median = viewer->getAutoStretchMedian();
+        auto linked = viewer->isDisplayLinked();
+        QString childTitle = buildChildTitle(viewer->windowTitle(), "_" + title.toLower().remove(' '));
+        createNewImageWindow(img, childTitle, mode, median, linked);
     });
 
     // Create Custom SubWindow
@@ -1831,11 +1808,14 @@ void MainWindow::extractChannels() {
     }
 
     QString baseTitle = v->windowTitle();
+    ImageBuffer::DisplayMode srcMode   = v->getDisplayMode();
+    float srcMedian   = v->getAutoStretchMedian();
+    bool  srcLinked   = v->isDisplayLinked();
     QString suffixes[] = { "_R", "_G", "_B" };
     
     for (size_t i = 0; i < channels.size(); ++i) {
         if (i < 3) {
-            createNewImageWindow(channels[i], baseTitle + suffixes[i]);
+            createNewImageWindow(channels[i], buildChildTitle(baseTitle, suffixes[i]), srcMode, srcMedian, srcLinked);
         }
     }
     log("Extracted channels for " + baseTitle, Log_Success);
@@ -2005,12 +1985,13 @@ void MainWindow::openCbeDialog() {
     m_cbeDlg = dlg;
 
     connect(dlg, &CBEDialog::applyResult, [this, v](const ImageBuffer& res) {
-        QString oldName = v->getBuffer().name();
-        QString newName = oldName + "_cbe";
-        
+        ImageBuffer::DisplayMode srcMode   = v->getDisplayMode();
+        float srcMedian   = v->getAutoStretchMedian();
+        bool  srcLinked   = v->isDisplayLinked();
+        QString newName = buildChildTitle(v->windowTitle(), "_cbe");
         ImageBuffer resBuffer = res;
         resBuffer.setName(newName);
-        createNewImageWindow(resBuffer, newName);
+        createNewImageWindow(resBuffer, newName, srcMode, srcMedian, srcLinked);
         log(tr("CBE successful."), Log_Success, true);
     });
 
@@ -2354,7 +2335,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event) {
                          ImageViewer* sourceViewer = sourceWin->widget()->findChild<ImageViewer*>();
                          if (sourceViewer) {
                              QString newTitle = generateUniqueTitle(sourceWin->windowTitle());
-                             createNewImageWindow(sourceViewer->getBuffer(), newTitle);
+                             createNewImageWindow(sourceViewer->getBuffer(), newTitle,
+                                 sourceViewer->getDisplayMode(),
+                                 sourceViewer->getAutoStretchMedian(),
+                                 sourceViewer->isDisplayLinked());
                              log(tr("View Duplicated: ") + newTitle, Log_Success);
                          }
                     }
@@ -3230,39 +3214,45 @@ void MainWindow::runCosmicClarity(const CosmicClarityParams& params) {
          m_mdiArea->setActiveSubWindow(sub);
      }
 
-     startLongProcess();
-     
-     QThread* thread = new QThread;
-     CosmicClarityRunner* runner = new CosmicClarityRunner;
-     runner->moveToThread(thread);
-     
-     connect(runner, &CosmicClarityRunner::processOutput, this, [this](const QString& msg){ log(msg.trimmed(), Log_Info); });
-     
-     QProgressDialog* pd = new QProgressDialog(tr("Running Cosmic Clarity..."), tr("Cancel"), 0, 0, this);
-     pd->setWindowModality(Qt::WindowModal);
-     pd->setMinimumDuration(0);
-     pd->show();
-     
-     connect(pd, &QProgressDialog::canceled, runner, &CosmicClarityRunner::cancel, Qt::DirectConnection);
-     
-     ImageBuffer input = v->getBuffer();
-     
-     connect(thread, &QThread::started, runner, [runner, input, params, thread, pd, this]() mutable {
-         ImageBuffer result;
-         QString err;
-         bool success = runner->run(input, result, params, &err);
-         
-         QMetaObject::invokeMethod(this, [=]() {
-             pd->close();
-             pd->deleteLater();
-             thread->quit();
-             thread->wait();
-             thread->deleteLater();
-             runner->deleteLater();
-             
-             endLongProcess();
-             
-             if (success) createNewImageWindow(result, "CC_Result", m_displayMode);
+QString srcTitle  = v->windowTitle();
+    ImageBuffer::DisplayMode srcMode   = v->getDisplayMode();
+    float srcMedian   = v->getAutoStretchMedian();
+    bool  srcLinked   = v->isDisplayLinked();
+
+    startLongProcess();
+    
+    QThread* thread = new QThread;
+    CosmicClarityRunner* runner = new CosmicClarityRunner;
+    runner->moveToThread(thread);
+    
+    connect(runner, &CosmicClarityRunner::processOutput, this, [this](const QString& msg){ log(msg.trimmed(), Log_Info); });
+    
+    QProgressDialog* pd = new QProgressDialog(tr("Running Cosmic Clarity..."), tr("Cancel"), 0, 0, this);
+    pd->setWindowModality(Qt::WindowModal);
+    pd->setMinimumDuration(0);
+    pd->show();
+    
+    connect(pd, &QProgressDialog::canceled, runner, &CosmicClarityRunner::cancel, Qt::DirectConnection);
+    
+    ImageBuffer input = v->getBuffer();
+    
+    connect(thread, &QThread::started, runner, [runner, input, params, thread, pd, this,
+                                                srcTitle, srcMode, srcMedian, srcLinked]() mutable {
+        ImageBuffer result;
+        QString err;
+        bool success = runner->run(input, result, params, &err);
+        
+        QMetaObject::invokeMethod(this, [=]() {
+            pd->close();
+            pd->deleteLater();
+            thread->quit();
+            thread->wait();
+            thread->deleteLater();
+            runner->deleteLater();
+            
+            endLongProcess();
+            
+            if (success) createNewImageWindow(result, buildChildTitle(srcTitle, "_cc"), srcMode, srcMedian, srcLinked);
              else if (!err.isEmpty() && err != "Process cancelled by user.") QMessageBox::critical(this, tr("Cosmic Clarity Error"), err);
              else if (err == "Process cancelled by user.") log(tr("Cosmic Clarity cancelled."), Log_Warning);
          });
@@ -3281,6 +3271,11 @@ void MainWindow::runGraXpert(const GraXpertParams& params) {
          m_mdiArea->setActiveSubWindow(sub);
      }
 
+    QString srcTitle  = v->windowTitle();
+    ImageBuffer::DisplayMode srcMode   = v->getDisplayMode();
+    float srcMedian   = v->getAutoStretchMedian();
+    bool  srcLinked   = v->isDisplayLinked();
+
      startLongProcess();
      
      QThread* thread = new QThread;
@@ -3298,25 +3293,24 @@ void MainWindow::runGraXpert(const GraXpertParams& params) {
      
      ImageBuffer input = v->getBuffer();
      
-     connect(thread, &QThread::started, runner, [runner, input, params, thread, pd, this]() mutable {
-         ImageBuffer result;
-         QString err;
-         bool success = runner->run(input, result, params, &err);
-         
-         QMetaObject::invokeMethod(this, [=]() {
-             pd->close();
-             pd->deleteLater();
-             
-             thread->quit();
-             thread->wait();
-             thread->deleteLater();
-             runner->deleteLater();
-             
-             endLongProcess();
-             
-             if (success) createNewImageWindow(result, "GraXpert_Result", m_displayMode);
-             else if (!err.isEmpty() && err != "Process cancelled by user.") QMessageBox::critical(this, tr("GraXpert Error"), err);
-             else if (err == "Process cancelled by user.") log(tr("GraXpert cancelled."), Log_Warning);
+    connect(thread, &QThread::started, runner, [runner, input, params, thread, pd, this,
+                                                srcTitle, srcMode, srcMedian, srcLinked]() mutable {
+        ImageBuffer result;
+        QString err;
+        bool success = runner->run(input, result, params, &err);
+        
+        QMetaObject::invokeMethod(this, [=]() {
+            pd->close();
+            pd->deleteLater();
+            
+            thread->quit();
+            thread->wait();
+            thread->deleteLater();
+            runner->deleteLater();
+            
+            endLongProcess();
+            
+            if (success) createNewImageWindow(result, buildChildTitle(srcTitle, "_graxpert"), srcMode, srcMedian, srcLinked);
          });
      });
      
@@ -3946,7 +3940,14 @@ ImageViewer* MainWindow::getCurrentViewer() {
 }
 
 void MainWindow::createResultWindow(const ImageBuffer& buffer, const QString& title) {
-    createNewImageWindow(buffer, title);
+    ImageViewer* src = currentViewer();
+    auto mode   = src ? src->getDisplayMode()       : m_displayMode;
+    auto median = src ? src->getAutoStretchMedian() : 0.25f;
+    auto linked = src ? src->isDisplayLinked()      : m_displayLinked;
+    QString childTitle = (title.startsWith('_') && src)
+                         ? buildChildTitle(src->windowTitle(), title)
+                         : title;
+    createNewImageWindow(buffer, childTitle, mode, median, linked);
 }
 
 void MainWindow::logMessage(const QString& message, int severity, bool showPopup) {

@@ -298,7 +298,7 @@ void RARDialog::onRun() {
     
     if (success) {
         if (MainWindowCallbacks* mw = getCallbacks()) {
-            mw->createResultWindow(output, tr("RAR Result"));
+            mw->createResultWindow(output, "_rar");
             mw->logMessage(tr("Aberration Removal Complete."), 1, true);
         }
         accept();

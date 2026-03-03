@@ -850,6 +850,10 @@
             <translation type="finished">Proteggi Stelle (Filtro morfologico)</translation>
         </message>
         <message>
+            <source>Reference alignment cancelled. Background extraction aborted.</source>
+            <translation type="finished">Allineamento di riferimento annullato. Estrazione sfondo interrotta.</translation>
+        </message>
+        <message>
             <source>Reference image cache has been emptied.</source>
             <translation type="finished">La cache delle immagini di riferimento è stata svuotata.</translation>
         </message>
@@ -3577,8 +3581,8 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Rimozione Aberrazioni</translation>
         </message>
         <message>
-            <source>About</source>
-            <translation type="finished">Info</translation>
+            <source>About TStar</source>
+            <translation type="finished">Informazioni su TStar</translation>
         </message>
         <message>
             <source>Activating Curves Tool...</source>
@@ -3715,6 +3719,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Channel Operations</source>
             <translation type="finished">Operazioni Canale</translation>
+        </message>
+        <message>
+            <source>Channel View</source>
+            <translation type="finished">Vista Canale</translation>
         </message>
         <message>
             <source>Color Management</source>
@@ -3929,14 +3937,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">GraXpert</translation>
         </message>
         <message>
-            <source>GraXpert Error</source>
-            <translation type="finished">Errore GraXpert</translation>
-        </message>
-        <message>
-            <source>GraXpert cancelled.</source>
-            <translation type="finished">GraXpert annullato.</translation>
-        </message>
-        <message>
             <source>Header</source>
             <translation type="finished">Header</translation>
         </message>
@@ -4067,6 +4067,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Mirror V</source>
             <translation type="finished">Specchio Vert.</translation>
+        </message>
+        <message>
+            <source>Mono</source>
+            <translation type="finished">Mono</translation>
         </message>
         <message>
             <source>Multiscale Decomposition</source>
@@ -6742,10 +6746,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Fornitore:</translation>
         </message>
         <message>
-            <source>RAR Result</source>
-            <translation type="finished">Risultato RAR</translation>
-        </message>
-        <message>
             <source>RAR cancelled.</source>
             <translation type="finished">RAR annullato.</translation>
         </message>
@@ -6855,6 +6855,49 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>The target image must be a color (RGB) image.</source>
             <translation type="finished">L'immagine di destinazione deve essere un'immagine a colori (RGB).</translation>
+        </message>
+    </context>
+    <context>
+        <name>ReferenceAlignDialog</name>
+        <message>
+            <source>Align Reference Image</source>
+            <translation type="finished">Allinea Immagine di Riferimento</translation>
+        </message>
+        <message>
+            <source>Auto-stretch Overlay</source>
+            <translation type="finished">Sovrapposizione Auto-stretch</translation>
+        </message>
+        <message>
+            <source>Fine Rotation:</source>
+            <translation type="finished">Rotazione Fine:</translation>
+        </message>
+        <message>
+            <source>Flip Horizontal</source>
+            <translation type="finished">Ribalta Orizzontalmente</translation>
+        </message>
+        <message>
+            <source>Flip Vertical</source>
+            <translation type="finished">Ribalta Verticalmente</translation>
+        </message>
+        <message>
+            <source>Opacity:</source>
+            <translation type="finished">Opacità:</translation>
+        </message>
+        <message>
+            <source>Overlay (with Target):</source>
+            <translation type="finished">Sovrapposizione (con Target):</translation>
+        </message>
+        <message>
+            <source>Rotate 90° CCW</source>
+            <translation type="finished">Ruota 90° CCW</translation>
+        </message>
+        <message>
+            <source>Rotate 90° CW</source>
+            <translation type="finished">Ruota 90° CW</translation>
+        </message>
+        <message>
+            <source>Show Original Overlay</source>
+            <translation type="finished">Mostra Sovrapposizione Originale</translation>
         </message>
     </context>
     <context>
@@ -8616,10 +8659,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Esecuzione StarNet++...</translation>
         </message>
         <message>
-            <source>Star Mask</source>
-            <translation type="finished">Maschera Stelle</translation>
-        </message>
-        <message>
             <source>StarNet Error</source>
             <translation type="finished">Errore StarNet</translation>
         </message>
@@ -8642,10 +8681,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>StarNet++ Star Removal</source>
             <translation type="finished">Rimozione Stelle StarNet++</translation>
-        </message>
-        <message>
-            <source>Starless</source>
-            <translation type="finished">Senza Stelle</translation>
         </message>
         <message>
             <source>Starting StarNet++...</source>

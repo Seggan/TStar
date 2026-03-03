@@ -831,7 +831,7 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
             
             // Optimized SIMD path for full-resolution, packed RGB data.
             // Strided/zoomed views use the scalar fallback below.
-            if (stepX == 1 && m_channels == 3) {
+            if (stepX == 1 && m_channels == 3 && !falseColor) {
                  const float* srcRow = m_data.data() + (size_t)srcY * m_width * 3;
                  SimdOps::applySTF_Row(srcRow, dest, outW, stf, inverted);
                  
@@ -890,6 +890,38 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
                 }
                 
                 r_out = v[0]; g_out = v[1]; b_out = v[2];
+
+                // Apply False Color (Heatmap: intensity -> hue 300° to 0°)
+                if (falseColor) {
+                    float intensity = (m_channels == 3) ? (0.2989f * r_out + 0.5870f * g_out + 0.1140f * b_out) : r_out;
+                    intensity = std::clamp(intensity, 0.0f, 1.0f);
+                    
+                    // HSV to RGB conversion helper
+                    auto hsvToRgb = [](float h, float s, float v) -> std::tuple<float, float, float> {
+                        if (s <= 0.0f) return {v, v, v};
+                        float hh = (h < 360.0f) ? h : 0.0f;
+                        hh /= 60.0f;
+                        int i = static_cast<int>(hh);
+                        float ff = hh - i;
+                        float p = v * (1.0f - s);
+                        float q = v * (1.0f - (s * ff));
+                        float t = v * (1.0f - (s * (1.0f - ff)));
+                        switch (i % 6) {
+                            case 0: return {v, t, p};
+                            case 1: return {q, v, p};
+                            case 2: return {p, v, t};
+                            case 3: return {p, q, v};
+                            case 4: return {t, p, v};
+                            default: return {v, p, q};
+                        }
+                    };
+                    
+                    float hue = (1.0f - intensity) * 300.0f;
+                    auto [rf, gf, bf] = hsvToRgb(hue, 1.0f, 1.0f);
+                    r_out = rf;
+                    g_out = gf;
+                    b_out = bf;
+                }
 
                 // Mask Logic
                 if (m_hasMask && showMask) { 

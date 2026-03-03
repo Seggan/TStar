@@ -78,6 +78,8 @@ public:
     class MainWindowCallbacks* getCallbacks();
     
 protected:
+    void showEvent(QShowEvent* event) override;
+
     /**
      * @brief Called after window setup to allow subclasses to configure
      * Override this instead of manual setWindowTitle/resize

@@ -142,7 +142,7 @@ void StarNetDialog::onRun() {
                          mw->logMessage(tr("ERR: StarNet result is empty!"), 3, true);
                          QMessageBox::critical(this, tr("Error"), tr("StarNet produced an empty image."));
                     } else {
-                        mw->createResultWindow(starless, tr("Starless"));
+                        mw->createResultWindow(starless, "_starless");
                         if (params.generateMask) {
                             mw->logMessage(tr("Generating Star Mask..."), 0, false);
                             if (input.width() != starless.width() || input.height() != starless.height()) {
@@ -159,7 +159,7 @@ void StarNetDialog::onRun() {
                                     maskData[i] = std::max(0.0f, val);
                                 }
                                 mask.setData(input.width(), input.height(), input.channels(), maskData);
-                                mw->createResultWindow(mask, tr("Star Mask"));
+                                mw->createResultWindow(mask, "_starmask");
                             }
                         }
                     }

@@ -154,9 +154,9 @@ void NameStrip::mouseMoveEvent(QMouseEvent *event) {
 // --- LinkStrip ---
 LinkStrip::LinkStrip(QWidget *parent) : QWidget(parent) {
     setFixedWidth(DpiHelper::sidebarWidth(this));
-    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding); // Takes remaining space
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     setCursor(Qt::OpenHandCursor);
-    setAcceptDrops(true); // Can drop on link strip too
+    setAcceptDrops(true);
 }
 
 void LinkStrip::setLinked(bool linked) {
@@ -254,7 +254,7 @@ void LinkStrip::dropEvent(QDropEvent *event) {
 // --- AdaptStrip ---
 AdaptStrip::AdaptStrip(QWidget *parent) : QWidget(parent) {
     setFixedWidth(DpiHelper::sidebarWidth(this));
-    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     setCursor(Qt::OpenHandCursor);
     setAcceptDrops(true);
 }
@@ -653,6 +653,7 @@ CustomMdiSubWindow::CustomMdiSubWindow(QWidget *parent) : QMdiSubWindow(parent) 
     leftLayout->addWidget(m_nameStrip);
     leftLayout->addWidget(m_linkStrip);
     leftLayout->addWidget(m_adaptStrip);
+    leftLayout->addStretch();  // Push all three strips to top
     
     m_contentLayout->addWidget(leftStrip);
     m_mainLayout->addWidget(m_contentArea, 1);

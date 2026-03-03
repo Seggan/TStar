@@ -850,6 +850,10 @@
             <translation type="finished">Protéger les Étoiles (Filtre morphologique)</translation>
         </message>
         <message>
+            <source>Reference alignment cancelled. Background extraction aborted.</source>
+            <translation type="finished">Alignement de référence annulé. Extraction de fond abandonnée.</translation>
+        </message>
+        <message>
             <source>Reference image cache has been emptied.</source>
             <translation type="finished">Le cache des images de référence a été vidé.</translation>
         </message>
@@ -3577,8 +3581,8 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Correction des Aberrations</translation>
         </message>
         <message>
-            <source>About</source>
-            <translation type="finished">À propos</translation>
+            <source>About TStar</source>
+            <translation type="finished">À propos de TStar</translation>
         </message>
         <message>
             <source>Activating Curves Tool...</source>
@@ -3715,6 +3719,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Channel Operations</source>
             <translation type="finished">Opérations Canal</translation>
+        </message>
+        <message>
+            <source>Channel View</source>
+            <translation type="finished">Vue de Canal</translation>
         </message>
         <message>
             <source>Color Management</source>
@@ -3929,14 +3937,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">GraXpert</translation>
         </message>
         <message>
-            <source>GraXpert Error</source>
-            <translation type="finished">Erreur GraXpert</translation>
-        </message>
-        <message>
-            <source>GraXpert cancelled.</source>
-            <translation type="finished">GraXpert annulé.</translation>
-        </message>
-        <message>
             <source>Header</source>
             <translation type="finished">En-tête</translation>
         </message>
@@ -4067,6 +4067,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Mirror V</source>
             <translation type="finished">Miroir V</translation>
+        </message>
+        <message>
+            <source>Mono</source>
+            <translation type="finished">Mono</translation>
         </message>
         <message>
             <source>Multiscale Decomposition</source>
@@ -6742,10 +6746,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Fournisseur :</translation>
         </message>
         <message>
-            <source>RAR Result</source>
-            <translation type="finished">Résultat RAR</translation>
-        </message>
-        <message>
             <source>RAR cancelled.</source>
             <translation type="finished">RAR annulé.</translation>
         </message>
@@ -6855,6 +6855,49 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>The target image must be a color (RGB) image.</source>
             <translation type="finished">L'image cible doit être une image en couleur (RGB).</translation>
+        </message>
+    </context>
+    <context>
+        <name>ReferenceAlignDialog</name>
+        <message>
+            <source>Align Reference Image</source>
+            <translation type="finished">Aligner l'Image de Référence</translation>
+        </message>
+        <message>
+            <source>Auto-stretch Overlay</source>
+            <translation type="finished">Superposition Auto-stretch</translation>
+        </message>
+        <message>
+            <source>Fine Rotation:</source>
+            <translation type="finished">Rotation Fine :</translation>
+        </message>
+        <message>
+            <source>Flip Horizontal</source>
+            <translation type="finished">Retourner Horizontalement</translation>
+        </message>
+        <message>
+            <source>Flip Vertical</source>
+            <translation type="finished">Retourner Verticalement</translation>
+        </message>
+        <message>
+            <source>Opacity:</source>
+            <translation type="finished">Opacité :</translation>
+        </message>
+        <message>
+            <source>Overlay (with Target):</source>
+            <translation type="finished">Superposition (avec Cible) :</translation>
+        </message>
+        <message>
+            <source>Rotate 90° CCW</source>
+            <translation type="finished">Pivoter 90° CCW</translation>
+        </message>
+        <message>
+            <source>Rotate 90° CW</source>
+            <translation type="finished">Pivoter 90° CW</translation>
+        </message>
+        <message>
+            <source>Show Original Overlay</source>
+            <translation type="finished">Afficher Superposition Originale</translation>
         </message>
     </context>
     <context>
@@ -8616,10 +8659,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Exécution StarNet++...</translation>
         </message>
         <message>
-            <source>Star Mask</source>
-            <translation type="finished">Masque d'Étoiles</translation>
-        </message>
-        <message>
             <source>StarNet Error</source>
             <translation type="finished">Erreur StarNet</translation>
         </message>
@@ -8642,10 +8681,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>StarNet++ Star Removal</source>
             <translation type="finished">Suppression Étoiles StarNet++</translation>
-        </message>
-        <message>
-            <source>Starless</source>
-            <translation type="finished">Sans Étoiles</translation>
         </message>
         <message>
             <source>Starting StarNet++...</source>

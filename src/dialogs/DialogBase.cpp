@@ -2,9 +2,7 @@
 #include "MainWindowCallbacks.h"
 #include <QIcon>
 #include <QSettings>
-#include <QRect>
-#include <QApplication>
-#include <QScreen>
+#include <QShowEvent>
 
 DialogBase::DialogBase(QWidget* parent,
                        const QString& title,
@@ -26,15 +24,6 @@ void DialogBase::initialize(const QString& title,
         setWindowIcon(getStandardIcon());
     }
     
-    // Center on parent or screen
-    if (parent() && parent()->isWidgetType()) {
-        move(static_cast<QWidget*>(parent())->frameGeometry().topLeft() + QPoint(40, 40));
-    } else {
-        QRect screenGeometry = QApplication::primaryScreen()->geometry();
-        int x = (screenGeometry.width() / 2) - (width / 2);
-        int y = (screenGeometry.height() / 2) - (height / 2);
-        move(x, y);
-    }
     
     // Set delete on close for transient dialogs
     if (deleteOnClose) {
@@ -52,6 +41,13 @@ void DialogBase::initialize(const QString& title,
     if (!settingsKey.isEmpty()) {
         restoreWindowGeometry(settingsKey);
     }
+}
+
+void DialogBase::showEvent(QShowEvent* event) {
+    QDialog::showEvent(event);
+    // adjustPosition centers this dialog on the top-level parent window,
+    // correctly handling MDI-embedded widgets and screen boundaries.
+    adjustPosition(parentWidget() ? parentWidget()->window() : nullptr);
 }
 
 void DialogBase::setWindowProperties(const QString& title, int width, int height) {
