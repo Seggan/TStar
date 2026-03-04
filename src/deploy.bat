@@ -25,11 +25,24 @@ if exist "build_win\TStar.exe" (
 )
 
 set "EXE_PATH=!BUILD_DIR!\TStar.exe"
-set "MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin"
-set "QT_BIN=C:\Qt\6.10.1\mingw_64\bin"
-set "WINDEPLOYQT=!QT_BIN!\windeployqt.exe"
 
-echo [INFO] Using build directory: !BUILD_DIR!
+REM --- TOOL DETECTION ---
+call src\windows_utils.bat :FindMinGW
+if "!MINGW_BIN!"=="" (
+    echo [ERROR] MinGW not found.
+    if !SILENT_MODE!==0 pause
+    exit /b 1
+)
+
+call src\windows_utils.bat :FindQtPath
+if "!QT_PATH!"=="" (
+    echo [ERROR] Qt6 not found.
+    if !SILENT_MODE!==0 pause
+    exit /b 1
+)
+
+set "QT_BIN=!QT_PATH!\bin"
+set "WINDEPLOYQT=!QT_BIN!\windeployqt.exe"
 
 if not exist "%EXE_PATH%" (
     echo [ERROR] %EXE_PATH% not found. Please build first.

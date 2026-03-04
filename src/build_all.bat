@@ -32,13 +32,13 @@ if not exist "src\windows_utils.bat" (
 )
 
 REM --- AUTO-DETECT TOOLS ---
-call :FindMinGW
+call src\windows_utils.bat :FindMinGW
 if "!MINGW_BIN!"=="" (
     echo [ERROR] MinGW not found. Please install Qt Creator or MinGW separately.
     goto :error
 )
 
-call :FindQtPath
+call src\windows_utils.bat :FindQtPath
 if "!QT_PATH!"=="" (
     echo [ERROR] Qt6 not found. Please install Qt6.
     goto :error
@@ -108,19 +108,7 @@ call :LogError "Build failed"
 exit /b 1
 
 REM Include utility functions
-:FindMinGW
-    set "MINGW_BIN="
-    if exist "C:\Qt\Tools\mingw1310_64\bin" set "MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin"
-    if exist "C:\Qt\Tools\mingw1220_64\bin" set "MINGW_BIN=C:\Qt\Tools\mingw1220_64\bin"
-    if exist "C:\msys64\mingw64\bin" set "MINGW_BIN=C:\msys64\mingw64\bin"
-    exit /b 0
-
-:FindQtPath
-    set "QT_PATH="
-    if exist "C:\Qt\6.10.1\mingw_64" set "QT_PATH=C:\Qt\6.10.1\mingw_64"
-    if exist "C:\Qt\6.9.2\mingw_64" set "QT_PATH=C:\Qt\6.9.2\mingw_64"
-    if exist "C:\Qt\6.8.1\mingw_64" set "QT_PATH=C:\Qt\6.8.1\mingw_64"
-    exit /b 0
+REM (Tool detection is now handled via src\windows_utils.bat)
 
 :LogInfo
     echo [INFO] %~1

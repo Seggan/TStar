@@ -21,7 +21,7 @@ set "ERROR_COUNT=0"
 set "COPY_COUNT=0"
 
 REM Read version from changelog.txt using shared function
-call :GetVersion
+call src\windows_utils.bat :GetVersion
 echo Version detected: %VERSION%
 
 REM --- Verify build exists ---
@@ -290,61 +290,24 @@ REM ============================================================================
 REM  Utility Functions (Embedded from windows_utils.bat)
 REM =============================================================================
 
-:GetVersion
-set "VERSION=1.0.0"
-if exist "changelog.txt" (
-    for /f "tokens=2" %%v in ('type "changelog.txt" ^| findstr /R "^Version [0-9]"') do (
-        set "VERSION=%%v"
-        goto :EOF
-    )
-)
-goto :EOF
-
 :FindInnoSetup
-set "ISCC="
-if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
-    set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-    goto :EOF
-)
-if exist "C:\Program Files\Inno Setup 6\ISCC.exe" (
-    set "ISCC=C:\Program Files\Inno Setup 6\ISCC.exe"
-    goto :EOF
-)
-REM Fallback to searching registry
-for /f "tokens=2*" %%A in ('reg query "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1" /v "InstallLocation" 2^>nul') do (
-    if exist "%%B\ISCC.exe" (
-        set "ISCC=%%B\ISCC.exe"
-        goto :EOF
-    )
-)
-goto :EOF
+    call src\windows_utils.bat :FindInnoSetup
+    exit /b 0
 
 :VerifyFile
 REM Usage: call :VerifyFile path description
-set "FILE_PATH=%~1"
-set "DESCRIPTION=%~2"
-if not exist "!FILE_PATH!" (
-    echo [ERROR] !DESCRIPTION! not found: !FILE_PATH!
-    exit /b 1
-)
-exit /b 0
+    call src\windows_utils.bat :VerifyFile "%~1" "%~2"
+    exit /b %errorlevel%
 
 :VerifyDir
-set "DIR_PATH=%~1"
-set "DESCRIPTION=%~2"
-if not exist "!DIR_PATH!" (
-    echo [ERROR] !DESCRIPTION! not found: !DIR_PATH!
-    exit /b 1
-)
-exit /b 0
+    call src\windows_utils.bat :VerifyDir "%~1" "%~2"
+    exit /b %errorlevel%
 
 :SafeRmDir
-if exist "%~1" (
-    rmdir /s /q "%~1"
-)
-exit /b 0
+    call src\windows_utils.bat :SafeRmDir "%~1"
+    exit /b 0
 
 :EnsureDir
-if not exist "%~1" mkdir "%~1"
-exit /b 0
+    call src\windows_utils.bat :EnsureDir "%~1"
+    exit /b 0
 

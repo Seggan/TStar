@@ -98,6 +98,7 @@ When developing on macOS, be aware of architecture-specific considerations:
   - Test builds on both architectures when modifying low-level code or dependencies
   - Verify that the `package_macos.sh` script correctly bundles libraries for your architecture
   - Check that the app launches and functions correctly on both platforms
+- **Shared Build Logic**: Common build functions and detection logic are centralized in `src/windows_utils.bat` and `src/macos_utils.sh`. Update these files when adding global build features.
 - **Architecture Verification**: You can check the built executable's architecture:
   ```bash
   lipo -info build/TStar.app/Contents/MacOS/TStar

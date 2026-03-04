@@ -130,12 +130,12 @@ This approach ensures compatibility across development, distribution, and hetero
 1. Open a terminal with Qt environment (e.g., Qt 6.x.x MinGW 64-bit).
 2. Use the "All-in-One" build script:
 ```bash
-build_all.bat
+src/build_all.bat
 ```
-Alternatively, follow the manual steps:
+Alternatively, follow the manual steps (Ninja generator recommended):
 ```bash
 mkdir build && cd build
-cmake -G "MinGW Makefiles" -DCMAKE_PREFIX_PATH="C:/Qt/6.7.0/mingw_64" -DCMAKE_BUILD_TYPE=Release ..
+cmake -G "Ninja" -DCMAKE_PREFIX_PATH="C:/Qt/6.10.1/mingw_64" -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . --config Release -j4
 ```
 
@@ -144,7 +144,7 @@ cmake --build . --config Release -j4
 To create a standalone, portable folder for distribution:
 
 ```bash
-package_dist.bat
+src/package_dist.bat
 ```
 
 **This script automates several critical tasks:**
@@ -162,15 +162,15 @@ The resulting folder in `dist/TStar` is completely standalone and can be moved t
 ## Troubleshooting
 
 ### Python-related issues
-- If the AI tools fail, ensure `deps/python/python.exe` exists.
-- If you need to re-install the environment, simply delete `deps/python` and run `package_dist.bat` again.
+- If the AI tools fail, ensure `deps/python/python.exe` (Windows) or `deps/python_venv` (macOS) exists.
+- If you need to re-install the environment, simply delete the python folder and run `src/package_dist.bat` (Windows) or `setup_python_macos.sh` (macOS) again.
 - C++ code looks for Python in:
   1. `./python/python.exe` (Distribution/Production)
   2. `../deps/python/python.exe` (Development/Build environment)
   3. System `python` (Fallback)
 
 ### Missing DLLs at runtime
-If you built manually with CMake, you MUST run `package_dist.bat` to collect the dependencies. The old `deploy.bat` is preserved for legacy use but `package_dist.bat` is now the preferred method as it handles Python bundling.
+If you built manually with CMake, you MUST run `src/package_dist.bat` (Windows) or `src/package_macos.sh` (macOS) to collect the dependencies. The old `deploy.bat` is preserved for legacy use but `package_dist.bat` is now the preferred method as it handles Python bundling.
 
 From your MinGW `bin/` directory to the executable folder.
 
@@ -180,15 +180,16 @@ From your MinGW `bin/` directory to the executable folder.
 |--------------|---------|-------------|
 | `CMAKE_BUILD_TYPE` | Debug | Set to `Release` for optimized builds |
 | `CMAKE_PREFIX_PATH` | — | Path to Qt installation |
+| `ENABLE_LTO` | OFF | Enable Link-Time Optimization (Release only) |
 
 ## Verified Configurations
 
 | OS | Compiler | Qt Version | Status |
 |----|----------|------------|--------|
-| Windows 11 | MinGW 13.1 | Qt 6.7.0 | ✅ Tested |
+| Windows 11 | MinGW 13.1 | Qt 6.7.x / 6.8.x / 6.10.x | ✅ Tested |
 | Windows 10 | MinGW 11.2 | Qt 6.5.0 | ✅ Tested |
-| macOS 11+ (Big Sur) - Apple Silicon | Apple Clang | Qt 6.5+ | ✅ Tested |
-| macOS 11+ (Big Sur) - Intel | Apple Clang | Qt 6.5+ | ✅ Tested |
+| macOS 11+ (Big Sur) - Apple Silicon | Apple Clang | Qt 6.5 - 6.10 | ✅ Tested |
+| macOS 11+ (Big Sur) - Intel | Apple Clang | Qt 6.5 - 6.10 | ✅ Tested |
 
 ---
 
@@ -209,7 +210,7 @@ From your MinGW `bin/` directory to the executable folder.
 ```bash
 # Required dependencies
 brew install qt@6 cmake ninja pkg-config
-brew install opencv gsl cfitsio libomp
+brew install opencv gsl cfitsio libomp md4c
 
 # Optional - for XISF compression (Recommended)
 brew install lz4 zstd
@@ -245,6 +246,7 @@ chmod +x src/package_macos.sh
 ./src/package_macos.sh
 
 # 4. Create DMG installer (optional)
+# TIP: brew install create-dmg for styled DMGs
 chmod +x src/build_installer_macos.sh
 ./src/build_installer_macos.sh
 ```

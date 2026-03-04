@@ -4,7 +4,29 @@ REM TStar Windows Build Utilities
 REM Shared functions for build_all.bat, package_dist.bat, build_installer.bat
 REM =============================================================================
 
-setlocal enabledelayedexpansion
+REM Dispatcher for external label calls
+if "%~1"=="" goto :EOF
+set "_cmd=%~1"
+if "%_cmd%"==":GetVersion" shift & goto :GetVersion
+if "%_cmd%"==":FindInnoSetup" shift & goto :FindInnoSetup
+if "%_cmd%"==":FindMinGW" shift & goto :FindMinGW
+if "%_cmd%"==":FindQtPath" shift & goto :FindQtPath
+if "%_cmd%"==":VerifyFile" shift & goto :VerifyFile
+if "%_cmd%"==":VerifyDir" shift & goto :VerifyDir
+if "%_cmd%"==":VerifyCommand" shift & goto :VerifyCommand
+if "%_cmd%"==":NormalizePath" shift & goto :NormalizePath
+if "%_cmd%"==":SafeRmDir" shift & goto :SafeRmDir
+if "%_cmd%"==":EnsureDir" shift & goto :EnsureDir
+if "%_cmd%"==":LogInfo" shift & goto :LogInfo
+if "%_cmd%"==":LogWarning" shift & goto :LogWarning
+if "%_cmd%"==":LogError" shift & goto :LogError
+if "%_cmd%"==":LogStep" shift & goto :LogStep
+if "%_cmd%"==":CopyWithCheck" shift & goto :CopyWithCheck
+if "%_cmd%"==":SetupPythonVenv" shift & goto :SetupPythonVenv
+if "%_cmd%"==":InstallPythonPackage" shift & goto :InstallPythonPackage
+if "%_cmd%"==":ConfigureCMake" shift & goto :ConfigureCMake
+if "%_cmd%"==":CleanCMakeCache" shift & goto :CleanCMakeCache
+goto :EOF
 
 REM --- Version Management ---
 REM Call this to get the current version
@@ -21,6 +43,24 @@ goto :EOF
 REM --- Tool Detection ---
 :FindInnoSetup
 set "ISCC="
+REM 1. Check if ISCC is already in PATH
+where /q ISCC.exe
+if !errorlevel! equ 0 (
+    for /f "tokens=*" %%i in ('where ISCC.exe') do (
+        set "ISCC=%%i"
+        goto :EOF
+    )
+)
+
+REM 2. Check for environment override
+if defined INNO_SETUP_DIR (
+    if exist "%INNO_SETUP_DIR%\ISCC.exe" (
+        set "ISCC=%INNO_SETUP_DIR%\ISCC.exe"
+        goto :EOF
+    )
+)
+
+REM 3. Check common installation paths
 if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
     set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
     goto :EOF
@@ -29,7 +69,8 @@ if exist "C:\Program Files\Inno Setup 6\ISCC.exe" (
     set "ISCC=C:\Program Files\Inno Setup 6\ISCC.exe"
     goto :EOF
 )
-REM Fallback to searching registry
+
+REM 4. Fallback to searching registry
 for /f "tokens=2*" %%A in ('reg query "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1" /v "InstallLocation" 2^>nul') do (
     if exist "%%B\ISCC.exe" (
         set "ISCC=%%B\ISCC.exe"
@@ -40,24 +81,37 @@ goto :EOF
 
 :FindMinGW
 set "MINGW_BIN="
-REM Check common Qt installation paths
-if exist "C:\Qt\Tools\mingw1310_64\bin" (
-    set "MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin"
-    goto :EOF
+REM 1. Check for environment override
+if defined MINGW_DIR (
+    if exist "%MINGW_DIR%\bin\g++.exe" (
+        set "MINGW_BIN=%MINGW_DIR%\bin"
+        goto :EOF
+    )
+    if exist "%MINGW_DIR%\g++.exe" (
+        set "MINGW_BIN=%MINGW_DIR%"
+        goto :EOF
+    )
 )
-if exist "C:\Qt\Tools\mingw1220_64\bin" (
-    set "MINGW_BIN=C:\Qt\Tools\mingw1220_64\bin"
-    goto :EOF
+
+REM 2. Check common Qt installation paths
+for %%v in (1310_64 1220_64 1120_64 810_64) do (
+    if exist "C:\Qt\Tools\mingw%%v\bin" (
+        set "MINGW_BIN=C:\Qt\Tools\mingw%%v\bin"
+        goto :EOF
+    )
 )
+
+REM 3. Check common MSYS2 paths
 if exist "C:\msys64\mingw64\bin" (
     set "MINGW_BIN=C:\msys64\mingw64\bin"
     goto :EOF
 )
-REM Fallback to PATH search
+
+REM 4. Fallback to PATH search
 for %%X in (g++.exe) do (
     set "GXX_PATH=%%~$PATH:X"
-    if not "!GXX_PATH!"=="" (
-        for %%A in ("!GXX_PATH!\.") do set "MINGW_BIN=%%~fA"
+    if not "%GXX_PATH%"=="" (
+        for %%A in ("%GXX_PATH%\.") do set "MINGW_BIN=%%~fA"
         goto :EOF
     )
 )
@@ -65,20 +119,23 @@ goto :EOF
 
 :FindQtPath
 set "QT_PATH="
-REM Check common Qt locations
-if exist "C:\Qt\6.10.1\mingw_64" (
-    set "QT_PATH=C:\Qt\6.10.1\mingw_64"
-    goto :EOF
+REM 1. Check for environment override
+if defined QT_DIR (
+    if exist "%QT_DIR%\bin\qmake.exe" (
+        set "QT_PATH=%QT_DIR%"
+        goto :EOF
+    )
 )
-if exist "C:\Qt\6.9.2\mingw_64" (
-    set "QT_PATH=C:\Qt\6.9.2\mingw_64"
-    goto :EOF
+
+REM 2. Check common Qt locations (descending order)
+for %%v in (6.10.1 6.10.0 6.9.2 6.9.1 6.9.0 6.8.2 6.8.1 6.8.0 6.7.2 6.7.1 6.7.0 6.6.3 6.6.2 6.6.1 6.5.3) do (
+    if exist "C:\Qt\%%v\mingw_64" (
+        set "QT_PATH=C:\Qt\%%v\mingw_64"
+        goto :EOF
+    )
 )
-if exist "C:\Qt\6.8.1\mingw_64" (
-    set "QT_PATH=C:\Qt\6.8.1\mingw_64"
-    goto :EOF
-)
-REM Fallback to qmake search
+
+REM 3. Fallback to qmake search
 for %%X in (qmake.exe) do (
     set "QMAKE_PATH=%%~$PATH:X"
     if not "!QMAKE_PATH!"=="" (
