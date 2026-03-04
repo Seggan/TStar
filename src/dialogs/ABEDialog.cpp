@@ -71,13 +71,12 @@ ABEDialog::ABEDialog(QWidget* parent, ImageViewer* viewer, const ImageBuffer& bu
     bottomLayout->addWidget(copyLabel);
     bottomLayout->addStretch();
     
-    QPushButton* btnApply = new QPushButton(tr("Apply"));
-    connect(btnApply, &QPushButton::clicked, this, &ABEDialog::onApply);
-    bottomLayout->addWidget(btnApply);
-    
     QPushButton* btnClose = new QPushButton(tr("Close"));
     connect(btnClose, &QPushButton::clicked, this, &ABEDialog::close);
+    QPushButton* btnApply = new QPushButton(tr("Apply"));
+    connect(btnApply, &QPushButton::clicked, this, &ABEDialog::onApply);
     bottomLayout->addWidget(btnClose);
+    bottomLayout->addWidget(btnApply);
     
     mainLayout->addLayout(bottomLayout);
     

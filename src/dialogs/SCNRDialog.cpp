@@ -64,8 +64,8 @@ SCNRDialog::SCNRDialog(QWidget* parent) : DialogBase(parent, tr("SCNR (Remove Gr
     QPushButton* applyBtn = new QPushButton(tr("Apply"));
     QPushButton* closeBtn = new QPushButton(tr("Close"));
     btnLayout->addStretch();
-    btnLayout->addWidget(applyBtn);
     btnLayout->addWidget(closeBtn);
+    btnLayout->addWidget(applyBtn);
     layout->addLayout(btnLayout);
 
     connect(applyBtn, &QPushButton::clicked, this, &SCNRDialog::apply);

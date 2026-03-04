@@ -179,6 +179,14 @@ QString HelpDialog::buildHelpContent()
     html += "<h3>" + tr("Saturation") + "</h3>";
     html += "<p>" + tr("Adjust color saturation with protection for highlights and shadows.") + "</p>";
 
+    html += "<h3>" + tr("Catalog Background Extraction (CBE)") + "</h3>";
+    html += "<p>" + tr("Advanced background extraction using catalog reference images:") + "</p>";
+    html += "<ul>";
+    html += "<li>" + tr("Downloads a reference image from online surveys (e.g., DSS2) based on the image's WCS coordinates") + "</li>";
+    html += "<li>" + tr("Analyzes the difference between your image and the reference to build a highly accurate gradient model") + "</li>";
+    html += "<li>" + tr("Requires a plate-solved image to accurately determine the sky region") + "</li>";
+    html += "</ul>";
+
     html += "<h3>" + tr("Temperature / Tint") + "</h3>";
     html += "<p>" + tr("Adjust the color balance of the image by shifting towards warm (red) or cool (blue) tones and balancing green/magenta tints. Useful for manual white balance correction.") + "</p>";
 

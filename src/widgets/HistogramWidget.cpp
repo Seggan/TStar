@@ -27,6 +27,7 @@ void HistogramWidget::setGhostData(const std::vector<std::vector<int>>& bins, in
 void HistogramWidget::setLogScale(bool enabled) {
     if (m_logScale == enabled) return;
     m_logScale = enabled;
+    m_cachedWidth = -1;
     update();
 }
 

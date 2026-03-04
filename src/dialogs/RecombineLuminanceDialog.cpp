@@ -51,8 +51,8 @@ RecombineLuminanceDialog::RecombineLuminanceDialog(QWidget* parent) : DialogBase
     QPushButton* applyBtn = new QPushButton(tr("Apply"));
     QPushButton* closeBtn = new QPushButton(tr("Close"));
     btnLayout->addStretch();
-    btnLayout->addWidget(applyBtn);
     btnLayout->addWidget(closeBtn);
+    btnLayout->addWidget(applyBtn);
     mainLayout->addLayout(btnLayout);
     
     connect(m_blendSlider, &QSlider::valueChanged, this, &RecombineLuminanceDialog::updateBlendLabel);

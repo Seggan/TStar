@@ -203,13 +203,13 @@ void SelectiveColorDialog::setupUi() {
     
     btnLayout->addStretch();
     
-    QPushButton* applyBtn = new QPushButton(tr("Apply"));
-    connect(applyBtn, &QPushButton::clicked, this, &SelectiveColorDialog::onApply);
-    btnLayout->addWidget(applyBtn);
-    
     QPushButton* closeBtn = new QPushButton(tr("Close"));
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::reject);
     btnLayout->addWidget(closeBtn);
+
+    QPushButton* applyBtn = new QPushButton(tr("Apply"));
+    connect(applyBtn, &QPushButton::clicked, this, &SelectiveColorDialog::onApply);
+    btnLayout->addWidget(applyBtn);
     
     leftLayout->addLayout(btnLayout);
     

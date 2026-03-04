@@ -283,6 +283,18 @@ TRANSLATIONS = {
 
     "CLAHE": {'it': 'CLAHE', 'es': 'CLAHE', 'fr': 'CLAHE', 'de': 'CLAHE'},
 
+    "Catalog Background Extraction (CBE)": {'it': 'Estrazione Sfondo da Catalogo (CBE)', 'es': 'Extracción de Fondo de Catálogo (CBE)', 'fr': 'Extraction de Fond par Catalogue (CBE)', 'de': 'Katalog-Hintergrundextraktion (CBE)'},
+
+    "Advanced background extraction using catalog reference images:": {'it': 'Estrazione del fondo avanzata utilizzando immagini di riferimento da catalogo:', 'es': 'Extracción de fondo avanzada utilizando imágenes de referencia de catálogo:', 'fr': 'Extraction de fond avancée utilisant des images de référence de catalogue :', 'de': 'Erweiterte Hintergrundextraktion mit Katalog-Referenzbildern:'},
+
+    "Downloads a reference image from online surveys (e.g., DSS2) based on the image's WCS coordinates": {'it': 'Scarica un\'immagine di riferimento dalle survey online (es. DSS2) basata sulle coordinate WCS dell\'immagine', 'es': 'Descarga una imagen de referencia de encuestas en línea (ej. DSS2) según las coordenadas WCS de la imagen', 'fr': 'Télécharge une image de référence d\'enquêtes en ligne (ex. DSS2) selon les coordonnées WCS de l\'image', 'de': 'Lädt ein Referenzbild aus Online-Surveys (z.B. DSS2) basierend auf den WCS-Koordinaten des Bildes herunter'},
+
+    "Analyzes the difference between your image and the reference to build a highly accurate gradient model": {'it': 'Analizza la differenza tra la tua immagine e il riferimento per costruire un modello di gradiente altamente accurato', 'es': 'Analiza la diferencia entre su imagen y la referencia para construir un modelo de gradiente altamente preciso', 'fr': 'Analyse la différence entre votre image et la référence pour construire un modèle de gradient très précis', 'de': 'Analysiert den Unterschied zwischen Ihrem Bild und der Referenz, um ein hochgenaues Gradientenmodell zu erstellen'},
+
+    "Requires a plate-solved image to accurately determine the sky region": {'it': 'Richiede un\'immagine risolta astrometricamente per determinare accuratamente la regione di cielo', 'es': 'Requiere una imagen resuelta astrométricamente para determinar con precisión la región del cielo', 'fr': 'Nécessite une image résolue astrométriquement pour déterminer précisément la région du ciel', 'de': 'Erfordert ein plattenaufgelöstes Bild, um die Himmelsregion genau zu bestimmen'},
+
+    "Check if the reference image pattern matches your image. Use the buttons below to flip or rotate it if necessary.": {'it': 'Verifica se il pattern dell\'immagine di riferimento corrisponde alla tua immagine. Usa i pulsanti in basso per rifletterla o ruotarla se necessario.', 'es': 'Compruebe si el patrón de la imagen de referencia coincide con su imagen. Utilice los botones de abajo per voltearla o rotarla si es necesario.', 'fr': 'Vérifiez si le motif de l\'image de référence correspond à votre image. Utilisez les boutons ci-dessous pour la retourner ou la faire pivoter si nécessaire.', 'de': 'Prüfen Sie, ob das Muster des Referenzbildes mit Ihrem Bild übereinstimmt. Verwenden Sie die Schaltflächen unten, um es bei Bedarf zu spiegeln oder zu drehen.'},
+
     "Click to add sample points on the background": {'it': "Fai clic per aggiungere punti di campionamento sullo sfondo", 'es': "Haga clic para agregar puntos de muestra en el fondo", 'fr': "Cliquez pour ajouter des points d'échantillonnage sur l'arrière-plan", 'de': "Klicken Sie, um Stichprobenpunkte auf dem Hintergrund hinzuzufügen"},
 
     "Close": {'it': 'Chiudi', 'es': 'Cerrar', 'fr': 'Fermer', 'de': 'Schließen'},

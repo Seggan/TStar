@@ -69,12 +69,12 @@ CBEDialog::CBEDialog(QWidget* pParent, ImageViewer* viewer, const ImageBuffer& b
     btnLayout->addWidget(btnClearCache);
     btnLayout->addStretch();
 
+    QPushButton* btnClose = new QPushButton(tr("Close"), this);
+    btnLayout->addWidget(btnClose);
+
     m_btnApply = new QPushButton(tr("Apply"), this);
     m_btnApply->setDefault(true);
     btnLayout->addWidget(m_btnApply);
-
-    QPushButton* btnClose = new QPushButton(tr("Close"), this);
-    btnLayout->addWidget(btnClose);
 
     mainLayout->addLayout(btnLayout);
 

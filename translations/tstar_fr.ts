@@ -2439,6 +2439,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Ajuste la protection des zones lumineuses</translation>
         </message>
         <message>
+            <source>Advanced background extraction using catalog reference images:</source>
+            <translation type="finished">Extraction de fond avancée utilisant des images de référence de catalogue :</translation>
+        </message>
+        <message>
             <source>Advanced stretch tool with full control:</source>
             <translation type="finished">Outil d'étirement avancé avec contrôle total :</translation>
         </message>
@@ -2465,6 +2469,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Analyzes star quality metrics (FWHM, roundness, etc.)</source>
             <translation type="finished">Analyse les métriques de qualité des étoiles (FWHM, rondeur, etc.)</translation>
+        </message>
+        <message>
+            <source>Analyzes the difference between your image and the reference to build a highly accurate gradient model</source>
+            <translation type="finished">Analyse la différence entre votre image et la référence pour construire un modèle de gradient très précis</translation>
         </message>
         <message>
             <source>Apply Mask:</source>
@@ -2557,6 +2565,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Calibrates raw light frames using master calibration images:</source>
             <translation type="finished">Calibre les images brutes de lumière à l'aide d'images de calibration maîtres :</translation>
+        </message>
+        <message>
+            <source>Catalog Background Extraction (CBE)</source>
+            <translation type="finished">Extraction de Fond par Catalogue (CBE)</translation>
         </message>
         <message>
             <source>Channel Operations</source>
@@ -2725,6 +2737,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Double-click to run a script on the active image</source>
             <translation type="finished">Double-cliquer pour exécuter un script sur l'image active</translation>
+        </message>
+        <message>
+            <source>Downloads a reference image from online surveys (e.g., DSS2) based on the image's WCS coordinates</source>
+            <translation type="finished">Télécharge une image de référence d'enquêtes en ligne (ex. DSS2) selon les coordonnées WCS de l'image</translation>
         </message>
         <message>
             <source>Drag &amp; Drop:</source>
@@ -3093,6 +3109,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Required for PCC and annotation tools</source>
             <translation type="finished">Requis pour PCC et les outils d'annotation</translation>
+        </message>
+        <message>
+            <source>Requires a plate-solved image to accurately determine the sky region</source>
+            <translation type="finished">Nécessite une image résolue astrométriquement pour déterminer précisément la région du ciel</translation>
         </message>
         <message>
             <source>Requires external Cosmic Clarity installation</source>
@@ -6866,6 +6886,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Auto-stretch Overlay</source>
             <translation type="finished">Superposition Auto-stretch</translation>
+        </message>
+        <message>
+            <source>Check if the reference image pattern matches your image. Use the buttons below to flip or rotate it if necessary.</source>
+            <translation type="finished">Vérifiez si le motif de l'image de référence correspond à votre image. Utilisez les boutons ci-dessous pour la retourner ou la faire pivoter si nécessaire.</translation>
         </message>
         <message>
             <source>Fine Rotation:</source>

@@ -420,14 +420,14 @@ void WavescaleHDRDialog::createUI() {
     btnLayout->addWidget(copyLabel);
     btnLayout->addStretch();
     
-    m_applyBtn = new QPushButton(tr("Apply"), this);
-    connect(m_applyBtn, &QPushButton::clicked, this, &WavescaleHDRDialog::onApplyClicked);
-    
     m_closeBtn = new QPushButton(tr("Close"), this);
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
     
-    btnLayout->addWidget(m_applyBtn);
+    m_applyBtn = new QPushButton(tr("Apply"), this);
+    connect(m_applyBtn, &QPushButton::clicked, this, &WavescaleHDRDialog::onApplyClicked);
+    
     btnLayout->addWidget(m_closeBtn);
+    btnLayout->addWidget(m_applyBtn);
     rightLayout->addLayout(btnLayout);
     
     contentLayout->addLayout(rightLayout);

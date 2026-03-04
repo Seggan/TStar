@@ -15,16 +15,15 @@
 #include <cmath>
 
 ReferenceAlignDialog::ReferenceAlignDialog(QWidget* parent, const ImageBuffer& refBuffer, const ImageBuffer& targetBuffer, double paddingFactor)
-    : DialogBase(parent, tr("Align Reference Image"), 700, 600), m_originalRefBuffer(refBuffer), m_targetBuffer(targetBuffer), m_currentBuffer(refBuffer), m_paddingFactor(paddingFactor)
+    : DialogBase(parent, tr("Align Reference Image"), 800, 600), m_originalRefBuffer(refBuffer), m_targetBuffer(targetBuffer), m_currentBuffer(refBuffer), m_paddingFactor(paddingFactor)
 {
     // Removing manual centering and sizing as DialogBase handles this now.
     // resize(700, 600) and centering are done by base class.
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
-    QLabel* infoLabel = new QLabel(tr("Check if the reference image pattern matches your image.\n"
-                                      "Use the buttons below to flip or rotate it if necessary."), this);
-    infoLabel->setWordWrap(true);
+    QLabel* infoLabel = new QLabel(tr("Check if the reference image pattern matches your image. Use the buttons below to flip or rotate it if necessary."), this);
+    infoLabel->setWordWrap(false);
     mainLayout->addWidget(infoLabel);
 
     // Preview area

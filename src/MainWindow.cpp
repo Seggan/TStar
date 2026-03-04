@@ -1202,8 +1202,6 @@ MainWindow::MainWindow(QWidget *parent)
     });
     mainToolbar->addWidget(helpBtn);
     
-    mainToolbar->addSeparator();
-
     // About button — info.svg icon
     QToolButton* aboutBtn = new QToolButton(this);
     aboutBtn->setIcon(makeIcon("images/info.svg"));

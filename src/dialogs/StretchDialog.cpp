@@ -175,8 +175,8 @@ void StretchDialog::setupUI() {
     btnLayout->addWidget(previewBtn);
     btnLayout->addWidget(copyLabel);
     btnLayout->addStretch();
-    btnLayout->addWidget(applyBtn);
     btnLayout->addWidget(cancelBtn);
+    btnLayout->addWidget(applyBtn);
     
     connect(previewBtn, &QPushButton::clicked, this, &StretchDialog::onPreview);
     connect(applyBtn, &QPushButton::clicked, this, &StretchDialog::onApply);

@@ -82,9 +82,9 @@ PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr(
     QPushButton* closeBtn = new QPushButton(tr("Close"), this);
     connect(closeBtn, &QPushButton::clicked, this, &PlateSolvingDialog::reject);
     
-    btnLay->addWidget(m_solveBtn);
-    btnLay->addStretch();
     btnLay->addWidget(closeBtn);
+    btnLay->addStretch();
+    btnLay->addWidget(m_solveBtn);
     mainLayout->addLayout(btnLay);
     
     // Objects

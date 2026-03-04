@@ -398,8 +398,8 @@ CurvesDialog::CurvesDialog(ImageViewer* viewer, QWidget* parent)
     connect(applyBtn, &QPushButton::clicked, this, &CurvesDialog::onApply);
     connect(cancelBtn, &QPushButton::clicked, this, &CurvesDialog::reject);
     
-    botLayout->addWidget(applyBtn);
     botLayout->addWidget(cancelBtn);
+    botLayout->addWidget(applyBtn);
     
     mainLayout->addLayout(botLayout);
 

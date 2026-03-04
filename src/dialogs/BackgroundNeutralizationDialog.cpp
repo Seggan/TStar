@@ -57,8 +57,8 @@ void BackgroundNeutralizationDialog::setupUI() {
     connect(m_btnApply, &QPushButton::clicked, this, &BackgroundNeutralizationDialog::onApply);
     connect(m_btnCancel, &QPushButton::clicked, this, &QDialog::reject);
     
-    btnLayout->addWidget(m_btnApply);
     btnLayout->addWidget(m_btnCancel);
+    btnLayout->addWidget(m_btnApply);
     layout->addLayout(btnLayout);
 }
 

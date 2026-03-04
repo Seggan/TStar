@@ -99,8 +99,8 @@ AlignChannelsDialog::AlignChannelsDialog(QWidget* parent)
 
     btnLayout->addWidget(refreshBtn);
     btnLayout->addStretch(1);
-    btnLayout->addWidget(m_applyBtn);
     btnLayout->addWidget(closeBtn);
+    btnLayout->addWidget(m_applyBtn);
     mainLayout->addLayout(btnLayout);
 
     refreshImageList();

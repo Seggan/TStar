@@ -65,8 +65,8 @@ StarNetDialog::StarNetDialog(QWidget* parent) : DialogBase(parent, tr("StarNet++
     connect(btnClose, &QPushButton::clicked, this, &QDialog::close);
 
     btnLayout->addStretch();
-    btnLayout->addWidget(m_btnRun);
     btnLayout->addWidget(btnClose);
+    btnLayout->addWidget(m_btnRun);
 
     layout->addLayout(btnLayout);
 }

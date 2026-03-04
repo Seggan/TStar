@@ -2437,6 +2437,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Advanced background extraction using catalog reference images:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Advanced stretch tool with full control:</source>
             <translation type="unfinished" />
         </message>
@@ -2462,6 +2466,10 @@
         </message>
         <message>
             <source>Analyzes star quality metrics (FWHM, roundness, etc.)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Analyzes the difference between your image and the reference to build a highly accurate gradient model</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2554,6 +2562,10 @@
         </message>
         <message>
             <source>Calibrates raw light frames using master calibration images:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Catalog Background Extraction (CBE)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2722,6 +2734,10 @@
         </message>
         <message>
             <source>Double-click to run a script on the active image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Downloads a reference image from online surveys (e.g., DSS2) based on the image's WCS coordinates</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3090,6 +3106,10 @@
         </message>
         <message>
             <source>Required for PCC and annotation tools</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Requires a plate-solved image to accurately determine the sky region</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6862,6 +6882,10 @@
         </message>
         <message>
             <source>Auto-stretch Overlay</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Check if the reference image pattern matches your image. Use the buttons below to flip or rotate it if necessary.</source>
             <translation type="unfinished" />
         </message>
         <message>
