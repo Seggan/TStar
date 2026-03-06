@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QGroupBox>
 #include <QSettings>
+#include <QPushButton>
 #include <QIcon>
 
 #include <QLibrary>
@@ -68,10 +69,16 @@ GraXpertDialog::GraXpertDialog(QWidget* parent) : DialogBase(parent, tr("GraXper
     
     mainLayout->addWidget(m_gpuCheck);
 
-    QDialogButtonBox* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(btns, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(btns, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    mainLayout->addWidget(btns);
+    QHBoxLayout* btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
+    QPushButton* okBtn = new QPushButton(tr("OK"));
+    okBtn->setDefault(true);
+    btnLayout->addWidget(cancelBtn);
+    btnLayout->addWidget(okBtn);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    mainLayout->addLayout(btnLayout);
 
     connect(m_rbBackground, &QRadioButton::toggled, this, &GraXpertDialog::updateUI);
     updateUI();

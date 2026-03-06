@@ -81,10 +81,16 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
     
     // --- Buttons ---
     mainLayout->addStretch();
-    QDialogButtonBox* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(btns, &QDialogButtonBox::accepted, this, &SettingsDialog::saveSettings);
-    connect(btns, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    mainLayout->addWidget(btns);
+    QHBoxLayout* btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
+    QPushButton* okBtn = new QPushButton(tr("OK"));
+    okBtn->setDefault(true);
+    btnLayout->addWidget(cancelBtn);
+    btnLayout->addWidget(okBtn);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, this, &SettingsDialog::saveSettings);
+    mainLayout->addLayout(btnLayout);
     
     // --- Load Settings ---
     m_graxpertPath->setText(m_settings.value("paths/graxpert").toString());

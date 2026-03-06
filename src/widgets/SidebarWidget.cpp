@@ -280,6 +280,25 @@ void SidebarWidget::logToConsole(const QString& htmlMsg) {
     m_console->verticalScrollBar()->setValue(m_console->verticalScrollBar()->maximum());
 }
 
+void SidebarWidget::updateLastLogLine(const QString& htmlMsg) {
+    if (!m_console) return;
+    
+    QTextCursor cursor = m_console->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    
+    if (m_console->document()->isEmpty()) {
+        m_console->append(htmlMsg);
+    } else {
+        // Select the entire current line (block)
+        cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+        cursor.removeSelectedText();
+        // Insert and ensure it's on the same logic level
+        cursor.insertHtml(htmlMsg);
+    }
+    
+    m_console->verticalScrollBar()->setValue(m_console->verticalScrollBar()->maximum());
+}
+
 SidebarWidget::VerticalButton::VerticalButton(const QString& text, QWidget* parent) : QPushButton(text, parent) {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }

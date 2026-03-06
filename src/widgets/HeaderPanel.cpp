@@ -39,6 +39,9 @@ void HeaderPanel::setupUI() {
     m_table->setTextElideMode(Qt::ElideNone);
     m_table->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     
+    // Explicitly configure horizontal header to ensure text doesn't overflow
+    m_table->horizontalHeader()->setStretchLastSection(true);
+    
     layout->addWidget(m_table, 1);
 }
 
@@ -62,6 +65,9 @@ void HeaderPanel::setMetadata(const ImageBuffer::Metadata& meta) {
         m_table->setItem(i, 1, v);
         m_table->setItem(i, 2, c);
     }
+    
+    // Resize rows to fit wrapped text
+    m_table->resizeRowsToContents();
     
     // Re-apply filter if text present
     if (!m_searchBox->text().isEmpty()) {

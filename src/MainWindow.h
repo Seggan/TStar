@@ -211,6 +211,8 @@ private:
     QPointer<class StretchDialog> m_stretchDlg;
     QPointer<class SaturationDialog> m_satDlg;
     QPointer<class TemperatureTintDialog> m_tempTintDlg;
+    
+    bool m_lastWasProgress = false; // Tracks if the previous log line was a progress update
 
     // Tool Dialog Singletons
     QPointer<class ABEDialog> m_abeDlg;

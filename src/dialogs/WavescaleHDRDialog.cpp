@@ -210,7 +210,7 @@ void WavescaleHDRWorker::run() {
 // ------ Dialog ------
  
 WavescaleHDRDialog::WavescaleHDRDialog(QWidget* parent, ImageViewer* targetViewer)
-    : DialogBase(parent, tr("Wavescale HDR"), 1000, 700), m_targetViewer(targetViewer)
+    : DialogBase(parent, tr("Wavescale HDR"), 1100, 650), m_targetViewer(targetViewer)
 {
     
     // Copy for preview
@@ -325,12 +325,18 @@ void WavescaleHDRDialog::createUI() {
     m_viewer = new ImageViewer(this);
     m_viewer->setProperty("isPreview", true);  // Prevent MainWindow activation handler from treating this as target
     m_viewer->setMaskOverlay(false);           // Never show mask overlay in preview
-    m_viewer->setMinimumWidth(600);
-    contentLayout->addWidget(m_viewer, 1);
+    m_viewer->setMinimumWidth(400);            // Rebalanced from 300
+    contentLayout->addWidget(m_viewer, 1);      // Original stretch factor 1
     
     // Right: Controls
     QVBoxLayout* rightLayout = new QVBoxLayout();
     rightLayout->setContentsMargins(10, 0, 0, 0);
+    
+    // Controls should have enough space so sliders are wide enough
+    QWidget* rightContainer = new QWidget(this);
+    rightContainer->setLayout(rightLayout);
+    rightContainer->setMinimumWidth(400); // Increased from 300 as requested for wider controls
+    
     QGroupBox* grp = new QGroupBox(tr("HDR Controls"), this);
     QFormLayout* form = new QFormLayout(grp);
     
@@ -376,10 +382,10 @@ void WavescaleHDRDialog::createUI() {
     QGroupBox* maskGrp = new QGroupBox(tr("Mask Preview"), this);
     QVBoxLayout* maskLay = new QVBoxLayout(maskGrp);
     m_maskLabel = new QLabel(this);
-    m_maskLabel->setFixedSize(200, 200);
-    m_maskLabel->setScaledContents(false); // Fix: Prevent squashing
+    m_maskLabel->setFixedSize(350, 250);       // Reduced height from 350 to 250
+    m_maskLabel->setScaledContents(false); 
     m_maskLabel->setAlignment(Qt::AlignCenter); 
-    maskLay->addWidget(m_maskLabel);
+    maskLay->addWidget(m_maskLabel, 0, Qt::AlignCenter); 
     rightLayout->addWidget(maskGrp);
 
     // Opacity slider (0–100, default 100)
@@ -430,7 +436,7 @@ void WavescaleHDRDialog::createUI() {
     btnLayout->addWidget(m_applyBtn);
     rightLayout->addLayout(btnLayout);
     
-    contentLayout->addLayout(rightLayout);
+    contentLayout->addWidget(rightContainer);
     mainLayout->addLayout(contentLayout);
 }
 

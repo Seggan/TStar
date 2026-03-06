@@ -19,7 +19,7 @@
 #include <QUuid>
 
 MaskGenerationDialog::MaskGenerationDialog(const ImageBuffer& image, QWidget* parent) 
-    : DialogBase(parent, tr("Mask Generation"), 1024, 800), m_sourceImage(image) 
+    : DialogBase(parent, tr("Mask Generation"), 1024, 700), m_sourceImage(image) 
 {
     setWindowFlag(Qt::Window); // Allow minimize/maximize
     
@@ -95,13 +95,14 @@ void MaskGenerationDialog::setupUI() {
     // Generate preview image for background
     QImage bg = m_sourceImage.getDisplayImage(ImageBuffer::Display_AutoStretch, true); // AutoStretch by default for visibility
     m_canvas = new MaskCanvas(bg, this);
+    m_canvas->setFixedHeight(400); // Fixed height as requested by the user
+    m_canvas->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     connect(m_canvas, &MaskCanvas::maskContentChanged, this, &MaskGenerationDialog::updateLivePreview);
-    mainLayout->addWidget(m_canvas, 1);
+    mainLayout->addWidget(m_canvas);
     
     // --- 3. Controls ---
     QHBoxLayout* controls = new QHBoxLayout();
     controls->addWidget(new QLabel(tr("Mask Type:")));
-    m_typeCombo = new QComboBox();
     m_typeCombo = new QComboBox();
     m_typeCombo->addItem(tr("Binary"), "Binary");
     m_typeCombo->addItem(tr("Range Selection"), "Range Selection");
@@ -291,10 +292,18 @@ void MaskGenerationDialog::setupUI() {
     
     mainLayout->addLayout(btnLayout);
     
-    QDialogButtonBox* bbox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(bbox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(bbox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    mainLayout->addWidget(bbox);
+    // Using explicit buttons for correct ordering: Cancel on left, OK on right
+    QHBoxLayout* btnLayout2 = new QHBoxLayout();
+    btnLayout2->addStretch();
+    QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
+    QPushButton* okBtn = new QPushButton(tr("OK"));
+    okBtn->setDefault(true);
+    btnLayout2->addWidget(cancelBtn);
+    btnLayout2->addWidget(okBtn);
+    
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    mainLayout->addLayout(btnLayout2);
 }
 
 void MaskGenerationDialog::setMode(const QString& mode) {
@@ -309,7 +318,18 @@ void MaskGenerationDialog::onTypeChanged(const QString& type) {
     Q_UNUSED(type);
     QString id = m_typeCombo->currentData().toString();
     bool isRange = (id == "Range Selection");
+    
+    // Save current width to prevent horizontal expansion
+    int curWidth = width();
+    
     m_rangeGroup->setVisible(isRange);
+    
+    // Ensure the dialog resizes correctly to fit or shrink based on visible controls
+    updateGeometry();
+    adjustSize();
+    
+    // Restore width to keep it consistent
+    resize(curWidth, height());
 }
 
 MaskLayer MaskGenerationDialog::getGeneratedMask(int requestedW, int requestedH) const {

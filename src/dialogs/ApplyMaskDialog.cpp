@@ -3,6 +3,7 @@
 #include <QPixmap>
 #include <QDialogButtonBox>
 #include <QGroupBox>
+#include <QPushButton>
 #include <opencv2/opencv.hpp>
 
 ApplyMaskDialog::ApplyMaskDialog(int targetWidth, int targetHeight, QWidget* parent)
@@ -31,10 +32,16 @@ ApplyMaskDialog::ApplyMaskDialog(int targetWidth, int targetHeight, QWidget* par
     groupLayout->addWidget(m_previewLabel);
     previewLayout->addWidget(previewGroup, 1);
 
-    QDialogButtonBox* bbox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(bbox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(bbox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    previewLayout->addWidget(bbox);
+    QHBoxLayout* btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
+    QPushButton* okBtn = new QPushButton(tr("OK"));
+    okBtn->setDefault(true);
+    btnLayout->addWidget(cancelBtn);
+    btnLayout->addWidget(okBtn);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    previewLayout->addLayout(btnLayout);
 
     mainLayout->addLayout(previewLayout, 1);
 

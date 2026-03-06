@@ -91,8 +91,16 @@ ReferenceAlignDialog::ReferenceAlignDialog(QWidget* parent, const ImageBuffer& r
     mainLayout->addLayout(formOptions);
 
     // Dialog buttons
-    QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    mainLayout->addWidget(buttonBox);
+    QHBoxLayout* buttonBox = new QHBoxLayout();
+    buttonBox->addStretch();
+    QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
+    QPushButton* okBtn = new QPushButton(tr("OK"));
+    okBtn->setDefault(true);
+    buttonBox->addWidget(cancelBtn);
+    buttonBox->addWidget(okBtn);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    mainLayout->addLayout(buttonBox);
 
     connect(btnFlipH, &QPushButton::clicked, this, &ReferenceAlignDialog::onFlipHorizontal);
     connect(btnFlipV, &QPushButton::clicked, this, &ReferenceAlignDialog::onFlipVertical);
@@ -123,8 +131,7 @@ ReferenceAlignDialog::ReferenceAlignDialog(QWidget* parent, const ImageBuffer& r
 
     connect(m_sliderOpacity, &QSlider::valueChanged, this, &ReferenceAlignDialog::onOpacityChanged);
 
-    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    // Extraneous connects removed
 
     rebuildBuffer();
 }

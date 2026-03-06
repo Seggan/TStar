@@ -2228,11 +2228,73 @@ void MainWindow::log(const QString& msg, LogType type, bool autoShow) {
     else if (type == Log_Error) color = "red";
     else if (type == Log_Action) color = "#add8e6"; // Light Blue
     
-    QString timeStr = QDateTime::currentDateTime().toString("HH:mm:ss");
-    QString fullMsg = QString("<span style='color:gray'>[%1]</span> <span style='color:%2'>%3</span>")
-                      .arg(timeStr).arg(color).arg(msg);
-                      
-    m_sidebar->logToConsole(fullMsg);
+    // Split message into lines to handle multi-line tool outputs (e.g. from GraXpert)
+    QStringList lines = msg.split('\n', Qt::KeepEmptyParts);
+    for (const QString& line : lines) {
+        QString trimmed = line.trimmed();
+        if (trimmed.isEmpty()) continue;
+
+        // 1. Aggressive cleaning of bridge/python logging metadata
+        static QRegularExpression logMetadataRe("(\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2},\\d{3}\\s+MainProcess\\s+.*?\\s+(INFO|DEBUG|WARNING|ERROR)\\s*)|(\\[Bridge\\]\\s*)");
+        trimmed.remove(logMetadataRe);
+
+        // 2. Transience detection (Should this line overwrite the previous one?)
+        // Treat ALMOST EVERYTHING from bridge/worker as transient unless it's a critical milestone or success
+        bool isTransient = trimmed.contains("Progress:", Qt::CaseInsensitive) || 
+                           trimmed.contains("chunk ", Qt::CaseInsensitive) || 
+                           trimmed.contains("%") ||
+                           trimmed.contains("DEBUG:", Qt::CaseInsensitive) ||
+                           trimmed.contains("INFO:", Qt::CaseInsensitive) ||
+                           trimmed.contains("Shape=", Qt::CaseInsensitive) ||
+                           trimmed.contains("patch size", Qt::CaseInsensitive) ||
+                           trimmed.contains("mode=", Qt::CaseInsensitive) ||
+                           trimmed.contains("Input:", Qt::CaseInsensitive) ||
+                           trimmed.contains("Prepared:", Qt::CaseInsensitive) ||
+                           trimmed.contains("Before sharpen:", Qt::CaseInsensitive) ||
+                           trimmed.contains("After sharpen:", Qt::CaseInsensitive) ||
+                           trimmed.contains("tiles...", Qt::CaseInsensitive) ||
+                           trimmed.contains("Inference finished", Qt::CaseInsensitive) ||
+                           trimmed.contains(" - ", Qt::CaseInsensitive) || // Parameters like "smoothing - 0.1"
+                           trimmed.contains("Providers :", Qt::CaseInsensitive) ||
+                           trimmed.contains("Used providers :", Qt::CaseInsensitive) ||
+                           trimmed.contains("Model enforces", Qt::CaseInsensitive);
+
+        // Keep explicit bridge/tool actions persistent if they look like milestones or successes
+        if (trimmed.contains("RESULT:", Qt::CaseInsensitive) || 
+            trimmed.contains("Complete", Qt::CaseInsensitive) ||
+            trimmed.contains("Successful", Qt::CaseInsensitive) ||
+            trimmed.contains("Saved TIFF", Qt::CaseInsensitive) ||
+            trimmed.contains("Apertura", Qt::CaseInsensitive) ||
+            trimmed.contains("Avvio", Qt::CaseInsensitive) ||
+            trimmed.contains("Loading result", Qt::CaseInsensitive) ||
+            type == Log_Success || type == Log_Action) {
+            isTransient = false;
+        }
+
+        // Clean up leading technical tokens for a super clean look
+        if (isTransient) {
+            QStringList tokens = {"Progress:", "chunk ", "INFO:", "DEBUG:"};
+            for (const QString& tok : tokens) {
+                int idx = trimmed.indexOf(tok, 0, Qt::CaseInsensitive);
+                if (idx >= 0) {
+                    trimmed = trimmed.mid(idx);
+                    break;
+                }
+            }
+        }
+
+        QString timeStr = QDateTime::currentDateTime().toString("HH:mm:ss");
+        QString fullMsg = QString("<span style='color:gray'>[%1]</span> <span style='color:%2'>%3</span>")
+                          .arg(timeStr).arg(color).arg(trimmed);
+
+        if (isTransient && m_lastWasProgress) {
+            m_sidebar->updateLastLogLine(fullMsg);
+        } else {
+            m_sidebar->logToConsole(fullMsg);
+        }
+        m_lastWasProgress = isTransient;
+    }
+    
     // Ensure console is transparent even after updates
     if (QWidget* p = m_sidebar->getPanel("Console")) {
         p->setStyleSheet("background-color: transparent; border: none;");

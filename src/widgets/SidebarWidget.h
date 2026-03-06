@@ -45,6 +45,7 @@ public:
     
     // Add text to the Console panel (assumed to be named "Console")
     void logToConsole(const QString& htmlMsg);
+    void updateLastLogLine(const QString& htmlMsg);
 
     // Public control for collapse/expand
     void collapse() { setExpanded(false); }
