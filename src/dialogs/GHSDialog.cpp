@@ -79,6 +79,9 @@ void GHSDialog::setupUI() {
     m_zoomOutBtn->setText("-");
     m_zoomOutBtn->setFixedWidth(24);
     m_zoomOutBtn->setToolTip(tr("Zoom Out"));
+    m_zoomOutBtn->setAutoRepeat(true);
+    m_zoomOutBtn->setAutoRepeatDelay(400);
+    m_zoomOutBtn->setAutoRepeatInterval(50);
     histoToolbar->addWidget(m_zoomOutBtn);
     
     m_zoomLabel = new QLabel("1x");
@@ -90,6 +93,9 @@ void GHSDialog::setupUI() {
     m_zoomInBtn->setText("+");
     m_zoomInBtn->setFixedWidth(24);
     m_zoomInBtn->setToolTip(tr("Zoom In"));
+    m_zoomInBtn->setAutoRepeat(true);
+    m_zoomInBtn->setAutoRepeatDelay(400);
+    m_zoomInBtn->setAutoRepeatInterval(50);
     histoToolbar->addWidget(m_zoomInBtn);
     
     // Zoom Reset
@@ -450,7 +456,7 @@ void GHSDialog::connectSignals() {
     
     // Histogram controls - Zoom buttons
     connect(m_zoomInBtn, &QToolButton::clicked, [this](){
-        if (m_zoomLevel < 10) {
+        if (m_zoomLevel < 100) {
             m_zoomLevel++;
             m_zoomLabel->setText(QString("%1x").arg(m_zoomLevel));
             onZoomChanged();
