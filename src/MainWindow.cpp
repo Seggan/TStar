@@ -461,7 +461,10 @@ MainWindow::MainWindow(QWidget *parent)
                     }
                     if (m_arcsinhDlg) m_arcsinhDlg->setViewer(v);
                     if (m_scnrDlg) m_scnrDlg->setViewer(v);
-                    if (m_pixelMathDialog) m_pixelMathDialog->setViewer(v);
+                    if (m_pixelMathDialog) {
+                        m_pixelMathDialog->setViewer(v);
+                        m_pixelMathDialog->setImages(getImageRefsForPixelMath());
+                    }
                     if (m_rarDlg) m_rarDlg->setViewer(v);
                     if (m_starStretchDlg) m_starStretchDlg->setViewer(v);
                     if (m_starRecompDlg) m_starRecompDlg->setViewer(v);
@@ -834,6 +837,17 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
     mainToolbar->addWidget(m_linkChannelsBtn);
+
+    // Burn Display Button (next to Link Channels)
+    QWidget* spacerBurn = new QWidget(this);
+    spacerBurn->setFixedWidth(5);
+    mainToolbar->addWidget(spacerBurn);
+    
+    m_burnDisplayBtn = new QToolButton(this);
+    m_burnDisplayBtn->setIcon(makeIcon("images/burn.svg"));
+    m_burnDisplayBtn->setToolTip(tr("Burn Display View to Buffer\n(Applies current stretch/display mode permanently)"));
+    connect(m_burnDisplayBtn, &QToolButton::clicked, this, &MainWindow::onBurnDisplay);
+    mainToolbar->addWidget(m_burnDisplayBtn);
 
     // Spacer
     QWidget* s1 = new QWidget(this);
@@ -1339,6 +1353,97 @@ void MainWindow::redo() {
         log("Redo performed", Log_Success);
     } else {
         log("No active viewer for redo", Log_Warning);
+    }
+}
+
+void MainWindow::onBurnDisplay() {
+    // Burn the current display view (with stretch/AutoStretch/etc) to the buffer permanently
+    if (auto v = currentViewer()) {
+        // Save undo state before modifying
+        v->pushUndo();
+        
+        ImageBuffer& buffer = v->getBuffer();
+        if (!buffer.isValid()) {
+            log(tr("Cannot burn display: Invalid buffer"), Log_Warning, true);
+            return;
+        }
+        
+        // Save the current display mode before we change it
+        ImageBuffer::DisplayMode originalMode = v->getDisplayMode();
+        bool originalLinked = v->isDisplayLinked();
+        bool originalInverted = v->isDisplayInverted();
+        bool originalFalseColor = v->isDisplayFalseColor();
+        
+        // Get the display image with current display mode applied (including inverted and falseColor)
+        QImage displayImg = buffer.getDisplayImage(originalMode, originalLinked, nullptr, 0, 0, false, 
+                                                    originalInverted, originalFalseColor, m_autoStretchMedianValue);
+        
+        if (displayImg.isNull()) {
+            log(tr("Cannot burn display: Failed to generate display image"), Log_Warning, true);
+            return;
+        }
+        
+        // Convert QImage back to ImageBuffer (float format)
+        // Handle RGB and Grayscale formats
+        int channels = (displayImg.format() == QImage::Format_Grayscale8) ? 1 : 3;
+        int w = displayImg.width();
+        int h = displayImg.height();
+        
+        std::vector<float> data(w * h * channels);
+        
+        for (int y = 0; y < h; ++y) {
+            const uchar* line = displayImg.scanLine(y);
+            for (int x = 0; x < w; ++x) {
+                if (channels == 1) {
+                    // Grayscale: single byte per pixel
+                    data[y * w + x] = line[x] / 255.0f;
+                } else {
+                    // RGB: 3 bytes per pixel
+                    data[(y * w + x) * 3 + 0] = line[x * 3 + 0] / 255.0f;  // R
+                    data[(y * w + x) * 3 + 1] = line[x * 3 + 1] / 255.0f;  // G
+                    data[(y * w + x) * 3 + 2] = line[x * 3 + 2] / 255.0f;  // B
+                }
+            }
+        }
+        
+        // Create new buffer with the burned display data
+        ImageBuffer newBuffer(w, h, channels);
+        newBuffer.setData(w, h, channels, data);
+        
+        // Apply the new buffer
+        v->setBuffer(newBuffer, v->windowTitle(), true);
+        
+        // Reset display state to Linear with no invert and no false color
+        v->setDisplayState(ImageBuffer::Display_Linear, true);
+        v->setInverted(false);
+        v->setFalseColor(false);
+        v->refreshDisplay();
+        
+        // Update the combo box to match the new Linear state
+        if (m_stretchCombo) {
+            QSignalBlocker blocker(m_stretchCombo);
+            m_stretchCombo->setCurrentIndex(0);  // "Linear" is always at index 0
+            blocker.unblock();
+            // Manually trigger the signal to update m_displayMode
+            m_displayMode = ImageBuffer::Display_Linear;
+        }
+        
+        // Log the operation with the original display mode
+        QString modeStr = (originalMode == ImageBuffer::Display_AutoStretch ? "AutoStretch" :
+                          originalMode == ImageBuffer::Display_ArcSinh ? "ArcSinh" :
+                          originalMode == ImageBuffer::Display_Sqrt ? "Sqrt" :
+                          originalMode == ImageBuffer::Display_Log ? "Log" :
+                          "Linear");
+        
+        QString extraStr = "";
+        if (originalInverted) extraStr += " + Inverted";
+        if (originalFalseColor) extraStr += " + FalseColor";
+        
+        log(tr("Display burned to buffer (") + modeStr + extraStr + ")", Log_Success, true);
+        
+        updateMenus();
+    } else {
+        log(tr("Cannot burn display: No active viewer"), Log_Warning, true);
     }
 }
 
@@ -2888,6 +2993,29 @@ void MainWindow::openBackgroundNeutralizationDialog() {
 // ============================================================================
 // Pixel Math
 // ============================================================================
+
+// Build the list of all open image viewers as PMImageRef variables I1, I2, ...
+// The most recently active viewer comes first so it ends up as I1.
+QVector<PMImageRef> MainWindow::getImageRefsForPixelMath() const {
+    QVector<PMImageRef> result;
+    int idx = 1;
+    // Walk subwindow list in activation order (last activated = first in list)
+    for (auto* sub : m_mdiArea->subWindowList(QMdiArea::ActivationHistoryOrder)) {
+        auto* csw = qobject_cast<CustomMdiSubWindow*>(sub);
+        if (!csw || csw->isToolWindow() || !csw->viewer()) continue;
+        ImageViewer* v = csw->viewer();
+        if (!v->getBuffer().isValid()) continue;
+        PMImageRef ref;
+        ref.varId  = QString("I%1").arg(idx++);
+        ref.name   = csw->windowTitle();
+        if (ref.name.isEmpty()) ref.name = v->windowTitle();
+        ref.buffer = &v->getBuffer();
+        result.append(ref);
+        if (idx > 10) break;
+    }
+    return result;
+}
+
 void MainWindow::openPixelMathDialog() {
     ImageViewer* viewer = currentViewer();
     if (!viewer) {
@@ -2915,28 +3043,28 @@ void MainWindow::openPixelMathDialog() {
         return;
     }
     
-    m_pixelMathDialog = new PixelMathDialog(this, nullptr); 
+    m_pixelMathDialog = new PixelMathDialog(this, nullptr);
     m_pixelMathDialog->setAttribute(Qt::WA_DeleteOnClose, true);
 
-    
-    // Logic setup...
-    connect(m_pixelMathDialog, &PixelMathDialog::apply, [this](const QString& expr, bool rescale){
-         ImageViewer* v = currentViewer();
-         if(v) {
-             pushUndo();
-             QString err;
-             if (PixelMathDialog::evaluateExpression(expr, v->getBuffer(), rescale, &err)) {
-                 updateActiveImage();
-                 log(tr("PixelMath Applied") + QString(rescale ? tr(" (Rescaled)") : "") + ": " + expr.left(30) + "...", Log_Success, true);
-             } else {
-                 QMessageBox::critical(this, tr("PixelMath Error"), err);
-                 undo(); // Revert
-             }
-         }
+    connect(m_pixelMathDialog, &PixelMathDialog::apply, [this](const QString& expr, bool rescale) {
+        ImageViewer* v = currentViewer();
+        if (v) {
+            pushUndo();
+            QString err;
+            QVector<PMImageRef> imgs = getImageRefsForPixelMath();
+            if (PixelMathDialog::evaluateExpression(expr, v->getBuffer(), imgs, rescale, &err)) {
+                updateActiveImage();
+                log(tr("PixelMath Applied") + QString(rescale ? tr(" (Rescaled)") : "") + ": " + expr.left(40) + "...", Log_Success, true);
+            } else {
+                QMessageBox::critical(this, tr("PixelMath Error"), err);
+                undo();
+            }
+        }
     });
 
     setupToolSubwindow(nullptr, m_pixelMathDialog, tr("Pixel Math"));
     if (viewer) m_pixelMathDialog->setViewer(viewer);
+    m_pixelMathDialog->setImages(getImageRefsForPixelMath());
 }
 
 

@@ -14,13 +14,13 @@
 #include "dialogs/CurvesDialog.h"
 #include "dialogs/SaturationDialog.h"
 #include "dialogs/TemperatureTintDialog.h"
+#include "dialogs/PixelMathDialog.h"
 #include <QMap>
 #include <QSettings>
 
 
 class VizierClient;
 class StretchDialog;
-class PixelMathDialog;
 class CustomMdiSubWindow;
 class ABEDialog;
 class CBEDialog;
@@ -82,6 +82,7 @@ public:
 private slots:
     void undo();
     void redo();
+    void onBurnDisplay();  // Burn the current display view to the buffer
     // Existing slots...
     void openFile();
     void saveFile();
@@ -166,6 +167,9 @@ private:
     void updateDisplay() override;
     void updateMenus(); // Enable/Disable Undo/Redo
 
+    // Returns all open image viewers as PMImageRef variables for Pixel Math.
+    QVector<PMImageRef> getImageRefsForPixelMath() const;
+
     QMdiArea* m_mdiArea;
     // Moved to public: void createNewImageWindow(const ImageBuffer& buffer, const QString& title);
     QString generateUniqueTitle(const QString& baseTitle);
@@ -222,7 +226,7 @@ private:
     QPointer<class HistogramStretchDialog> m_histoDlg;
     QPointer<class ArcsinhStretchDialog> m_arcsinhDlg;
     QPointer<class SCNRDialog> m_scnrDlg;
-    QPointer<class PixelMathDialog> m_pixelMathDialog;
+    QPointer<PixelMathDialog> m_pixelMathDialog;
     QPointer<class RARDialog> m_rarDlg;
     QPointer<class StarStretchDialog> m_starStretchDlg;
     QPointer<class StarRecompositionDialog> m_starRecompDlg;
@@ -256,6 +260,7 @@ private:
     class QToolButton* m_autoStretchMedianBtn = nullptr;
     float m_autoStretchMedianValue = 0.25f;
     class QToolButton* m_linkChannelsBtn;
+    class QToolButton* m_burnDisplayBtn;
     class QToolButton* m_invertBtn;
     class QToolButton* m_falseColorBtn;
     class QAction* m_linkViewsAction;

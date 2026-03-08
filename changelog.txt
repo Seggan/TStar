@@ -4,6 +4,7 @@ TStar Changelog
 Version 1.7.5
 -------------
 - Introduced image magnifier that follows the cursor
+- Added "burn" button to make current image appearance permanent
 - Minor optimizations
 
 Version 1.7.4

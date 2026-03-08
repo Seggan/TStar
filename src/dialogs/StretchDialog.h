@@ -47,6 +47,8 @@ private:
     QPointer<class ImageViewer> m_viewer = nullptr;
     ImageBuffer m_originalBuffer;
     bool m_applied = false;
+    ImageBuffer::DisplayMode m_originalDisplayMode = ImageBuffer::Display_Linear;
+    bool m_originalDisplayLinked = true;
 
     // Basic Controls
     QDoubleSpinBox* m_targetSpin;

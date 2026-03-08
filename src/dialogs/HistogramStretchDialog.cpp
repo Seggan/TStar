@@ -34,6 +34,8 @@ HistogramStretchDialog::~HistogramStretchDialog() {
         if (m_backup.isValid()) {
             m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
         }
+        m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
+        m_viewer->refreshDisplay();
     }
 }
 
@@ -42,6 +44,7 @@ void HistogramStretchDialog::reject() {
     if (m_viewer) {
         m_viewer->clearPreviewLUT();
         if (m_backup.isValid()) {
+            m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
             m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
         }
     }
@@ -61,6 +64,8 @@ void HistogramStretchDialog::setViewer(ImageViewer* v) {
     
     if (m_viewer && m_viewer->getBuffer().isValid()) {
         m_backup = m_viewer->getBuffer();
+        m_originalDisplayMode = m_viewer->getDisplayMode();
+        m_originalDisplayLinked = m_viewer->isDisplayLinked();
         if (m_histogram) {
              m_baseHist = m_backup.computeHistogram(65536);
              m_histogram->setData(m_baseHist, m_backup.channels());
@@ -82,6 +87,9 @@ void HistogramStretchDialog::setupUI() {
     m_zoomOutBtn = new QToolButton();
     m_zoomOutBtn->setText("-");
     m_zoomOutBtn->setFixedWidth(24);
+    m_zoomOutBtn->setAutoRepeat(true);  // Hold button to keep zooming
+    m_zoomOutBtn->setAutoRepeatDelay(300);  // Start repeat after 300ms
+    m_zoomOutBtn->setAutoRepeatInterval(50);  // Repeat every 50ms
     histoToolbar->addWidget(m_zoomOutBtn);
     
     m_zoomLabel = new QLabel("1x");
@@ -92,6 +100,9 @@ void HistogramStretchDialog::setupUI() {
     m_zoomInBtn = new QToolButton();
     m_zoomInBtn->setText("+");
     m_zoomInBtn->setFixedWidth(24);
+    m_zoomInBtn->setAutoRepeat(true);  // Hold button to keep zooming
+    m_zoomInBtn->setAutoRepeatDelay(300);  // Start repeat after 300ms
+    m_zoomInBtn->setAutoRepeatInterval(50);  // Repeat every 50ms
     histoToolbar->addWidget(m_zoomInBtn);
     
     m_zoomResetBtn = new QToolButton();
@@ -273,7 +284,7 @@ void HistogramStretchDialog::setupUI() {
 
     // Zoom connections
     connect(m_zoomInBtn, &QToolButton::clicked, [this](){
-        if (m_zoomLevel < 10) { m_zoomLevel++; m_zoomLabel->setText(QString("%1x").arg(m_zoomLevel)); onZoomChanged(); }
+        if (m_zoomLevel < 100) { m_zoomLevel++; m_zoomLabel->setText(QString("%1x").arg(m_zoomLevel)); onZoomChanged(); }
     });
     connect(m_zoomOutBtn, &QToolButton::clicked, [this](){
         if (m_zoomLevel > 1) { m_zoomLevel--; m_zoomLabel->setText(QString("%1x").arg(m_zoomLevel)); onZoomChanged(); }
@@ -342,7 +353,10 @@ void HistogramStretchDialog::onPreviewToggled(bool checked) {
     if (checked) {
         updatePreview();
     } else {
-        if (m_viewer) m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
+        if (m_viewer) {
+            m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
+            m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
+        }
         m_lowClipLabel->setText(tr("Low: 0.00%"));
         m_highClipLabel->setText(tr("High: 0.00%"));
     }
@@ -395,7 +409,10 @@ void HistogramStretchDialog::onReset() {
     m_greenBtn->setChecked(true);
     m_blueBtn->setChecked(true);
     
-    if (m_viewer) m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
+    if (m_viewer) {
+        m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
+        m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
+    }
     if (m_histogram && m_backup.isValid()) {
         auto bins = m_backup.computeHistogram(65536);
         m_histogram->setData(bins, m_backup.channels());
@@ -418,12 +435,17 @@ void HistogramStretchDialog::onApply() {
         // 3. Apply MTF
         ImageBuffer buf = m_backup;
         applyMTF(buf, m_shadows, m_midtones, m_highlights, m_doRed, m_doGreen, m_doBlue);
+        // Switch to Linear BEFORE setBuffer so refreshDisplay shows the stretched
+        // data as-is, without a second auto-stretch pass on top of the MTF result.
+        m_viewer->setDisplayState(ImageBuffer::Display_Linear, m_originalDisplayLinked);
         m_viewer->setBuffer(buf, m_viewer->windowTitle(), true);
         
         m_applied = true;
         
         // --- Persistence: Keep dialog open for continued adjustments ---
         // Update backup to the newly applied result so subsequent cancels/closes revert to THIS state
+        // Also update the saved display mode: after apply the image is stretched, so Linear is now correct.
+        m_originalDisplayMode = ImageBuffer::Display_Linear;
         m_backup = buf;
         // We do NOT set m_applied = true because we want destructor/reject to ALWAYS restore m_backup
         // (which now holds the applied state). This handles cases where user applies, then changes sliders, then cancels.
@@ -470,19 +492,17 @@ void HistogramStretchDialog::onApply() {
 
 void HistogramStretchDialog::updatePreview() {
     if (!m_viewer || !m_previewCheck->isChecked()) return;
-    
-    // Create Preview LUT (65536 levels)
-    std::vector<std::vector<float>> luts(3, std::vector<float>(65536));
-    for (int i = 0; i < 65536; ++i) {
-        float x = (float)i / 65535.0f;
-        float y = MTF(x, m_midtones, m_shadows, m_highlights);
-        luts[0][i] = m_doRed ? y : x;
-        luts[1][i] = m_doGreen ? y : x;
-        luts[2][i] = m_doBlue ? y : x;
-    }
-    m_viewer->setPreviewLUT(luts);
-    
-    // Clipping stats are updated in updateHistogramOnly now (much faster)
+
+    // Apply MTF directly to a float copy of the backup buffer and show it in Linear
+    // mode. This matches exactly what onApply() does, so preview == apply result.
+    // Using a 65536-entry LUT was previously used here, but that approach only has
+    // ~65 effective levels for linear astronomical images (values in [0, 0.001]),
+    // causing visible banding/posterization. Direct float computation avoids this.
+    m_viewer->clearPreviewLUT();
+    ImageBuffer temp = m_backup;
+    applyMTF(temp, m_shadows, m_midtones, m_highlights, m_doRed, m_doGreen, m_doBlue);
+    m_viewer->setDisplayState(ImageBuffer::Display_Linear, m_originalDisplayLinked);
+    m_viewer->setBuffer(temp, m_viewer->windowTitle(), true);
 }
 
 void HistogramStretchDialog::updateHistogramOnly() {
@@ -635,64 +655,17 @@ void HistogramStretchDialog::applyMTF(ImageBuffer& buffer, float shadows, float 
     }
 }
 
-void HistogramStretchDialog::computeAutostretch(const ImageBuffer& buffer, 
+void HistogramStretchDialog::computeAutostretch(const ImageBuffer& buffer,
                                                   float& shadows, float& midtones, float& highlights) {
     if (!buffer.isValid()) return;
-    
-    int channels = buffer.channels();
-    int w = buffer.width();
-    int h = buffer.height();
-    size_t n = static_cast<size_t>(w) * h;
-    
-    const std::vector<float>& data = buffer.data();
-    
-    float c0_sum = 0.0f;
-    float m_sum = 0.0f;
-    
-    for (int c = 0; c < channels; ++c) {
-        // Extract channel data
-        std::vector<float> channelData(n);
-        if (channels == 3) {
-            for (size_t i = 0; i < n; ++i) {
-                channelData[i] = data[i * 3 + c];
-            }
-        } else {
-            channelData.assign(data.begin(), data.end());
-        }
-        
-        // Compute median
-        std::vector<float> sorted = channelData;
-        std::nth_element(sorted.begin(), sorted.begin() + n/2, sorted.end());
-        float median = sorted[n/2];
-        
-        // Compute MAD (Median Absolute Deviation)
-        std::vector<float> deviations(n);
-        for (size_t i = 0; i < n; ++i) {
-            deviations[i] = std::abs(channelData[i] - median);
-        }
-        std::nth_element(deviations.begin(), deviations.begin() + n/2, deviations.end());
-        float mad = deviations[n/2] * MAD_NORM;
-        
-        // Guard against zero MAD
-        if (mad == 0.0f) mad = 0.001f;
-        
-        // Compute shadow clipping
-        float c0 = median + AS_DEFAULT_SHADOWS_CLIPPING * mad;
-        if (c0 < 0.0f) c0 = 0.0f;
-        
-        c0_sum += c0;
-        m_sum += median;
-    }
-    
-    // Average across channels
-    c0_sum /= channels;
-    m_sum /= channels;
-    
-    // Compute final parameters
-    shadows = c0_sum;
-    float m2 = m_sum - c0_sum;
-    midtones = MTF(m2, AS_DEFAULT_TARGET_BACKGROUND, 0.0f, 1.0f);
-    highlights = 1.0f;
+    // Delegate entirely to ImageBuffer::computeAutoStretchParams, which uses the exact same
+    // internal computeStats() code as getDisplayImage(Display_AutoStretch). This is the only
+    // way to guarantee that Auto Stretch in the dialog produces bit-identical results to the display.
+    float targetMedian = (m_viewer) ? m_viewer->getAutoStretchMedian() : AS_DEFAULT_TARGET_BACKGROUND;
+    auto p = buffer.computeAutoStretchParams(true, targetMedian);
+    shadows    = p.shadows;
+    midtones   = p.midtones;
+    highlights = p.highlights;
 }
 
 float HistogramStretchDialog::computeMedian(const float* data, size_t n) {

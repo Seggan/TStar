@@ -722,6 +722,45 @@ struct StandardSTFParams {
     return result;
 }
 
+ImageBuffer::STFParams ImageBuffer::computeAutoStretchParams(bool linked, float targetMedian) const {
+    ReadLock lock(this);
+    STFParams result;
+    if (m_data.empty()) return result;
+
+    const float shadowClip = -2.8f;
+    std::vector<ChStats> stats(m_channels);
+    for (int c = 0; c < m_channels; ++c)
+        stats[c] = computeStats(m_data, m_width, m_height, m_channels, c);
+
+    if (linked && m_channels >= 3) {
+        float avgMed = 0.0f, avgMad = 0.0f;
+        for (int c = 0; c < m_channels; ++c) { avgMed += stats[c].median; avgMad += stats[c].mad; }
+        avgMed /= m_channels; avgMad /= m_channels;
+        float shadow = std::max(0.0f, avgMed + shadowClip * avgMad);
+        if (shadow >= avgMed) shadow = std::max(0.0f, avgMed - 0.001f);
+        float mid = avgMed - shadow;
+        if (mid <= 0.0f) mid = 0.5f;
+        result.shadows    = shadow;
+        result.midtones   = mtf_func(targetMedian, mid);
+        result.highlights = 1.0f;
+    } else {
+        for (int c = 0; c < m_channels; ++c) {
+            float shadow = std::max(0.0f, stats[c].median + shadowClip * stats[c].mad);
+            if (shadow >= stats[c].median) shadow = std::max(0.0f, stats[c].median - 0.001f);
+            float mid = stats[c].median - shadow;
+            if (mid <= 0.0f) mid = 0.5f;
+            // For mono or unlinked: return blended params (same as display unlinked path uses per-channel,
+            // but for the dialog we return averaged since it applies a single MTF to all enabled channels)
+            result.shadows    += shadow;
+            result.midtones   += mtf_func(targetMedian, mid);
+        }
+        result.shadows   /= m_channels;
+        result.midtones  /= m_channels;
+        result.highlights = 1.0f;
+    }
+    return result;
+}
+
 QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::vector<std::vector<float>>* overrideLUT, int maxWidth, int maxHeight, bool showMask, bool inverted, bool falseColor, float autoStretchTargetMedian, ChannelView channelView) const {
     ReadLock lock(this);  // Thread-safe read access
     

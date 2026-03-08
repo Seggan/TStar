@@ -204,21 +204,41 @@ bool XISFReader::parseHeader(const QByteArray& headerXml, XISFHeaderInfo& info, 
                             // Extract specific metadata
                             if (name == "FOCALLEN") info.meta.focalLength = val.toDouble();
                             else if (name == "XPIXSZ" || name == "PIXSIZE") info.meta.pixelSize = val.toDouble();
-                            else if (name == "RA") info.meta.ra = val.toDouble();
-                            else if (name == "DEC") info.meta.dec = val.toDouble();
+                            else if (name == "RA") {
+                                bool ok;
+                                double ra = FitsHeaderUtils::parseRA(val, &ok);
+                                if (ok) info.meta.ra = ra;
+                            }
+                            else if (name == "DEC") {
+                                bool ok;
+                                double dec = FitsHeaderUtils::parseDec(val, &ok);
+                                if (ok) info.meta.dec = dec;
+                            }
                             else if (name == "OBJCTRA") {
                                 // HMS string format, parse to degrees
-                                info.meta.ra = FitsHeaderUtils::parseRA(val);
+                                bool ok;
+                                double ra = FitsHeaderUtils::parseRA(val, &ok);
+                                if (ok) info.meta.ra = ra;
                             }
                             else if (name == "OBJCTDEC") {
                                 // DMS string format, parse to degrees
-                                info.meta.dec = FitsHeaderUtils::parseDec(val);
+                                bool ok;
+                                double dec = FitsHeaderUtils::parseDec(val, &ok);
+                                if (ok) info.meta.dec = dec;
                             }
                             else if (name == "DATE-OBS") info.meta.dateObs = val;
                             else if (name == "OBJECT") info.meta.objectName = val;
                             // WCS Keywords
-                            else if (name == "CRVAL1") info.meta.ra = val.toDouble();
-                            else if (name == "CRVAL2") info.meta.dec = val.toDouble();
+                            else if (name == "CRVAL1") {
+                                bool ok;
+                                double ra = FitsHeaderUtils::parseRA(val, &ok);
+                                if (ok) info.meta.ra = ra;
+                            }
+                            else if (name == "CRVAL2") {
+                                bool ok;
+                                double dec = FitsHeaderUtils::parseDec(val, &ok);
+                                if (ok) info.meta.dec = dec;
+                            }
                             else if (name == "CRPIX1") info.meta.crpix1 = val.toDouble();
                             else if (name == "CRPIX2") info.meta.crpix2 = val.toDouble();
                             else if (name == "CD1_1") info.meta.cd1_1 = val.toDouble();
@@ -752,18 +772,38 @@ bool XISFReader::parseAllImages(const QByteArray& headerXml, QList<XISFHeaderInf
                         
                         if (name == "FOCALLEN") info.meta.focalLength = val.toDouble();
                         else if (name == "XPIXSZ" || name == "PIXSIZE") info.meta.pixelSize = val.toDouble();
-                        else if (name == "RA") info.meta.ra = val.toDouble();
-                        else if (name == "DEC") info.meta.dec = val.toDouble();
+                        else if (name == "RA") {
+                            bool ok;
+                            double ra = FitsHeaderUtils::parseRA(val, &ok);
+                            if (ok) info.meta.ra = ra;
+                        }
+                        else if (name == "DEC") {
+                            bool ok;
+                            double dec = FitsHeaderUtils::parseDec(val, &ok);
+                            if (ok) info.meta.dec = dec;
+                        }
                         else if (name == "OBJCTRA") {
-                            info.meta.ra = FitsHeaderUtils::parseRA(val);
+                            bool ok;
+                            double ra = FitsHeaderUtils::parseRA(val, &ok);
+                            if (ok) info.meta.ra = ra;
                         }
                         else if (name == "OBJCTDEC") {
-                            info.meta.dec = FitsHeaderUtils::parseDec(val);
+                            bool ok;
+                            double dec = FitsHeaderUtils::parseDec(val, &ok);
+                            if (ok) info.meta.dec = dec;
                         }
                         else if (name == "DATE-OBS") info.meta.dateObs = val;
                         else if (name == "OBJECT") info.meta.objectName = val;
-                        else if (name == "CRVAL1") info.meta.ra = val.toDouble();
-                        else if (name == "CRVAL2") info.meta.dec = val.toDouble();
+                        else if (name == "CRVAL1") {
+                            bool ok;
+                            double ra = FitsHeaderUtils::parseRA(val, &ok);
+                            if (ok) info.meta.ra = ra;
+                        }
+                        else if (name == "CRVAL2") {
+                            bool ok;
+                            double dec = FitsHeaderUtils::parseDec(val, &ok);
+                            if (ok) info.meta.dec = dec;
+                        }
                         else if (name == "CRPIX1") info.meta.crpix1 = val.toDouble();
                         else if (name == "CRPIX2") info.meta.crpix2 = val.toDouble();
                         else if (name == "CD1_1") info.meta.cd1_1 = val.toDouble();

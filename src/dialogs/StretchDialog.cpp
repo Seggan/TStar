@@ -222,9 +222,8 @@ void StretchDialog::onLumaOnlyToggled(bool enabled) {
 StretchDialog::~StretchDialog() {
     // CRITICAL: Always restore original buffer if preview was active and not applied
     if (!m_applied && m_viewer && m_originalBuffer.isValid()) {
-        // Restore original buffer to undo any preview
+        m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
         m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-        // Clear LUT preview
         m_viewer->clearPreviewLUT();
     }
 }
@@ -240,9 +239,10 @@ void StretchDialog::reject() {
     // Always restore when dialog is closed without applying
     if (m_viewer) {
         m_viewer->clearPreviewLUT();
-        // Restore original buffer if we have a backup
+        // Restore original buffer and display mode if not applied
         if (m_originalBuffer.isValid() && !m_applied) {
             m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
+            m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
         }
     }
     QDialog::reject();
@@ -254,6 +254,7 @@ void StretchDialog::closeEvent(QCloseEvent* event) {
         m_viewer->clearPreviewLUT();
         if (m_originalBuffer.isValid()) {
             m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
+            m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
         }
     }
     QDialog::closeEvent(event);
@@ -280,6 +281,8 @@ void StretchDialog::setViewer(ImageViewer* v) {
     
     if (m_viewer && m_viewer->getBuffer().isValid()) {
         m_originalBuffer = m_viewer->getBuffer();
+        m_originalDisplayMode = m_viewer->getDisplayMode();
+        m_originalDisplayLinked = m_viewer->isDisplayLinked();
         // Clear any previous preview state when switching viewers
         m_viewer->clearPreviewLUT();
     }
@@ -302,6 +305,8 @@ void StretchDialog::onPreview() {
         
         ImageBuffer temp = m_originalBuffer;
         temp.performTrueStretch(p);
+        // Switch to Linear BEFORE setBuffer so the stretched preview is shown as-is.
+        m_viewer->setDisplayState(ImageBuffer::Display_Linear, m_originalDisplayLinked);
         m_viewer->setBuffer(temp, m_viewer->windowTitle(), true);  // Changed to preserveView=true for better UX
         
         if (overlay) {
@@ -309,13 +314,15 @@ void StretchDialog::onPreview() {
             overlay->update();
         }
     } else {
-        // IMPORTANT: When switching from modal preview (full buffer) to LUT preview,
-        // we MUST restore the original buffer first, then apply LUT
-        // This prevents the image from remaining stretched
-        m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
+        // Perform stretch on a temp buffer rather than using a LUT.
+        // A 65536-entry LUT only provides ~65 effective levels for linear astronomical
+        // images (pixel values in [0, 0.001]), causing banding in the preview.
+        // Direct float computation gives the same result as onApply().
         m_viewer->clearPreviewLUT();
-        auto lut = m_originalBuffer.computeTrueStretchLUT(p);
-        m_viewer->setPreviewLUT(lut);
+        ImageBuffer temp = m_originalBuffer;
+        temp.performTrueStretch(p);
+        m_viewer->setDisplayState(ImageBuffer::Display_Linear, m_originalDisplayLinked);
+        m_viewer->setBuffer(temp, m_viewer->windowTitle(), true);
     }
 }
 
@@ -333,6 +340,9 @@ void StretchDialog::onApply() {
         
         ImageBuffer::StretchParams p = getParams();
         m_viewer->getBuffer().performTrueStretch(p);
+        // Switch to linear display so the stretched result is shown as-is,
+        // preventing auto-stretch from being re-applied to already-stretched data.
+        m_viewer->setDisplayState(ImageBuffer::Display_Linear, m_originalDisplayLinked);
         m_viewer->refreshDisplay();
         
         if (overlay) {

@@ -61,6 +61,8 @@ private:
     QPointer<ImageViewer> m_viewer;
     ImageBuffer m_backup;
     bool m_applied = false;
+    ImageBuffer::DisplayMode m_originalDisplayMode = ImageBuffer::Display_Linear;
+    bool m_originalDisplayLinked = true;
     
     // UI elements
     HistogramWidget* m_histogram;
