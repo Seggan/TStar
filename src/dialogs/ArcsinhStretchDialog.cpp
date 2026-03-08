@@ -128,18 +128,19 @@ void ArcsinhStretchDialog::setupUI() {
     mainLayout->addLayout(buttonLayout);
     
     // --- Connections ---
-    // Slider drag: update spin only, no preview
+    // Slider drag: update spin and clipping stats ONLY (no preview to avoid lag)
     connect(m_stretchSlider, &QSlider::valueChanged, [this](int val){
         double dval = val / 10.0;
         m_stretchSpin->blockSignals(true);
         m_stretchSpin->setValue(dval);
         m_stretchSpin->blockSignals(false);
         m_stretch = static_cast<float>(dval);
+        updateClippingStatsOnly();  // Live clipping stats, no preview
     });
     // Slider release: trigger preview
     connect(m_stretchSlider, &QSlider::sliderReleased, this, &ArcsinhStretchDialog::updatePreview);
     
-    // Spin change: sync slider and preview immediately
+    // Spin change: sync slider and trigger preview
     connect(m_stretchSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double val){
         m_stretchSlider->blockSignals(true);
         m_stretchSlider->setValue(static_cast<int>(val * 10));
@@ -148,13 +149,14 @@ void ArcsinhStretchDialog::setupUI() {
         if (m_previewCheck->isChecked()) updatePreview();
     });
     
-    // Black point slider drag: update spin only
+    // Black point slider drag: update spin and clipping stats ONLY (no preview to avoid lag)
     connect(m_blackPointSlider, &QSlider::valueChanged, [this](int val){
         double dval = val / 100000.0;
         m_blackPointSpin->blockSignals(true);
         m_blackPointSpin->setValue(dval);
         m_blackPointSpin->blockSignals(false);
         m_blackPoint = static_cast<float>(dval);
+        updateClippingStatsOnly();  // Live clipping stats, no preview
     });
     // Black point slider release: trigger preview
     connect(m_blackPointSlider, &QSlider::sliderReleased, this, &ArcsinhStretchDialog::updatePreview);
@@ -265,4 +267,16 @@ void ArcsinhStretchDialog::updateClippingStats(const ImageBuffer& buffer) {
         m_lowClipLabel->setText(tr("Low: %1%").arg(lowPct, 0, 'f', 4));
         m_highClipLabel->setText(tr("High: %1%").arg(highPct, 0, 'f', 4));
     }
+}
+
+void ArcsinhStretchDialog::updateClippingStatsOnly() {
+    // Calculate clipping stats WITHOUT updating preview (to avoid lag during drag)
+    if (!m_originalBuffer.isValid()) return;
+    
+    // Create temporary buffer to compute clipping
+    ImageBuffer temp = m_originalBuffer;
+    temp.applyArcSinh(m_stretch, m_blackPoint, m_humanLuminance);
+    
+    // Update labels only
+    updateClippingStats(temp);
 }

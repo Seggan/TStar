@@ -58,6 +58,9 @@ ImageViewer::ImageViewer(QWidget* parent) : QGraphicsView(parent) {
     m_queryRectItem->setZValue(20);
     m_scene->addItem(m_queryRectItem);
     m_queryRectItem->setVisible(false);
+    
+    // Initialize magnifier cross cursor on the viewport
+    if (viewport()) viewport()->setMouseTracking(true);
 }
 
 ImageViewer::~ImageViewer() {
@@ -694,6 +697,22 @@ void ImageViewer::mouseMoveEvent(QMouseEvent* event) {
         updateCropCursor(hoverMode, m_cropAngle);
     }
     
+    // ── Magnifier: cross cursor + floating loupe ──────────
+    if (m_imageItem && !m_imageItem->pixmap().isNull()) {
+        bool overImage = m_imageItem->boundingRect().contains(scenePos);
+        if (overImage) {
+            m_magnifierScenePos   = scenePos;
+            m_magnifierViewportPos = event->pos();
+            m_magnifierVisible    = true;
+            // viewport()->setCursor() overrides the hand cursor set by ScrollHandDrag
+            viewport()->setCursor(Qt::CrossCursor);
+        } else {
+            m_magnifierVisible = false;
+            viewport()->unsetCursor();  // Restore default (hand from drag mode)
+        }
+        viewport()->update();
+    }
+
     QGraphicsView::mouseMoveEvent(event);
 }
 
@@ -821,13 +840,41 @@ void ImageViewer::zoom1to1() {
 }
 
 void ImageViewer::wheelEvent(QWheelEvent* event) {
-    if (event->angleDelta().y() > 0) {
-        zoomIn();
-    } else {
-        zoomOut();
+    // Smooth zoom 
+    QPoint pixelDelta = event->pixelDelta();
+    QPoint angleDelta = event->angleDelta();
+
+    double scaleFactor = 1.0;
+
+    if (!pixelDelta.isNull()) {
+        // Trackpad: continuous smooth deltas
+        // Use asymmetric formula so zoom-in and zoom-out are exactly inverse of each other
+        double dy = pixelDelta.y();
+        if (dy > 0)
+            scaleFactor = 1.0 + dy * 0.008;
+        else
+            scaleFactor = 1.0 / (1.0 - dy * 0.008);
+    } else if (angleDelta.y() != 0) {
+        // Mouse wheel: discrete step per notch (120 units = 1 notch)
+        if (angleDelta.y() > 0)
+            scaleFactor = 1.25;
+        else
+            scaleFactor = 1.0 / 1.25;
     }
+
+    // Constrain to zoom limits
+    double newScale = m_scaleFactor * scaleFactor;
+    if (newScale < ZOOM_MIN) newScale = ZOOM_MIN;
+    if (newScale > ZOOM_MAX) newScale = ZOOM_MAX;
+    double actual = newScale / m_scaleFactor;
+    if (qAbs(actual - 1.0) < 1e-9) { event->accept(); return; }
+
+    // scale() with AnchorUnderMouse keeps the mouse point fixed — no scroll bar math needed
+    scale(actual, actual);
+    m_scaleFactor = transform().m11();
+
+    emit viewChanged(m_scaleFactor, horizontalScrollBar()->value(), verticalScrollBar()->value());
     event->accept();
-    // Signal emitted by zoomIn/zoomOut
 }
     
 void ImageViewer::syncView(float scale, float hVal, float vVal) {
@@ -982,8 +1029,83 @@ double ImageViewer::pixelScale() const {
     return scale * 3600.0;  // Convert deg to arcsec
 }
 
-void ImageViewer::drawForeground([[maybe_unused]] QPainter* painter, [[maybe_unused]] const QRectF& rect) {
-    // Legacy "Linked" indicator removed.
+void ImageViewer::drawForeground(QPainter* painter, [[maybe_unused]] const QRectF& rect) {
+    // ── Magnifier loupe ───────────────────────────────────
+    // 100×100 px, floating top-right of the cursor at a small gap.
+    // Drawn in viewport space: setWorldMatrixEnabled(false) disables the scene transform.
+    if (!m_magnifierVisible || !painter || !m_imageItem || m_imageItem->pixmap().isNull())
+        return;
+
+    static constexpr int   LOUPE_SIZE  = 100;   // pixels
+    static constexpr float LOUPE_ZOOM  = 8.0f; // source region = LOUPE_SIZE / LOUPE_ZOOM pixels
+    static constexpr int   GAP         = 12;   // gap between cursor tip and loupe
+
+    // ── Build loupe rect in viewport coordinates ──
+    // Preferred position: top-right of cursor
+    QPoint cur = m_magnifierViewportPos;
+    QRect  loupe(cur.x() + GAP, cur.y() - GAP - LOUPE_SIZE, LOUPE_SIZE, LOUPE_SIZE);
+
+    // Flip horizontally if loupe would go outside right edge
+    if (loupe.right() > viewport()->width() - 2)
+        loupe.moveRight(cur.x() - GAP);
+
+    // Flip vertically if loupe would go above top edge
+    if (loupe.top() < 2)
+        loupe.moveTop(cur.y() + GAP);
+
+    // ── Extract source area from the pixmap (1 px = 1 image pixel) ──
+    double halfSrc = LOUPE_SIZE / (2.0 * LOUPE_ZOOM);  // radius in image pixels
+    QRectF src(m_magnifierScenePos.x() - halfSrc,
+               m_magnifierScenePos.y() - halfSrc,
+               halfSrc * 2, halfSrc * 2);
+    src = src.intersected(m_imageItem->boundingRect());
+
+    // ── Draw ─────────────────────────────────────────────────────────────────
+    painter->save();
+    painter->setWorldMatrixEnabled(false);  // draw in viewport (pixel) coordinates
+
+    // Content: draw pixels without interpolation (each source pixel = square in loupe)
+    if (!src.isEmpty()) {
+        QPixmap cropped = m_imageItem->pixmap().copy(src.toRect());
+        QImage srcImage = cropped.toImage();
+        int srcW = srcImage.width();
+        int srcH = srcImage.height();
+        
+        if (srcW > 0 && srcH > 0) {
+            // Calculate pixel size using floating point, then round to pixel boundaries
+            double pixSizeX = (double)LOUPE_SIZE / srcW;
+            double pixSizeY = (double)LOUPE_SIZE / srcH;
+            
+            // Draw each source pixel as a colored square (no interpolation)
+            // Each rect spans from start to end position, properly rounding to fill the loupe
+            for (int y = 0; y < srcH; ++y) {
+                for (int x = 0; x < srcW; ++x) {
+                    QColor pixelColor(srcImage.pixel(x, y));
+                    int x1 = loupe.left() + (int)(x * pixSizeX);
+                    int y1 = loupe.top() + (int)(y * pixSizeY);
+                    int x2 = loupe.left() + (int)((x + 1) * pixSizeX);
+                    int y2 = loupe.top() + (int)((y + 1) * pixSizeY);
+                    painter->fillRect(QRect(x1, y1, x2 - x1, y2 - y1), pixelColor);
+                }
+            }
+        }
+    } else {
+        painter->fillRect(loupe, Qt::black);
+    }
+
+    // Border (thin white)
+    painter->setPen(QPen(QColor(220, 220, 220), 1));
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRect(loupe);
+
+    // Central crosshair
+    int cx = loupe.center().x();
+    int cy = loupe.center().y();
+    painter->setPen(QPen(Qt::white, 1));
+    painter->drawLine(cx - 5, cy,     cx + 5, cy);
+    painter->drawLine(cx,     cy - 5, cx,     cy + 5);
+
+    painter->restore();
 }
 void ImageViewer::dragEnterEvent(QDragEnterEvent* event) {
     if (event->mimeData()->hasFormat("application/x-tstar-link") || 

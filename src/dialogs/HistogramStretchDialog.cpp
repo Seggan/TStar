@@ -221,7 +221,7 @@ void HistogramStretchDialog::setupUI() {
     mainLayout->addLayout(buttonLayout);
     
     // --- Connections ---
-    // Shadows slider: real-time histogram, preview on release
+    // Shadows slider: real-time histogram, clipping stats (no preview to avoid lag)
     connect(m_shadowsSlider, &QSlider::valueChanged, [this](int val){
         double dval = val / 10000.0;
         m_shadowsSpin->blockSignals(true);
@@ -229,6 +229,7 @@ void HistogramStretchDialog::setupUI() {
         m_shadowsSpin->blockSignals(false);
         m_shadows = static_cast<float>(dval);
         updateHistogramOnly();  // Real-time histogram
+        updateClippingStatsOnly();  // Live clipping stats, no preview
     });
     connect(m_shadowsSlider, &QSlider::sliderReleased, this, &HistogramStretchDialog::onSliderReleased);
     connect(m_shadowsSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &HistogramStretchDialog::onShadowsChanged);
@@ -241,6 +242,7 @@ void HistogramStretchDialog::setupUI() {
         m_midtonesSpin->blockSignals(false);
         m_midtones = static_cast<float>(dval);
         updateHistogramOnly();  // Real-time histogram
+        updateClippingStatsOnly();  // Live clipping stats, no preview
     });
     connect(m_midtonesSlider, &QSlider::sliderReleased, this, &HistogramStretchDialog::onSliderReleased);
     connect(m_midtonesSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &HistogramStretchDialog::onMidtonesChanged);
@@ -253,6 +255,7 @@ void HistogramStretchDialog::setupUI() {
         m_highlightsSpin->blockSignals(false);
         m_highlights = static_cast<float>(dval);
         updateHistogramOnly();  // Real-time histogram
+        updateClippingStatsOnly();  // Live clipping stats, no preview
     });
     connect(m_highlightsSlider, &QSlider::sliderReleased, this, &HistogramStretchDialog::onSliderReleased);
     connect(m_highlightsSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &HistogramStretchDialog::onHighlightsChanged);
@@ -563,6 +566,18 @@ void HistogramStretchDialog::updateClippingStats(const ImageBuffer& buffer) {
         m_lowClipLabel->setText(tr("Low: %1%").arg(lowPct, 0, 'f', 4));
         m_highClipLabel->setText(tr("High: %1%").arg(highPct, 0, 'f', 4));
     }
+}
+
+void HistogramStretchDialog::updateClippingStatsOnly() {
+    // Calculate clipping stats WITHOUT updating preview (to avoid lag during drag)
+    if (!m_backup.isValid()) return;
+    
+    // Create temporary buffer to compute clipping
+    ImageBuffer temp = m_backup;
+    applyMTF(temp, m_shadows, m_midtones, m_highlights, m_doRed, m_doGreen, m_doBlue);
+    
+    // Update labels only
+    updateClippingStats(temp);
 }
 
 float HistogramStretchDialog::MTF(float x, float m, float lo, float hi) {

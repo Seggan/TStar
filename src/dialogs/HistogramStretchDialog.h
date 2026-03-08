@@ -48,6 +48,7 @@ private:
     void updatePreview();
     void updateHistogramOnly();    // Update histogram without image preview
     void updateClippingStats(const ImageBuffer& buffer);
+    void updateClippingStatsOnly();  // Update clipping WITHOUT preview
     void applyMTF(ImageBuffer& buffer, float shadows, float midtones, float highlights,
                   bool doRed, bool doGreen, bool doBlue);
     void computeAutostretch(const ImageBuffer& buffer, float& shadows, float& midtones, float& highlights);

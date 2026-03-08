@@ -899,8 +899,18 @@ void GHSDialog::onPreviewTrigger() {
                 luts[1][i] = params.channels[1] ? ghsLut[i] : identity;
                 luts[2][i] = params.channels[2] ? ghsLut[i] : identity;
             }
+            
+            // Calculate clipping stats for preview (create temporary buffer for stats calculation only)
+            ImageBuffer temp = m_originalBuffer;
+            temp.applyGHS(params);
+            long lowClip = 0, highClip = 0;
+            temp.computeClippingStats(lowClip, highClip);
+            long total = static_cast<long>(temp.width()) * temp.height() * temp.channels();
+            if(total > 0) {
+                setClippingStats((100.0f * lowClip) / total, (100.0f * highClip) / total);
+            }
+            
             m_activeViewer->setPreviewLUT(luts);
-            // Clipping stats are already updated by updateHistogram() called from onValueChange() above
         } else {
             // Slow path for coupled color modes (WeightedLuminance, EvenWeightedLuminance, Saturation)
             // These require per-pixel multi-channel math that cannot be expressed as a simple LUT.

@@ -36,6 +36,7 @@ private:
     void setupUI();
     void updatePreview();
     void updateClippingStats(const ImageBuffer& buffer);
+    void updateClippingStatsOnly();  // Update clipping WITHOUT preview
     QPointer<ImageViewer> m_viewer;
     ImageBuffer m_originalBuffer;  // Original image for preview
     bool m_applied = false;

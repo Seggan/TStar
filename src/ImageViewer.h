@@ -227,6 +227,15 @@ private:
     InteractionMode m_interactionMode = Mode_PanZoom;
     std::vector<std::vector<float>> m_previewLUT; // Empty if no preview
     
+    // Smooth Zoom (AnchorUnderMouse handles centering, just need the limits)
+    static constexpr double ZOOM_MIN = 0.01;  // 1% minimum
+    static constexpr double ZOOM_MAX = 120.0; // 12000% maximum
+    
+    // Magnifier: 50x50, floating top-right of cursor
+    bool m_magnifierVisible = false;
+    QPointF m_magnifierScenePos;    // Scene coords under cursor (what to zoom into)
+    QPoint  m_magnifierViewportPos; // Viewport coords of cursor (where to anchor the loupe)
+    
     ImageBuffer::DisplayMode m_displayMode = ImageBuffer::Display_Linear;
     bool m_displayLinked = true;
     bool m_displayInverted = false;

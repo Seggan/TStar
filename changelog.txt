@@ -3,6 +3,7 @@ TStar Changelog
 
 Version 1.7.5
 -------------
+- Introduced image magnifier that follows the cursor
 - Minor optimizations
 
 Version 1.7.4
