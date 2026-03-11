@@ -121,7 +121,7 @@ TStar is distributed as a portable Windows x64 application.
 See [BUILDING.md](BUILDING.md) for detailed Windows build instructions using MinGW.
 
 ### macOS
-See [BUILDING.md](BUILDING.md) for detailed macOS build instructions. Both Intel and Apple Silicon architectures are fully supported.
+See [BUILDING.md](BUILDING.md) for detailed macOS build instructions. Both Intel and Apple Silicon architectures are fully supported (macOS 12+ recommended, but older versions are supported).
 
 For quick start:
 ```bash

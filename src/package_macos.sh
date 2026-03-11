@@ -705,6 +705,16 @@ if [ -f "$BUNDLED_PY_CHECK" ]; then
     # Test if it can load numpy (which tests dynamic library loading like libopenblas)
     if "$BUNDLED_PY_CHECK" -c "import numpy" 2>/dev/null; then
         echo "  - Bundled numpy: OK"
+        
+        # Verify that numpy/scipy do NOT link against Accelerate.framework (NEWLAPACK issue on macOS < 13.3)
+        if find "$DIST_DIR/Contents/Resources/python_venv" -name "*.so" -exec otool -L {} + 2>/dev/null | grep -q "Accelerate.framework"; then
+            echo "  [WARNING] Python extensions link against Accelerate.framework!"
+            echo "            This may cause crashes on macOS < 13.3 due to missing NEWLAPACK symbols."
+            echo "            Please ensure numpy<1.26.0 is used to force OpenBLAS instead."
+            ERROR_COUNT=$((ERROR_COUNT + 1))
+        else
+            echo "  - Accelerate framework check: OK (No NEWLAPACK link detected)"
+        fi
     else
         echo "  - Bundled numpy: NOT available (some AI tools may fail)"
         echo "          Error output:"

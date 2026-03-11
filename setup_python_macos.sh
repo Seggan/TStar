@@ -99,11 +99,12 @@ echo ""
 echo "[STEP 5] Installing dependencies..."
 
 PACKAGES=(
-    "numpy<2.0.0"
+    "numpy>=1.24.0,<1.26.0"
+    "scipy<1.13.0"
     "tifffile"
     "imagecodecs"
     "astropy"
-    "onnxruntime"
+    "onnxruntime<1.18.0"
 )
 
 for pkg in "${PACKAGES[@]}"; do
