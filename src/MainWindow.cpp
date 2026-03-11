@@ -842,20 +842,11 @@ MainWindow::MainWindow(QWidget *parent)
     mainToolbar->addWidget(m_linkChannelsBtn);
 
     // Burn Display Button (next to Link Channels)
-    QWidget* spacerBurn = new QWidget(this);
-    spacerBurn->setFixedWidth(5);
-    mainToolbar->addWidget(spacerBurn);
-    
     m_burnDisplayBtn = new QToolButton(this);
     m_burnDisplayBtn->setIcon(makeIcon("images/burn.svg"));
     m_burnDisplayBtn->setToolTip(tr("Burn Display View to Buffer\n(Applies current stretch/display mode permanently)"));
     connect(m_burnDisplayBtn, &QToolButton::clicked, this, &MainWindow::onBurnDisplay);
     mainToolbar->addWidget(m_burnDisplayBtn);
-
-    // Spacer
-    QWidget* s1 = new QWidget(this);
-    s1->setFixedWidth(5);
-    mainToolbar->addWidget(s1);
 
     m_invertBtn = new QToolButton(this);
     m_invertBtn->setCheckable(true);
@@ -1371,52 +1362,18 @@ void MainWindow::onBurnDisplay() {
             return;
         }
         
-        // Save the current display mode before we change it
+        // Save current state for logging and transformation
         ImageBuffer::DisplayMode originalMode = v->getDisplayMode();
-        bool originalLinked = v->isDisplayLinked();
         bool originalInverted = v->isDisplayInverted();
         bool originalFalseColor = v->isDisplayFalseColor();
+        bool originalLinked = v->isDisplayLinked();
         
-        // Get the display image with current display mode applied (including inverted and falseColor)
-        QImage displayImg = buffer.getDisplayImage(originalMode, originalLinked, nullptr, 0, 0, false, 
-                                                    originalInverted, originalFalseColor, m_autoStretchMedianValue);
+        // Apply the display transformation permanently at high precision (32-bit float)
+        // This avoids the 8-bit QImage roundtrip and preserves the histogram quality.
+        buffer.applyDisplayTransform(originalMode, originalLinked, m_autoStretchMedianValue,
+                                     originalInverted, originalFalseColor);
         
-        if (displayImg.isNull()) {
-            log(tr("Cannot burn display: Failed to generate display image"), Log_Warning, true);
-            return;
-        }
-        
-        // Convert QImage back to ImageBuffer (float format)
-        // Handle RGB and Grayscale formats
-        int channels = (displayImg.format() == QImage::Format_Grayscale8) ? 1 : 3;
-        int w = displayImg.width();
-        int h = displayImg.height();
-        
-        std::vector<float> data(w * h * channels);
-        
-        for (int y = 0; y < h; ++y) {
-            const uchar* line = displayImg.scanLine(y);
-            for (int x = 0; x < w; ++x) {
-                if (channels == 1) {
-                    // Grayscale: single byte per pixel
-                    data[y * w + x] = line[x] / 255.0f;
-                } else {
-                    // RGB: 3 bytes per pixel
-                    data[(y * w + x) * 3 + 0] = line[x * 3 + 0] / 255.0f;  // R
-                    data[(y * w + x) * 3 + 1] = line[x * 3 + 1] / 255.0f;  // G
-                    data[(y * w + x) * 3 + 2] = line[x * 3 + 2] / 255.0f;  // B
-                }
-            }
-        }
-        
-        // Create new buffer with the burned display data
-        ImageBuffer newBuffer(w, h, channels);
-        newBuffer.setData(w, h, channels, data);
-        
-        // Apply the new buffer
-        v->setBuffer(newBuffer, v->windowTitle(), true);
-        
-        // Reset display state to Linear with no invert and no false color
+        // Reset display state to Linear with no invert and no false color, since they are now part of m_data
         v->setDisplayState(ImageBuffer::Display_Linear, true);
         v->setInverted(false);
         v->setFalseColor(false);

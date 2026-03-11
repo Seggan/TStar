@@ -430,7 +430,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Invalid Mask Data</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>OK</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -1506,6 +1514,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Color Denoise: %1</source>
             <translation type="unfinished" />
         </message>
@@ -1559,6 +1571,10 @@
         </message>
         <message>
             <source>Non-Stellar PSF: 3.0</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>OK</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2197,6 +2213,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Denoise</source>
             <translation type="unfinished" />
         </message>
@@ -2206,6 +2226,10 @@
         </message>
         <message>
             <source>Latest (auto)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>OK</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3575,7 +3599,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>ABE - </source>
+            <source>ABE</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3703,6 +3727,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Burn Display View to Buffer\n(Applies current stretch/display mode permanently)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>CBE successful.</source>
             <translation type="unfinished" />
         </message>
@@ -3724,6 +3752,18 @@
         </message>
         <message>
             <source>Cannot burn annotations into raw data formats (FITS/XISF)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot burn display: Failed to generate display image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot burn display: Invalid buffer</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot burn display: No active viewer</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3828,6 +3868,10 @@
         </message>
         <message>
             <source>Display Mode changed to: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Display burned to buffer (</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4746,11 +4790,19 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Chrominance</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Clear Shapes</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color Mask</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4778,6 +4830,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Color: Violet</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Color: Yellow</source>
             <translation type="unfinished" />
         </message>
@@ -4799,6 +4855,10 @@
         </message>
         <message>
             <source>Fuzziness</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Fuzziness (°):</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4847,6 +4907,10 @@
         </message>
         <message>
             <source>No mask data generated. Please draw shapes or select a mask type.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>OK</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6075,6 +6139,22 @@
     <context>
         <name>PixelMathDialog</name>
         <message>
+            <source> &amp;nbsp;|&amp;nbsp; </source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>(untitled)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>&lt;b&gt;Available images:&lt;/b&gt; </source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>&lt;i&gt;No additional images loaded.&lt;/i&gt;</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Apply</source>
             <translation type="unfinished" />
         </message>
@@ -6095,7 +6175,19 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Image References</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Missing closing parenthesis</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No valid image buffer.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Parse error in %1 expression: %2</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6107,15 +6199,11 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Pixel Math requires RGB image.</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Please enter an expression.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>R = r; G = g; B = b;</source>
+            <source>R = r + I2.r * 0.5;   (or just)   r + I2 * 0.3</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6123,7 +6211,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Rescale result (maps min-max to 0-1)</source>
+            <source>Rescale result (maps min–max to 0–1)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6139,7 +6227,11 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Unknown variable or function: '%1' (only r, g, b are allowed)</source>
+            <source>Unknown variable '%1'. Use r, g, b, or I1..I10 (with optional .r/.g/.b).</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Unknown variable or function: '%1'</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -6885,6 +6977,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Check if the reference image pattern matches your image. Use the buttons below to flip or rotate it if necessary.</source>
             <translation type="unfinished" />
         </message>
@@ -6898,6 +6994,10 @@
         </message>
         <message>
             <source>Flip Vertical</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>OK</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7355,6 +7455,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Initialized script image from current viewer.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Load Script</source>
             <translation type="unfinished" />
         </message>
@@ -7671,6 +7775,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>OK</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Paths and Integrations</source>
             <translation type="unfinished" />
         </message>
@@ -7789,6 +7897,10 @@
     <context>
         <name>StackingCommands</name>
         <message>
+            <source>(no .tif files found)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Calibrating frames...</source>
             <translation type="unfinished" />
         </message>
@@ -7798,6 +7910,10 @@
         </message>
         <message>
             <source>Found %1 light frames</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Found: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7821,7 +7937,75 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>StarNet processing...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: %1% completed</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: Done!</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: OpenCV failed to read output TIFF: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: could not save starless FITS: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: failed to start – check executable path and permissions.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: failed to write input TIFF: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: input TIFF saved: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: loaded TIFF produced invalid buffer.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: no image loaded</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: output TIFF not found: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: output TIFF not found: %1\n%2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: process exit code: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: starless FITS saved: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>StarNet: starting %1 %2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Starting pipeline for: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>save: no image loaded</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -9043,6 +9227,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Protect Shadows/Highlights</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Reset</source>
             <translation type="unfinished" />
         </message>
@@ -9056,6 +9244,10 @@
         </message>
         <message>
             <source>Tint:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>When enabled, near-black and near-white pixels are protected from colour casts</source>
             <translation type="unfinished" />
         </message>
     </context>

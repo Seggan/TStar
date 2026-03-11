@@ -251,18 +251,50 @@ void ImageBuffer::resize(int width, int height, int channels) {
     m_data.assign(static_cast<size_t>(width) * height * channels, 0.0f);
 }
 
-void ImageBuffer::applyWhiteBalance(float r, float g, float b) {
+void ImageBuffer::applyWhiteBalance(float r, float g, float b, bool lumaProtected) {
     WriteLock lock(this);  // Thread-safe write access
     
     if (m_channels < 3) return; // Only for color images
 
     ImageBuffer original;
-    if (hasMask()) original = *this;
+    if (hasMask() || lumaProtected) original = *this;
 
     long totalPixels = static_cast<long>(m_width) * m_height;
-    
-    // SIMD Optimized Gain
-    SimdOps::applyGainRGB(m_data.data(), static_cast<size_t>(totalPixels), r, g, b);
+
+    if (!lumaProtected) {
+        // Fast SIMD path: uniform gain
+        SimdOps::applyGainRGB(m_data.data(), static_cast<size_t>(totalPixels), r, g, b);
+    } else {
+        // Luma-protected path: blend gain toward neutral in shadows and highlights.
+            // weight(L) transitions smoothly:
+        //   L = 0.00             -> 0 (full protection)
+        //   L in [0.00, 0.50]    -> 0..1 ramp  (shadow transition)
+        //   L in [0.50, 1.00]    -> 1..0 ramp  (highlight transition)
+        //   L = 1.00             -> 0 (full protection)
+        // This provides an extremely smooth bell-like curve centered at 0.5
+        auto smoothstep = [](float edge0, float edge1, float x) -> float {
+            float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+            return t * t * (3.0f - 2.0f * t);
+        };
+        const float* src = original.m_data.data();
+        float* dst = m_data.data();
+        #pragma omp parallel for
+        for (long i = 0; i < totalPixels; ++i) {
+            float R = src[i*3+0];
+            float G = src[i*3+1];
+            float B = src[i*3+2];
+            // Perceived luminance (Rec. 709)
+            float L = 0.2126f*R + 0.7152f*G + 0.0722f*B;
+            float w = smoothstep(0.00f, 0.50f, L) * (1.0f - smoothstep(0.50f, 1.00f, L));
+            // Effective gain: lerp between 1.0 (neutral) and the desired gain
+            float er = 1.0f + (r - 1.0f) * w;
+            float eg = 1.0f + (g - 1.0f) * w;
+            float eb = 1.0f + (b - 1.0f) * w;
+            dst[i*3+0] = R * er;
+            dst[i*3+1] = G * eg;
+            dst[i*3+2] = B * eb;
+        }
+    }
 
     if (hasMask()) {
         blendResult(original);
@@ -1309,6 +1341,127 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
     
     applyChannelView(result);
     return result;
+}
+ 
+void ImageBuffer::applyDisplayTransform(DisplayMode mode, bool linked, float targetMedian, bool inverted, bool falseColor) {
+    if (m_data.empty()) return;
+    
+    struct ChannelTransform {
+        float shadow = 0.0f;
+        float m = 0.5f;
+        float scale = 1.0f;
+        float offset = 0.0f;
+        bool active = true;
+    };
+    std::vector<ChannelTransform> txs(m_channels);
+    
+    if (mode == Display_AutoStretch) {
+        std::vector<ChStats> stats(m_channels);
+        for (int c = 0; c < m_channels; ++c) stats[c] = computeStats(m_data, m_width, m_height, m_channels, c);
+        const float targetBG = targetMedian;
+        const float shadowClip = -2.8f; 
+        
+        if (linked && m_channels == 3) {
+            float avgMed = (stats[0].median + stats[1].median + stats[2].median) / 3.0f;
+            float avgMad = (stats[0].mad + stats[1].mad + stats[2].mad) / 3.0f;
+            float shadow = std::max(0.0f, avgMed + shadowClip * avgMad);
+            if (shadow >= avgMed) shadow = std::max(0.0f, avgMed - 0.001f);
+            float mid = avgMed - shadow; 
+            if (mid <= 0) mid = 0.5f; 
+            float m = mtf_func(targetBG, mid);
+            for (int c = 0; c < 3; ++c) {
+                txs[c].shadow = shadow;
+                txs[c].m = m;
+            }
+        } else {
+            for (int c = 0; c < m_channels; ++c) {
+                float shadow = std::max(0.0f, stats[c].median + shadowClip * stats[c].mad);
+                if (shadow >= stats[c].median) shadow = std::max(0.0f, stats[c].median - 0.001f);
+                float mid = stats[c].median - shadow;
+                if (mid <= 0) mid = 0.5f;
+                txs[c].shadow = shadow;
+                txs[c].m = mtf_func(targetBG, mid);
+            }
+        }
+    } else if (mode == Display_ArcSinh) {
+        const float strength = 100.0f;
+        const float norm = 1.0f / std::asinh(strength);
+        for (int c = 0; c < m_channels; ++c) {
+            txs[c].scale = strength;
+            txs[c].m = norm; // reused for norm
+        }
+    } else if (mode == Display_Log) {
+        const float scale = 65535.0f / 10.0f;
+        const float norm = 1.0f / std::log(scale);
+        const float min_val = 10.0f / 65535.0f;
+        for (int c = 0; c < m_channels; ++c) {
+            txs[c].scale = scale;
+            txs[c].m = norm;
+            txs[c].offset = min_val;
+        }
+    }
+    
+    size_t totalPixels = static_cast<size_t>(m_width) * m_height;
+    int chCount = m_channels;
+    
+    #pragma omp parallel for
+    for (size_t i = 0; i < totalPixels; ++i) {
+        float r_val = 0, g_val = 0, b_val = 0;
+        
+        for (int c = 0; c < chCount; ++c) {
+            float& v = m_data[i * chCount + c];
+            float cin = safeClamp01(v);
+            float cout = cin;
+            
+            if (mode == Display_AutoStretch) {
+                float normX = (cin - txs[c].shadow) / (1.0f - txs[c].shadow + 1e-9f);
+                cout = mtf_func(txs[c].m, normX);
+            } else if (mode == Display_ArcSinh) {
+                cout = std::asinh(cin * txs[c].scale) * txs[c].m;
+            } else if (mode == Display_Sqrt) {
+                cout = std::sqrt(cin);
+            } else if (mode == Display_Log) {
+                cout = (cin < txs[c].offset) ? 0.0f : std::log(cin * txs[c].scale) * txs[c].m;
+            } else {
+                cout = cin; // Linear
+            }
+            
+            if (inverted) cout = 1.0f - cout;
+            v = cout;
+            
+            if (c == 0) r_val = cout;
+            else if (c == 1) g_val = cout;
+            else if (c == 2) b_val = cout;
+        }
+        
+        if (falseColor && chCount >= 1) {
+            if (chCount == 1) { r_val = g_val = b_val = m_data[i]; }
+            float intensity = (chCount == 3) ? (0.2989f * r_val + 0.5870f * g_val + 0.1140f * b_val) : r_val;
+            intensity = std::clamp(intensity, 0.0f, 1.0f);
+            float h = (1.0f - intensity) * 300.0f;
+            float rr=0, gg=0, bb=0;
+            float hh = h / 60.0f;
+            int ii = static_cast<int>(hh);
+            float ff = hh - ii;
+            float q = 1.0f - ff;
+            float t = ff;
+            switch (ii) {
+                case 0: rr = 1.0f; gg = t;    bb = 0.0f; break;
+                case 1: rr = q;    gg = 1.0f; bb = 0.0f; break;
+                case 2: rr = 0.0f; gg = 1.0f; bb = t;    break;
+                case 3: rr = 0.0f; gg = q;    bb = 1.0f; break;
+                case 4: rr = t;    gg = 0.0f; bb = 1.0f; break;
+                default: rr = 1.0f; gg = 0.0f; bb = q;   break;
+            }
+            if (chCount >= 3) {
+                m_data[i * chCount + 0] = rr;
+                m_data[i * chCount + 1] = gg;
+                m_data[i * chCount + 2] = bb;
+            }
+        }
+    }
+    
+    m_modified = true;
 }
 
 

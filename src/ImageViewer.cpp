@@ -1068,7 +1068,7 @@ void ImageViewer::drawForeground(QPainter* painter, [[maybe_unused]] const QRect
         return;
 
     static constexpr int   LOUPE_SIZE  = 100;   // pixels
-    static constexpr float LOUPE_ZOOM  = 8.0f; // source region = LOUPE_SIZE / LOUPE_ZOOM pixels
+    static constexpr float LOUPE_ZOOM  = 4.0f; // source region = LOUPE_SIZE / LOUPE_ZOOM pixels
     static constexpr int   GAP         = 12;   // gap between cursor tip and loupe
 
     // ── Build loupe rect in viewport coordinates ──

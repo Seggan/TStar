@@ -47,6 +47,7 @@ private:
     QLabel* m_valTint;
 
     QCheckBox* m_chkPreview;
+    QCheckBox* m_chkProtect;  // Protect shadows/highlights
 
     // Compute RGB gain factors from current slider values
     void computeGain(float& r, float& g, float& b) const;

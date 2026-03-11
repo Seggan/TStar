@@ -62,12 +62,12 @@ void HistogramWidget::clear() {
 }
 
 // Helper function to compute aggregated histogram values for display width
-static void computeDisplayHistogram(const std::vector<std::vector<int>>& srcBins,
-                                     int srcChannels,
-                                     int displayWidth,
-                                     std::vector<std::vector<float>>& dst,
-                                     double& maxVal,
-                                     bool logScale) {
+void HistogramWidget::computeDisplayHistogram(const std::vector<std::vector<int>>& srcBins,
+                                               int srcChannels,
+                                               int displayWidth,
+                                               std::vector<std::vector<float>>& dst,
+                                               double& maxVal,
+                                               bool logScale) {
     dst.clear();
     maxVal = 0.0;
     
@@ -97,10 +97,36 @@ static void computeDisplayHistogram(const std::vector<std::vector<int>>& srcBins
                 sum = std::log(sum);
             }
             dst[c][px] = (float)sum;
-            if (dst[c][px] > maxVal) {
-                maxVal = dst[c][px];
-            }
         }
+
+        // Precise smoothing: Single-pass Radius-2 Gaussian blur
+        // This provides minimal smoothing to bridge digital artifacts while maintaining peak precision.
+        std::vector<float> finalBlurred(displayWidth);
+        for (int px = 0; px < displayWidth; ++px) {
+            float sumBlur = 0.0f;
+            float weightSum = 0.0f;
+            for (int d = -2; d <= 2; ++d) {
+                int p = px + d;
+                if (p >= 0 && p < displayWidth) {
+                    float w;
+                    switch(std::abs(d)) {
+                        case 0: w = 6.0f; break;
+                        case 1: w = 4.0f; break;
+                        case 2: w = 1.0f; break;
+                        default: w = 0.0f;
+                    }
+                    sumBlur += dst[c][p] * w;
+                    weightSum += w;
+                }
+            }
+            finalBlurred[px] = sumBlur / weightSum;
+        }
+        
+        // Update max value after smoothing
+        for (float v : finalBlurred) {
+            if (v > maxVal) maxVal = v;
+        }
+        dst[c] = std::move(finalBlurred);
     }
 }
 

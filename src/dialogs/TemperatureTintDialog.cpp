@@ -68,12 +68,18 @@ void TemperatureTintDialog::setupUI() {
         }
     });
 
+    m_chkProtect = new QCheckBox(tr("Protect Shadows/Highlights"));
+    m_chkProtect->setChecked(true);
+    m_chkProtect->setToolTip(tr("When enabled, near-black and near-white pixels are protected from colour casts"));
+    connect(m_chkProtect, &QCheckBox::toggled, this, &TemperatureTintDialog::triggerPreview);
+
     QPushButton* btnReset  = new QPushButton(tr("Reset"));
     QPushButton* btnApply  = new QPushButton(tr("Apply"));
     btnApply->setDefault(true);
     QPushButton* btnCancel = new QPushButton(tr("Cancel"));
 
     btnLayout->addWidget(m_chkPreview);
+    btnLayout->addWidget(m_chkProtect);
     btnLayout->addStretch();
     btnLayout->addWidget(btnReset);
     btnLayout->addWidget(btnCancel);
@@ -121,7 +127,7 @@ void TemperatureTintDialog::triggerPreview() {
 
     float r, g, b;
     computeGain(r, g, b);
-    m_buffer->applyWhiteBalance(r, g, b);
+    m_buffer->applyWhiteBalance(r, g, b, m_chkProtect->isChecked());
     
     // Apply Mask if present
     if (m_originalBuffer.hasMask()) {
@@ -142,7 +148,7 @@ void TemperatureTintDialog::handleApply() {
         // Apply final values
         float r, g, b;
         computeGain(r, g, b);
-        m_buffer->applyWhiteBalance(r, g, b);
+        m_buffer->applyWhiteBalance(r, g, b, m_chkProtect->isChecked());
 
         // Apply Mask if present
         if (m_originalBuffer.hasMask()) {

@@ -17,6 +17,14 @@ public:
     void setShowCurve(bool show);
     void setTransformCurve(const std::vector<float>& lut);
     void clear();
+    
+    // Public static utility for all histogram-rendering widgets (GHS, Stretch, Curves)
+    static void computeDisplayHistogram(const std::vector<std::vector<int>>& srcBins,
+                                         int srcChannels,
+                                         int displayWidth,
+                                         std::vector<std::vector<float>>& dst,
+                                         double& maxVal,
+                                         bool logScale);
 
 protected:
     void paintEvent(class QPaintEvent *event) override;

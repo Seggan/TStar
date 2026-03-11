@@ -150,6 +150,9 @@ public:
     // Apply permanent stretch to m_data
     void performTrueStretch(const StretchParams& params);
     
+    // Applies the display transformation (AutoStretch, etc.) permanently to m_data at high precision
+    void applyDisplayTransform(DisplayMode mode = Display_Linear, bool linked = true, float targetMedian = 0.25f, bool inverted = false, bool falseColor = false);
+    
     // Luminance-only stretch (preserves colors)
     void performLumaOnlyStretch(const StretchParams& params);
     
@@ -162,7 +165,9 @@ public:
     // If mask exists, result = processed * mask + original * (1-mask).
     void blendResult(const ImageBuffer& original, bool inverseMask = false);
 
-    void applyWhiteBalance(float r, float g, float b);
+    // lumaProtected: when true, shadows and highlights are blended back toward neutral
+    // to avoid colour casts in near-black/near-white regions.
+    void applyWhiteBalance(float r, float g, float b, bool lumaProtected = false);
     void subtract(float r, float g, float b); // Subtract offsets per channel (clamped to 0)
     void applyPCC(float kr, float kg, float kb, float br, float bg, float bb, float bg_mean); // Standard application
 

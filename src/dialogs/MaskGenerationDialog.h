@@ -60,6 +60,11 @@ private:
     QCheckBox* m_screenCb;
     QCheckBox* m_lightCb; // Use Lightness
     QCheckBox* m_invertCb;
+
+    // Color Mask
+    QGroupBox* m_colorGroup;
+    QSlider* m_colorFuzzSl;
+    QLabel* m_colorFuzzLbl;
     
     // Preview Visualization
     QComboBox* m_previewStretchCombo;
@@ -83,8 +88,8 @@ private:
     std::vector<float> getStarMask() const;
     std::vector<float> getStarMask(int w, int h) const;
     std::vector<float> getChrominance(int w, int h) const;
-    std::vector<float> getColorMask(const QString& color) const;
-    std::vector<float> getColorMask(const QString& color, int w, int h) const;
+    std::vector<float> getColorMask(const QString& color, float fuzzDeg = 0.0f) const;
+    std::vector<float> getColorMask(const QString& color, int w, int h, float fuzzDeg = 0.0f) const;
     
     // Downsampled data for fast preview
     std::vector<float> m_smallLuma;

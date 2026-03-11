@@ -3,7 +3,10 @@ TStar Changelog
 
 Version 1.7.6
 -------------
-- Implemented retrocompatibility with older Windows and MacOS versions
+- Now TStar it fully compatible with all Windows and MacOS versions
+- Added fuzziness slider to color masks
+- Added shadows and highlights protection in the temperature/tint tool
+- Minor bugfixes
 
 Version 1.7.5
 -------------

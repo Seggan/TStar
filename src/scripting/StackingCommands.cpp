@@ -1189,9 +1189,9 @@ bool StackingCommands::cmdStarNet(const ScriptCommand& cmd) {
                 int pctVal = pct.toInt(&ok);
                 if (ok && s_runner) {
                     s_runner->logMessage(
-                        QObject::tr("StarNet: %1% completato").arg(pctVal), "neutral");
+                        QObject::tr("StarNet: %1% completed").arg(pct), "neutral");
                     s_runner->progressChanged(
-                        QObject::tr("StarNet elaborazione..."), pctVal / 100.0);
+                        QObject::tr("StarNet processing..."), pctVal / 100.0);
                 }
                 ++ti; // skip "finished"
             } else if (tok.compare("Done!", Qt::CaseInsensitive) == 0 ||

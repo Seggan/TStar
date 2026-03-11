@@ -1,5 +1,6 @@
 #include "CurvesDialog.h"
 #include "../ImageBuffer.h"
+#include "widgets/HistogramWidget.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPainter>
@@ -63,29 +64,12 @@ void CurvesGraph::updatePaths() {
     int h = height();
     if (w <= 0 || h <= 0 || m_hist.empty()) return;
     
-    int channels = m_hist.size();
     m_lastW = w;
     
     m_resampledBins.clear();
     m_maxVal = 0;
 
-    int numBins = m_hist[0].size();
-    m_resampledBins.assign(channels, std::vector<float>(w, 0.0f));
-    float binsPerPx = (float)numBins / (float)w;
-
-    for (int c = 0; c < channels; ++c) {
-        int binIdx = 0;
-        for (int px = 0; px < w; ++px) {
-            double sum = 0;
-            while (binIdx < numBins && ((float)binIdx / binsPerPx) <= ((float)px + 0.5f)) {
-                sum += (double)m_hist[c][binIdx];
-                binIdx++;
-            }
-            if (m_logScale && sum > 0) sum = std::log(sum);
-            m_resampledBins[c][px] = (float)sum;
-            if (m_resampledBins[c][px] > m_maxVal) m_maxVal = m_resampledBins[c][px];
-        }
-    }
+    HistogramWidget::computeDisplayHistogram(m_hist, m_hist.size(), w, m_resampledBins, m_maxVal, m_logScale);
 }
 
 void CurvesGraph::setChannelMode(int mode) {

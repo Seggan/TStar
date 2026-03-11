@@ -115,6 +115,7 @@ void MaskGenerationDialog::setupUI() {
     m_typeCombo->addItem(tr("Color: Green"), "Color: Green");
     m_typeCombo->addItem(tr("Color: Cyan"), "Color: Cyan");
     m_typeCombo->addItem(tr("Color: Blue"), "Color: Blue");
+    m_typeCombo->addItem(tr("Color: Violet"),   "Color: Violet");
     m_typeCombo->addItem(tr("Color: Magenta"), "Color: Magenta");
     connect(m_typeCombo, &QComboBox::currentTextChanged, this, &MaskGenerationDialog::onTypeChanged);
     connect(m_typeCombo, &QComboBox::currentTextChanged, this, &MaskGenerationDialog::updateLivePreview);
@@ -196,7 +197,26 @@ void MaskGenerationDialog::setupUI() {
     
     m_rangeGroup->setVisible(false);
     mainLayout->addWidget(m_rangeGroup);
-    
+
+    // --- 4b. Color Mask Group ---
+    m_colorGroup = new QGroupBox(tr("Color Mask"));
+    QGridLayout* colorGrid = new QGridLayout(m_colorGroup);
+
+    colorGrid->addWidget(new QLabel(tr("Fuzziness (°):")), 0, 0);
+    m_colorFuzzSl = new QSlider(Qt::Horizontal);
+    m_colorFuzzSl->setRange(0, 60);
+    m_colorFuzzSl->setValue(0);
+    m_colorFuzzLbl = new QLabel("0°");
+    colorGrid->addWidget(m_colorFuzzSl, 0, 1);
+    colorGrid->addWidget(m_colorFuzzLbl, 0, 2);
+    connect(m_colorFuzzSl, &QSlider::valueChanged, [this](int v){
+        m_colorFuzzLbl->setText(QString("%1°").arg(v));
+    });
+    connect(m_colorFuzzSl, &QSlider::valueChanged, this, &MaskGenerationDialog::updateLivePreview);
+
+    m_colorGroup->setVisible(false);
+    mainLayout->addWidget(m_colorGroup);
+
     // Defaults
     m_upperSl->setValue(100); // 1.0 default
     
@@ -318,11 +338,13 @@ void MaskGenerationDialog::onTypeChanged(const QString& type) {
     Q_UNUSED(type);
     QString id = m_typeCombo->currentData().toString();
     bool isRange = (id == "Range Selection");
+    bool isColor = id.startsWith("Color:");
     
     // Save current width to prevent horizontal expansion
     int curWidth = width();
     
     m_rangeGroup->setVisible(isRange);
+    m_colorGroup->setVisible(isColor);
     
     // Ensure the dialog resizes correctly to fit or shrink based on visible controls
     updateGeometry();
@@ -354,7 +376,7 @@ MaskLayer MaskGenerationDialog::getGeneratedMask(int requestedW, int requestedH)
     const QString ALL_IMAGE_TYPES[] = {
         "Range Selection", "Lightness", "Chrominance", "Star Mask",
         "Color: Red", "Color: Orange", "Color: Yellow", "Color: Green",
-        "Color: Cyan", "Color: Blue", "Color: Magenta"
+        "Color: Cyan", "Color: Blue", "Color: Violet", "Color: Magenta"
     };
 
     bool useAll = false;
@@ -443,7 +465,8 @@ MaskLayer MaskGenerationDialog::getGeneratedMask(int requestedW, int requestedH)
         for(size_t i=0; i<base.size(); ++i) finalMask[i] = (base[i] > 0) ? S[i] : 0.0f;
     } else if (t.startsWith("Color:")) {
         QString color = t.mid(7);
-        std::vector<float> C = getColorMask(color, targetW, targetH);
+        float fuzzDeg = static_cast<float>(m_colorFuzzSl->value());
+        std::vector<float> C = getColorMask(color, targetW, targetH, fuzzDeg);
         finalMask.resize(base.size());
         for(size_t i=0; i<base.size(); ++i) finalMask[i] = (base[i] > 0) ? C[i] : 0.0f;
     }
@@ -696,7 +719,7 @@ void MaskGenerationDialog::generatePreview() {
     m_livePreview->activateWindow();
 }
 
-std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, int w, int h) const {
+std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, int w, int h, float fuzzDeg) const {
     // Return zeros if not RGB
     if (m_sourceImage.channels() < 3) {
         return std::vector<float>(w*h, 0.0f);
@@ -730,11 +753,12 @@ std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, int 
     cv::cvtColor(rgb8, hls, cv::COLOR_RGB2HLS);
     
     // Define color ranges (in degrees, 0-360)
+    // Blue narrowed to 195-255, Violet added at 255-300, Magenta starts at 300
     struct Range { float lo; float hi; };
     std::vector<Range> ranges;
     
     if (color == "Red") {
-        ranges = {{0, 15}, {345, 360}}; // Widened a bit
+        ranges = {{0, 15}, {345, 360}};
     } else if (color == "Orange") {
         ranges = {{15, 45}};
     } else if (color == "Yellow") {
@@ -744,14 +768,30 @@ std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, int 
     } else if (color == "Cyan") {
         ranges = {{165, 195}};
     } else if (color == "Blue") {
-        ranges = {{195, 265}};
+        ranges = {{195, 255}};
+    } else if (color == "Violet") {
+        ranges = {{255, 300}};
     } else if (color == "Magenta") {
-        ranges = {{265, 345}};
+        ranges = {{300, 345}};
     } else {
         return std::vector<float>(w*h, 0.0f);
     }
-    
-    // Create mask based on hue ranges
+
+    // Helper: compute fuzzy hue mask value using circular angular distance.
+    // Returns 1.0 inside the range, linearly falls to 0 at +/-fuzzDeg outside.
+    auto hueFuzzyVal = [](float H, float lo, float hi, float fuzz) -> float {
+        if (H >= lo && H <= hi) return 1.0f;
+        if (fuzz < 1e-3f) return 0.0f;
+        // Circular distance to each boundary
+        auto circDist = [](float a, float b) {
+            float d = std::fabs(a - b);
+            return std::min(d, 360.0f - d);
+        };
+        float dist = std::min(circDist(H, lo), circDist(H, hi));
+        return (dist < fuzz) ? 1.0f - dist / fuzz : 0.0f;
+    };
+
+    // Create mask based on hue ranges with optional fuzziness
     std::vector<float> mask(w*h, 0.0f);
     
     #pragma omp parallel for
@@ -761,19 +801,18 @@ std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, int 
         
         if (s < 0.1f) continue; // Skip low saturation pixels (neutral/gray)
 
+        float maxVal = 0.0f;
         for (const auto& r : ranges) {
-            if (hue >= r.lo && hue <= r.hi) {
-                mask[i] = 1.0f;
-                break;
-            }
+            maxVal = std::max(maxVal, hueFuzzyVal(hue, r.lo, r.hi, fuzzDeg));
         }
+        mask[i] = std::clamp(maxVal, 0.0f, 1.0f);
     }
     
     return mask;
 }
 
-std::vector<float> MaskGenerationDialog::getColorMask(const QString& color) const {
-    return getColorMask(color, m_sourceImage.width(), m_sourceImage.height());
+std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, float fuzzDeg) const {
+    return getColorMask(color, m_sourceImage.width(), m_sourceImage.height(), fuzzDeg);
 }
 
 std::vector<float> MaskGenerationDialog::getLightness(int w, int h) const {

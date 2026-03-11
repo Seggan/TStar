@@ -430,8 +430,16 @@
             <translation type="finished">Maschere Disponibili:</translation>
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
             <source>Invalid Mask Data</source>
             <translation type="finished">Dati Maschera non validi</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation type="finished">OK</translation>
         </message>
         <message>
             <source>Preview</source>
@@ -1506,6 +1514,10 @@
             <translation type="finished">Entrambi</translation>
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
             <source>Color Denoise: %1</source>
             <translation type="finished">Denoise Colore: %1</translation>
         </message>
@@ -1560,6 +1572,10 @@
         <message>
             <source>Non-Stellar PSF: 3.0</source>
             <translation type="finished">PSF Non-Stellare: 3.0</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation type="finished">OK</translation>
         </message>
         <message>
             <source>Parameters</source>
@@ -2197,6 +2213,10 @@
             <translation type="finished">Estrazione Fondo</translation>
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
             <source>Denoise</source>
             <translation type="finished">Denoise</translation>
         </message>
@@ -2207,6 +2227,10 @@
         <message>
             <source>Latest (auto)</source>
             <translation type="finished">Ultimo (auto)</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation type="finished">OK</translation>
         </message>
         <message>
             <source>Operation</source>
@@ -3577,8 +3601,8 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">8-bit Intero</translation>
         </message>
         <message>
-            <source>ABE - </source>
-            <translation type="finished">ABE - </translation>
+            <source>ABE</source>
+            <translation type="finished">ABE</translation>
         </message>
         <message>
             <source>ABE applied.</source>
@@ -3705,6 +3729,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Imprimi Annotazioni</translation>
         </message>
         <message>
+            <source>Burn Display View to Buffer\n(Applies current stretch/display mode permanently)</source>
+            <translation type="finished">Applica visualizzazione al buffer\n(Applica permanentemente lo stretch/modalità corrente)</translation>
+        </message>
+        <message>
             <source>CBE successful.</source>
             <translation type="finished">CBE completato con successo.</translation>
         </message>
@@ -3727,6 +3755,18 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Cannot burn annotations into raw data formats (FITS/XISF)</source>
             <translation type="finished">Impossibile imprimere annotazioni su formati raw (FITS/XISF)</translation>
+        </message>
+        <message>
+            <source>Cannot burn display: Failed to generate display image</source>
+            <translation type="finished">Impossibile applicare visualizzazione: Generazione immagine fallita</translation>
+        </message>
+        <message>
+            <source>Cannot burn display: Invalid buffer</source>
+            <translation type="finished">Impossibile applicare visualizzazione: Buffer non valido</translation>
+        </message>
+        <message>
+            <source>Cannot burn display: No active viewer</source>
+            <translation type="finished">Impossibile applicare visualizzazione: Nessun visualizzatore attivo</translation>
         </message>
         <message>
             <source>Catalog Background Extraction (CBE)</source>
@@ -3831,6 +3871,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Display Mode changed to: %1</source>
             <translation type="finished">Modalità visualizzazione cambiata in: %1</translation>
+        </message>
+        <message>
+            <source>Display burned to buffer (</source>
+            <translation type="finished">Visualizzazione applicata al buffer (</translation>
         </message>
         <message>
             <source>Effects</source>
@@ -4749,12 +4793,20 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Binaria</translation>
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
             <source>Chrominance</source>
             <translation type="finished">Crominanza</translation>
         </message>
         <message>
             <source>Clear Shapes</source>
             <translation type="finished">Pulisci Forme</translation>
+        </message>
+        <message>
+            <source>Color Mask</source>
+            <translation type="finished">Maschera Colore</translation>
         </message>
         <message>
             <source>Color: Blue</source>
@@ -4781,6 +4833,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Colore: Rosso</translation>
         </message>
         <message>
+            <source>Color: Violet</source>
+            <translation type="finished">Colore: Violetto</translation>
+        </message>
+        <message>
             <source>Color: Yellow</source>
             <translation type="finished">Colore: Giallo</translation>
         </message>
@@ -4803,6 +4859,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Fuzziness</source>
             <translation type="finished">Sfumatura (Fuzziness)</translation>
+        </message>
+        <message>
+            <source>Fuzziness (°):</source>
+            <translation type="finished">Sfumatura (°):</translation>
         </message>
         <message>
             <source>Histogram</source>
@@ -4851,6 +4911,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>No mask data generated. Please draw shapes or select a mask type.</source>
             <translation type="finished">Nessun dato maschera generato. Disegna forme o seleziona un tipo di maschera.</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation type="finished">OK</translation>
         </message>
         <message>
             <source>Preview</source>
@@ -6078,6 +6142,22 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
     <context>
         <name>PixelMathDialog</name>
         <message>
+            <source> &amp;nbsp;|&amp;nbsp; </source>
+            <translation type="finished"> &amp;nbsp;|&amp;nbsp; </translation>
+        </message>
+        <message>
+            <source>(untitled)</source>
+            <translation type="finished">(senza titolo)</translation>
+        </message>
+        <message>
+            <source>&lt;b&gt;Available images:&lt;/b&gt; </source>
+            <translation type="finished">&lt;b&gt;Immagini disponibili:&lt;/b&gt;</translation>
+        </message>
+        <message>
+            <source>&lt;i&gt;No additional images loaded.&lt;/i&gt;</source>
+            <translation type="finished">&lt;i&gt;Nessuna immagine aggiuntiva caricata.&lt;/i&gt;</translation>
+        </message>
+        <message>
             <source>Apply</source>
             <translation type="finished">Applica</translation>
         </message>
@@ -6098,8 +6178,20 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Previsto ')' ma trovato '%1'</translation>
         </message>
         <message>
+            <source>Image References</source>
+            <translation type="finished">Riferimenti Immagine</translation>
+        </message>
+        <message>
             <source>Missing closing parenthesis</source>
             <translation type="finished">Parentesi di chiusura mancante</translation>
+        </message>
+        <message>
+            <source>No valid image buffer.</source>
+            <translation type="finished">Nessun buffer immagine valido.</translation>
+        </message>
+        <message>
+            <source>Parse error in %1 expression: %2</source>
+            <translation type="finished">Errore di parsing nell'espressione %1: %2</translation>
         </message>
         <message>
             <source>Parse error: %1</source>
@@ -6110,24 +6202,20 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">PixelMath (Pro)</translation>
         </message>
         <message>
-            <source>Pixel Math requires RGB image.</source>
-            <translation type="finished">PixelMath richiede immagine RGB.</translation>
-        </message>
-        <message>
             <source>Please enter an expression.</source>
             <translation type="finished">Inserisci un'espressione.</translation>
         </message>
         <message>
-            <source>R = r; G = g; B = b;</source>
-            <translation type="finished">R = r; G = g; B = b;</translation>
+            <source>R = r + I2.r * 0.5;   (or just)   r + I2 * 0.3</source>
+            <translation type="finished">R = r + I2.r * 0.5;   (o semplicemente)   r + I2 * 0.3</translation>
         </message>
         <message>
             <source>Ready</source>
             <translation type="finished">Pronto</translation>
         </message>
         <message>
-            <source>Rescale result (maps min-max to 0-1)</source>
-            <translation type="finished">Ridimensiona risultato (mappa min-max a 0-1)</translation>
+            <source>Rescale result (maps min–max to 0–1)</source>
+            <translation type="finished">Riscala risultato (mappa min–max a 0–1)</translation>
         </message>
         <message>
             <source>Unclosed function call: %1</source>
@@ -6142,8 +6230,12 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Funzione sconosciuta o arg errati: %1</translation>
         </message>
         <message>
-            <source>Unknown variable or function: '%1' (only r, g, b are allowed)</source>
-            <translation type="finished">Variabile o funzione sconosciuta: '%1' (solo r, g, b sono consentiti)</translation>
+            <source>Unknown variable '%1'. Use r, g, b, or I1..I10 (with optional .r/.g/.b).</source>
+            <translation type="finished">Variabile sconosciuta '%1'. Usa r, g, b, o I1..I10 (con .r/.g/.b opzionale).</translation>
+        </message>
+        <message>
+            <source>Unknown variable or function: '%1'</source>
+            <translation type="finished">Variabile o funzione sconosciuta: '%1'</translation>
         </message>
     </context>
     <context>
@@ -6888,6 +6980,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Sovrapposizione Auto-stretch</translation>
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
             <source>Check if the reference image pattern matches your image. Use the buttons below to flip or rotate it if necessary.</source>
             <translation type="finished">Verifica se il pattern dell'immagine di riferimento corrisponde alla tua immagine. Usa i pulsanti in basso per rifletterla o ruotarla se necessario.</translation>
         </message>
@@ -6902,6 +6998,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Flip Vertical</source>
             <translation type="finished">Ribalta Verticalmente</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation type="finished">OK</translation>
         </message>
         <message>
             <source>Opacity:</source>
@@ -7358,6 +7458,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Errore</translation>
         </message>
         <message>
+            <source>Initialized script image from current viewer.</source>
+            <translation type="finished">Immagine script inizializzata dal visualizzatore corrente.</translation>
+        </message>
+        <message>
             <source>Load Script</source>
             <translation type="finished">Carica Script</translation>
         </message>
@@ -7674,6 +7778,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Modelli scaricati e installati con successo.</translation>
         </message>
         <message>
+            <source>OK</source>
+            <translation type="finished">OK</translation>
+        </message>
+        <message>
             <source>Paths and Integrations</source>
             <translation type="finished">Percorsi e Integrazioni</translation>
         </message>
@@ -7792,6 +7900,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
     <context>
         <name>StackingCommands</name>
         <message>
+            <source>(no .tif files found)</source>
+            <translation type="finished">(nessun file .tif trovato)</translation>
+        </message>
+        <message>
             <source>Calibrating frames...</source>
             <translation type="finished">Calibrazione frame...</translation>
         </message>
@@ -7802,6 +7914,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Found %1 light frames</source>
             <translation type="finished">Trovati %1 light frame</translation>
+        </message>
+        <message>
+            <source>Found: %1</source>
+            <translation type="finished">Trovato: %1</translation>
         </message>
         <message>
             <source>Pipeline complete! Output: %1</source>
@@ -7824,8 +7940,76 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Stacking...</translation>
         </message>
         <message>
+            <source>StarNet processing...</source>
+            <translation type="finished">StarNet elaborazione...</translation>
+        </message>
+        <message>
+            <source>StarNet: %1</source>
+            <translation type="finished">StarNet: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: %1% completed</source>
+            <translation type="finished">StarNet: %1% completato</translation>
+        </message>
+        <message>
+            <source>StarNet: Done!</source>
+            <translation type="finished">StarNet: Fatto!</translation>
+        </message>
+        <message>
+            <source>StarNet: OpenCV failed to read output TIFF: %1</source>
+            <translation type="finished">StarNet: OpenCV ha fallito la lettura del TIFF di output: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: could not save starless FITS: %1</source>
+            <translation type="finished">StarNet: impossibile salvare FITS starless: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: failed to start – check executable path and permissions.</source>
+            <translation type="finished">StarNet: avvio fallito – controlla percorso eseguibile e permessi.</translation>
+        </message>
+        <message>
+            <source>StarNet: failed to write input TIFF: %1</source>
+            <translation type="finished">StarNet: scrittura TIFF di input fallita: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: input TIFF saved: %1</source>
+            <translation type="finished">StarNet: TIFF di input salvato: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: loaded TIFF produced invalid buffer.</source>
+            <translation type="finished">StarNet: il TIFF caricato ha prodotto un buffer non valido.</translation>
+        </message>
+        <message>
+            <source>StarNet: no image loaded</source>
+            <translation type="finished">StarNet: nessuna immagine caricata</translation>
+        </message>
+        <message>
+            <source>StarNet: output TIFF not found: %1</source>
+            <translation type="finished">StarNet: TIFF di output non trovato: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: output TIFF not found: %1\n%2</source>
+            <translation type="finished">StarNet: TIFF di output non trovato: %1\n%2</translation>
+        </message>
+        <message>
+            <source>StarNet: process exit code: %1</source>
+            <translation type="finished">StarNet: codice uscita processo: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: starless FITS saved: %1</source>
+            <translation type="finished">StarNet: FITS starless salvato: %1</translation>
+        </message>
+        <message>
+            <source>StarNet: starting %1 %2</source>
+            <translation type="finished">StarNet: avvio di %1 %2</translation>
+        </message>
+        <message>
             <source>Starting pipeline for: %1</source>
             <translation type="finished">Avvio pipeline per: %1</translation>
+        </message>
+        <message>
+            <source>save: no image loaded</source>
+            <translation type="finished">salvataggio: nessuna immagine caricata</translation>
         </message>
     </context>
     <context>
@@ -9046,6 +9230,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Anteprima</translation>
         </message>
         <message>
+            <source>Protect Shadows/Highlights</source>
+            <translation type="finished">Proteggi Ombre/Alte Luci</translation>
+        </message>
+        <message>
             <source>Reset</source>
             <translation type="finished">Reimposta</translation>
         </message>
@@ -9060,6 +9248,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Tint:</source>
             <translation type="finished">Tinta:</translation>
+        </message>
+        <message>
+            <source>When enabled, near-black and near-white pixels are protected from colour casts</source>
+            <translation type="finished">Se abilitato, i pixel vicino al nero e vicino al bianco sono protetti dalle dominanti di colore</translation>
         </message>
     </context>
     <context>
