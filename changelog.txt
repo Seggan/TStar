@@ -1,6 +1,10 @@
 TStar Changelog
 ===============
 
+Version 1.7.6
+-------------
+- Implemented retrocompatibility with older Windows and MacOS versions
+
 Version 1.7.5
 -------------
 - Introduced image magnifier that follows the cursor

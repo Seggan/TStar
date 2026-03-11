@@ -31,13 +31,15 @@ done
 
 # 2. Try Homebrew paths directly (ARM and Intel)
 if [ -z "$PYTHON_CMD" ]; then
-    HOMEBREW_PREFIX=$(brew --prefix 2>/dev/null || echo "/opt/homebrew")
-    for ver in "${COMPAT_VERSIONS[@]}"; do
-        BREW_PYTHON="$HOMEBREW_PREFIX/opt/python@$ver/bin/python$ver"
-        if [ -x "$BREW_PYTHON" ]; then
-            PYTHON_CMD="$BREW_PYTHON"
-            break
-        fi
+    for BASE in "/opt/homebrew" "/usr/local"; do
+        [ -d "$BASE" ] || continue
+        for ver in "${COMPAT_VERSIONS[@]}"; do
+            BREW_PYTHON="$BASE/opt/python@$ver/bin/python$ver"
+            if [ -x "$BREW_PYTHON" ]; then
+                PYTHON_CMD="$BREW_PYTHON"
+                break 2
+            fi
+        done
     done
 fi
 
@@ -55,11 +57,13 @@ fi
 
 if [ -z "$PYTHON_CMD" ]; then
     echo "[ERROR] Compatible Python 3 (3.11 or 3.12) not found!"
-    echo "Install with: brew install python@3.12"
+    echo "Install with: brew install python@3.11"
     exit 1
 fi
 
 PYTHON_DISPLAY_VERSION=$("$PYTHON_CMD" --version)
+PYTHON_MAJOR_MINOR=$("$PYTHON_CMD" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+
 echo "  - Using: $PYTHON_CMD ($PYTHON_DISPLAY_VERSION)"
 
 # --- 2. Prepare Directory ---
@@ -98,8 +102,17 @@ echo "[STEP 4] Upgrading pip..."
 echo ""
 echo "[STEP 5] Installing dependencies..."
 
+# NumPy version strategy:
+# - Python 3.12+ requires NumPy >= 1.26.0
+# - Python < 3.12 prefers NumPy 1.24/1.25 for broader legacy macOS support
+if [ "$(echo "$PYTHON_MAJOR_MINOR >= 3.12" | bc -l 2>/dev/null || python3 -c "print($PYTHON_MAJOR_MINOR >= 3.12)")" == "True" ] || [ "$PYTHON_MAJOR_MINOR" == "3.12" ]; then
+    NUMPY_VERSION="numpy>=1.26.0,<2.0.0"
+else
+    NUMPY_VERSION="numpy>=1.24.0,<1.26.0"
+fi
+
 PACKAGES=(
-    "numpy>=1.24.0,<1.26.0"
+    "$NUMPY_VERSION"
     "scipy<1.13.0"
     "tifffile"
     "imagecodecs"
