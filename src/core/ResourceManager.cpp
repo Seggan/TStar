@@ -15,6 +15,7 @@
 
 #ifdef Q_OS_MAC
 #include <mach/mach.h>
+#include <sys/sysctl.h>
 #endif
 
 #ifdef Q_OS_LINUX
@@ -65,14 +66,32 @@ double ResourceManager::getMemoryUsagePercent() const {
         return static_cast<double>(memInfo.dwMemoryLoad);
     }
 #elif defined(Q_OS_MAC)
-    mach_msg_type_number_t count = HOST_VM_INFO_COUNT;
-    vm_statistics_data_t vmstat;
-    if (host_statistics(mach_host_self(), HOST_VM_INFO, (host_info_t)&vmstat, &count) == KERN_SUCCESS) {
-        // MacOS memory usage API is complex compared to Windows.
-        // MacOS memory usage API requires porting.
-        // Returning 0.0 indicates 'unknown' status, which prevents blocking operations 
-        // that rely on strict memory checks. This is the intended behavior until ported.
-        return 0.0; 
+    mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+    vm_statistics64_data_t vmstat;
+    if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info_64_t)&vmstat, &count) == KERN_SUCCESS) {
+        // Physical memory usage calculation: (active + wired + compressed) / total
+        // Note: wired is memory that cannot be swapped out.
+        // Compressed is memory stored in the compressed segment.
+        
+        long long page_size = 0;
+        vm_size_t vmsize;
+        mach_port_t host_port = mach_host_self();
+        host_page_size(host_port, &vmsize);
+        page_size = vmsize;
+
+        long long total_pages = 0;
+        int mib[2];
+        mib[0] = CTL_HW;
+        mib[1] = HW_MEMSIZE;
+        int64_t total_memory = 0;
+        size_t len = sizeof(total_memory);
+        if (sysctl(mib, 2, &total_memory, &len, NULL, 0) != 0) {
+             return 0.0;
+        }
+
+        long long used_pages = vmstat.active_count + vmstat.wire_count + vmstat.compressor_page_count;
+        double used_bytes = (double)used_pages * page_size;
+        return (used_bytes / (double)total_memory) * 100.0;
     }
 #elif defined(Q_OS_LINUX)
     struct sysinfo memInfo;

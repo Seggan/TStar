@@ -272,7 +272,10 @@ MainWindow::MainWindow(QWidget *parent)
             }
             p.restore();
 
-            // 4. Draw Subwindows (handled by QMdiArea basic painting if we don't call base?)
+            // Signal successful startup for Self-Healing mechanism
+            QSettings startupSettings("TStar", "StartupCheck");
+            startupSettings.setValue("last_launch_successful", true);
+            startupSettings.sync();
             
             QMdiArea::paintEvent(event); 
         }

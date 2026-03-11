@@ -23,6 +23,35 @@
 
 int main(int argc, char *argv[])
 {
+    // --- Safe Graphics Fallback ---
+    // Allow users to force software rendering if GPU drivers are unstable
+    bool safeGraphics = false;
+    
+    // 1. Check Command line or Env Var
+    for (int i = 0; i < argc; ++i) {
+        if (QString(argv[i]) == "--safe-graphics") safeGraphics = true;
+    }
+    if (qEnvironmentVariableIsSet("TSTAR_SAFE_GRAPHICS")) safeGraphics = true;
+
+    // 2. Self-Healing: Check if last launch failed
+    QSettings startupSettings("TStar", "StartupCheck");
+    bool lastLaunchSuccessful = startupSettings.value("last_launch_successful", true).toBool();
+    if (!lastLaunchSuccessful) {
+        safeGraphics = true;
+        qDebug() << "TStar: Detected previous startup failure. Engaging Safe Graphics Mode (Software OpenGL).";
+    }
+
+    // Set flag to false during initialization. MainWindow will set it to true.
+    startupSettings.setValue("last_launch_successful", false);
+    startupSettings.sync();
+
+    if (safeGraphics) {
+        // Force software rendering backend
+        QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
+        qputenv("QT_QUICK_BACKEND", "software");
+        qputenv("QSG_RHI_BACKEND", "software");
+    }
+
     // Initialize Global Exception Handlers (SEH, Signals, Terminate)
     GlobalExceptionHandler::init();
 
