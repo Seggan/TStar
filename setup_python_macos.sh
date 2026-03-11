@@ -107,17 +107,17 @@ PACKAGES=(
     "onnxruntime<1.18.0"
 )
 
-for pkg in "${PACKAGES[@]}"; do
-    echo "  - Installing $pkg..."
-    "$PYTHON_VENV/bin/python3" -m pip install "$pkg" --quiet
-done
+echo "  - Installing all packages..."
+"$PYTHON_VENV/bin/python3" -m pip install "${PACKAGES[@]}" --quiet
 
 # --- 6. Verify Installation ---
 echo ""
 echo "[STEP 6] Verifying installation..."
 
 for pkg in "${PACKAGES[@]}"; do
-    if "$PYTHON_VENV/bin/python3" -c "import ${pkg//-/_}" 2>/dev/null; then
+    # Extract clean package name for import (remove version constraints and replace - with _)
+    pkg_name=$(echo "$pkg" | sed 's/[<>=!].*//' | tr '-' '_')
+    if "$PYTHON_VENV/bin/python3" -c "import $pkg_name" 2>/dev/null; then
         echo "  - $pkg: OK"
     else
         echo "  - $pkg: FAILED"
