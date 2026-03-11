@@ -72,9 +72,7 @@ else()
     # GCC/Clang (used on both macOS and Windows with MinGW)
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
     add_compile_options(-ffast-math)  # Enable fast math for scientific computing
-    add_compile_options(-march=native)  # Architecture-specific optimizations
     
-    # LTO Optimization (Conditional)
     # LTO Optimization (Conditional)
     option(ENABLE_LTO "Enable Link-Time Optimization" OFF)
     if(ENABLE_LTO)
