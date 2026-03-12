@@ -96,6 +96,7 @@
 #include "dialogs/ContinuumSubtractionDialog.h"
 #include "dialogs/AlignChannelsDialog.h"
 #include "dialogs/AnnotationToolDialog.h"
+#include "dialogs/BlinkComparatorDialog.h"
 #include "widgets/AnnotationOverlay.h"
 #include "widgets/SidebarWidget.h"
 #include "widgets/HeaderPanel.h"
@@ -1070,6 +1071,9 @@ MainWindow::MainWindow(QWidget *parent)
     addMenuAction(utilMenu, tr("Multiscale Decomposition"), "", [this](){
         openMultiscaleDecompDialog();
     });
+    addMenuAction(utilMenu, tr("Blink Comparator"), "", [this](){
+        openBlinkComparatorDialog();
+    });
 
     // --- F. Effects ---
     QMenu* effectMenu = processMenu->addMenu(tr("Effects"));
@@ -1203,7 +1207,6 @@ MainWindow::MainWindow(QWidget *parent)
     helpBtn->setToolTip(tr("Help"));
     connect(helpBtn, &QToolButton::clicked, this, [this](){
         HelpDialog dlg(this);
-        dlg.adjustSize();
         QRect mainGeom = this->geometry();
         dlg.move(mainGeom.center() - QPoint(dlg.width() / 2, dlg.height() / 2));
         dlg.exec();
@@ -4305,6 +4308,36 @@ void MainWindow::openNBtoRGBStarsDialog() {
 
     CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_nbToRGBStarsDlg,
                                                   tr("NB → RGB Stars"));
+    centerToolWindow(sub);
+    if (sub) {
+        QPoint p = sub->pos();
+        const QRect scr = this->screen()->availableGeometry();
+        p.setY(qMax(scr.top(), p.y() - 50));
+        sub->move(p);
+    }
+}
+
+// ============================================================================
+// Blink Comparator
+// ============================================================================
+void MainWindow::openBlinkComparatorDialog() {
+    if (m_blinkComparatorDlg) {
+        m_blinkComparatorDlg->raise();
+        m_blinkComparatorDlg->activateWindow();
+        m_blinkComparatorDlg->updateViewLists();
+        return;
+    }
+
+    m_blinkComparatorDlg = new BlinkComparatorDialog(this, this);
+    log(tr("Opening Blink Comparator..."), Log_Action, true);
+    m_blinkComparatorDlg->setAttribute(Qt::WA_DeleteOnClose);
+
+    connect(m_blinkComparatorDlg, &QDialog::destroyed, this, [this]() {
+        m_blinkComparatorDlg = nullptr;
+    });
+
+    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_blinkComparatorDlg,
+                                                  tr("Blink Comparator"));
     centerToolWindow(sub);
     if (sub) {
         QPoint p = sub->pos();

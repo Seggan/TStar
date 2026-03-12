@@ -590,6 +590,8 @@ set(TSTAR_SOURCES
     src/dialogs/CropRotateDialog.h
     src/dialogs/AboutDialog.cpp
     src/dialogs/AboutDialog.h
+    src/dialogs/BlinkComparatorDialog.cpp
+    src/dialogs/BlinkComparatorDialog.h
     src/dialogs/ABEDialog.cpp
     src/dialogs/ABEDialog.h
     src/dialogs/SCNRDialog.cpp

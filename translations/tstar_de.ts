@@ -585,7 +585,7 @@
         </message>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>Fit to Screen</source>
@@ -757,6 +757,49 @@
         <message>
             <source>Selection: %1x%2 at %3,%4</source>
             <translation type="finished">Auswahl: %1x%2 bei %3,%4</translation>
+        </message>
+    </context>
+    <context>
+        <name>BlinkComparatorDialog</name>
+        <message>
+            <source>AutoStretch</source>
+            <translation type="finished">AutoStretch</translation>
+        </message>
+        <message>
+            <source>Blink Comparator</source>
+            <translation type="finished">Blinkkomparator</translation>
+        </message>
+        <message>
+            <source>Blink Rate (ms):</source>
+            <translation type="finished">Blinkrate (ms):</translation>
+        </message>
+        <message>
+            <source>Fit</source>
+            <translation type="finished">Einpassen</translation>
+        </message>
+        <message>
+            <source>No Image</source>
+            <translation type="finished">Kein Bild</translation>
+        </message>
+        <message>
+            <source>Pause</source>
+            <translation type="finished">Pause</translation>
+        </message>
+        <message>
+            <source>Play</source>
+            <translation type="finished">Abspielen</translation>
+        </message>
+        <message>
+            <source>Refresh Views</source>
+            <translation type="finished">Ansichten aktualisieren</translation>
+        </message>
+        <message>
+            <source>View 1:</source>
+            <translation type="finished">Ansicht 1:</translation>
+        </message>
+        <message>
+            <source>View 2:</source>
+            <translation type="finished">Ansicht 2:</translation>
         </message>
     </context>
     <context>
@@ -1460,7 +1503,7 @@
         </message>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>Linked channels</source>
@@ -2435,6 +2478,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Passen Sie den Q-Faktor an, um die Subtraktionsstärke zu steuern</translation>
         </message>
         <message>
+            <source>Adjust blink rate (ms) and use Play/Pause to toggle the animation</source>
+            <translation type="finished">Passen Sie die Blinkrate (ms) an und verwenden Sie Wiedergabe/Pause, um die Animation umzuschalten</translation>
+        </message>
+        <message>
             <source>Adjust color saturation with protection for highlights and shadows.</source>
             <translation type="finished">Farbsättigung mit Schutz für Lichter und Schatten anpassen.</translation>
         </message>
@@ -2573,6 +2620,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>Blends starless and star-only images with adjustable parameters.</source>
             <translation type="finished">Mischt sternenlose und Nur-Sterne-Bilder mit einstellbaren Parametern.</translation>
+        </message>
+        <message>
+            <source>Blink Comparator</source>
+            <translation type="finished">Blinkkomparator</translation>
         </message>
         <message>
             <source>Browse and execute built-in processing scripts:</source>
@@ -3035,6 +3086,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Gibt kalibrierte Frames aus, die für Registrierung und Stacking bereit sind</translation>
         </message>
         <message>
+            <source>Overlay and compare two active views by alternating their display:</source>
+            <translation type="finished">Überlagern und vergleichen Sie zwei aktive Ansichten, indem Sie deren Anzeige abwechseln:</translation>
+        </message>
+        <message>
             <source>PCC Distribution</source>
             <translation type="finished">PCC-Verteilung</translation>
         </message>
@@ -3211,6 +3266,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Master-Bias-, Dark- und Flat-Frames auswählen</translation>
         </message>
         <message>
+            <source>Select two views from the dropdown menus</source>
+            <translation type="finished">Wählen Sie zwei Ansichten aus den Dropdown-Menüs aus</translation>
+        </message>
+        <message>
             <source>Selective Color Correction</source>
             <translation type="finished">Selektive Farbkorrektur</translation>
         </message>
@@ -3383,6 +3442,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Variablen wie $T (Ziel), $R, $G, $B verwenden</translation>
         </message>
         <message>
+            <source>Use zoom controls (+, -, Fit) and AutoStretch for better inspection</source>
+            <translation type="finished">Verwenden Sie die Zoom-Steuerelemente (+, -, Einpassen) und AutoStretch für eine bessere Inspektion</translation>
+        </message>
+        <message>
             <source>Useful for verifying calibration accuracy</source>
             <translation type="finished">Nützlich zur Überprüfung der Kalibrierungsgenauigkeit</translation>
         </message>
@@ -3547,7 +3610,7 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <name>LivePreviewDialog</name>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>Live Mask Preview</source>
@@ -3725,6 +3788,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Bittiefe:</translation>
         </message>
         <message>
+            <source>Blink Comparator</source>
+            <translation type="finished">Blinkkomparator</translation>
+        </message>
+        <message>
             <source>Burn Annotations</source>
             <translation type="finished">Anmerkungen einbrennen</translation>
         </message>
@@ -3755,10 +3822,6 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>Cannot burn annotations into raw data formats (FITS/XISF)</source>
             <translation type="finished">Anmerkungen können nicht in Rohdatenformate (FITS/XISF) eingebrannt werden.</translation>
-        </message>
-        <message>
-            <source>Cannot burn display: Failed to generate display image</source>
-            <translation type="finished">Anzeige kann nicht gebrannt werden: Fehler beim Erzeugen des Anzeige-Bildes</translation>
         </message>
         <message>
             <source>Cannot burn display: Invalid buffer</source>
@@ -4267,6 +4330,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>Opening AstroSpike Tool...</source>
             <translation type="finished">Öffne AstroSpike-Werkzeug...</translation>
+        </message>
+        <message>
+            <source>Opening Blink Comparator...</source>
+            <translation type="finished">Öffne Blinkkomparator...</translation>
         </message>
         <message>
             <source>Opening CLAHE...</source>
@@ -4850,7 +4917,7 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         </message>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>Freehand</source>
@@ -5115,7 +5182,7 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         </message>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>Gain</source>
@@ -5262,7 +5329,7 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         </message>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>From File</source>
@@ -5485,7 +5552,7 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         </message>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>From %1 import</source>
@@ -8948,7 +9015,7 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         </message>
         <message>
             <source>Fit</source>
-            <translation type="finished">Anpassen</translation>
+            <translation type="finished">Einpassen</translation>
         </message>
         <message>
             <source>Generalized Hyperbolic Stretch</source>

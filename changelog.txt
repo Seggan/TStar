@@ -6,6 +6,7 @@ Version 1.7.6
 - Now TStar it fully compatible with all Windows and MacOS versions
 - Added fuzziness slider to color masks
 - Added shadows and highlights protection in the temperature/tint tool
+- Added blink comparator tool
 - Minor bugfixes
 
 Version 1.7.5

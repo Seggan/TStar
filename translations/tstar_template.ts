@@ -760,6 +760,49 @@
         </message>
     </context>
     <context>
+        <name>BlinkComparatorDialog</name>
+        <message>
+            <source>AutoStretch</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blink Comparator</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blink Rate (ms):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Fit</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No Image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Pause</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Play</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Refresh Views</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>View 1:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>View 2:</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
         <name>CBEDialog</name>
         <message>
             <source>  (non-standard orientation — ensure image has been recently plate-solved)</source>
@@ -2433,6 +2476,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Adjust blink rate (ms) and use Play/Pause to toggle the animation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Adjust color saturation with protection for highlights and shadows.</source>
             <translation type="unfinished" />
         </message>
@@ -2570,6 +2617,10 @@
         </message>
         <message>
             <source>Blends starless and star-only images with adjustable parameters.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blink Comparator</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3033,6 +3084,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Overlay and compare two active views by alternating their display:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>PCC Distribution</source>
             <translation type="unfinished" />
         </message>
@@ -3209,6 +3264,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Select two views from the dropdown menus</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Selective Color Correction</source>
             <translation type="unfinished" />
         </message>
@@ -3378,6 +3437,10 @@
         </message>
         <message>
             <source>Use variables like $T (target), $R, $G, $B</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Use zoom controls (+, -, Fit) and AutoStretch for better inspection</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3723,6 +3786,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Blink Comparator</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Burn Annotations</source>
             <translation type="unfinished" />
         </message>
@@ -3752,10 +3819,6 @@
         </message>
         <message>
             <source>Cannot burn annotations into raw data formats (FITS/XISF)</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Cannot burn display: Failed to generate display image</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4264,6 +4327,10 @@
         </message>
         <message>
             <source>Opening AstroSpike Tool...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Opening Blink Comparator...</source>
             <translation type="unfinished" />
         </message>
         <message>

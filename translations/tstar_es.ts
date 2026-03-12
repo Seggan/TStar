@@ -760,6 +760,49 @@
         </message>
     </context>
     <context>
+        <name>BlinkComparatorDialog</name>
+        <message>
+            <source>AutoStretch</source>
+            <translation type="finished">AutoStretch</translation>
+        </message>
+        <message>
+            <source>Blink Comparator</source>
+            <translation type="finished">Comparador Blink</translation>
+        </message>
+        <message>
+            <source>Blink Rate (ms):</source>
+            <translation type="finished">Frecuencia Blink (ms):</translation>
+        </message>
+        <message>
+            <source>Fit</source>
+            <translation type="finished">Ajustar</translation>
+        </message>
+        <message>
+            <source>No Image</source>
+            <translation type="finished">Sin Imagen</translation>
+        </message>
+        <message>
+            <source>Pause</source>
+            <translation type="finished">Pausar</translation>
+        </message>
+        <message>
+            <source>Play</source>
+            <translation type="finished">Reproducir</translation>
+        </message>
+        <message>
+            <source>Refresh Views</source>
+            <translation type="finished">Actualizar Vistas</translation>
+        </message>
+        <message>
+            <source>View 1:</source>
+            <translation type="finished">Vista 1:</translation>
+        </message>
+        <message>
+            <source>View 2:</source>
+            <translation type="finished">Vista 2:</translation>
+        </message>
+    </context>
+    <context>
         <name>CBEDialog</name>
         <message>
             <source>  (non-standard orientation — ensure image has been recently plate-solved)</source>
@@ -2435,6 +2478,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Ajusta el Factor Q para controlar la fuerza de sustracción</translation>
         </message>
         <message>
+            <source>Adjust blink rate (ms) and use Play/Pause to toggle the animation</source>
+            <translation type="finished">Ajuste la frecuencia blink (ms) e use Reproducir/Pausa para alternar la animación</translation>
+        </message>
+        <message>
             <source>Adjust color saturation with protection for highlights and shadows.</source>
             <translation type="finished">Ajusta la saturación de color con protección para luces y sombras.</translation>
         </message>
@@ -2573,6 +2620,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Blends starless and star-only images with adjustable parameters.</source>
             <translation type="finished">Mezcla imágenes sin estrellas y solo estrellas con parámetros ajustables.</translation>
+        </message>
+        <message>
+            <source>Blink Comparator</source>
+            <translation type="finished">Comparador Blink</translation>
         </message>
         <message>
             <source>Browse and execute built-in processing scripts:</source>
@@ -3035,6 +3086,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Genera fotogramas calibrados listos para registro y apilado</translation>
         </message>
         <message>
+            <source>Overlay and compare two active views by alternating their display:</source>
+            <translation type="finished">Superponga y compare due vistas activas alternando su visualización:</translation>
+        </message>
+        <message>
             <source>PCC Distribution</source>
             <translation type="finished">Distribución PCC</translation>
         </message>
@@ -3211,6 +3266,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Seleccionar fotogramas maestros Bias, Dark y Flat</translation>
         </message>
         <message>
+            <source>Select two views from the dropdown menus</source>
+            <translation type="finished">Seleccione dos vistas de los menús desplegables</translation>
+        </message>
+        <message>
             <source>Selective Color Correction</source>
             <translation type="finished">Corrección Selectiva de Color</translation>
         </message>
@@ -3381,6 +3440,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Use variables like $T (target), $R, $G, $B</source>
             <translation type="finished">Usa variables como $T (objetivo), $R, $G, $B</translation>
+        </message>
+        <message>
+            <source>Use zoom controls (+, -, Fit) and AutoStretch for better inspection</source>
+            <translation type="finished">Use los controles de zoom (+, -, Ajustar) e AutoStretch para una mejor inspección</translation>
         </message>
         <message>
             <source>Useful for verifying calibration accuracy</source>
@@ -3725,6 +3788,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Profundidad de Bits:</translation>
         </message>
         <message>
+            <source>Blink Comparator</source>
+            <translation type="finished">Comparador Blink</translation>
+        </message>
+        <message>
             <source>Burn Annotations</source>
             <translation type="finished">Grabar Anotaciones</translation>
         </message>
@@ -3755,10 +3822,6 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Cannot burn annotations into raw data formats (FITS/XISF)</source>
             <translation type="finished">No se pueden grabar anotaciones en formatos raw (FITS/XISF)</translation>
-        </message>
-        <message>
-            <source>Cannot burn display: Failed to generate display image</source>
-            <translation type="finished">No si può aplicar vista: Error al generar imagen</translation>
         </message>
         <message>
             <source>Cannot burn display: Invalid buffer</source>
@@ -4267,6 +4330,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Opening AstroSpike Tool...</source>
             <translation type="finished">Abriendo Herramienta AstroSpike...</translation>
+        </message>
+        <message>
+            <source>Opening Blink Comparator...</source>
+            <translation type="finished">Abriendo Comparador Blink...</translation>
         </message>
         <message>
             <source>Opening CLAHE...</source>

@@ -49,6 +49,7 @@ class MultiscaleDecompDialog;
 class NarrowbandNormalizationDialog;
 class NBtoRGBStarsDialog;
 struct Annotation;
+class BlinkComparatorDialog;
 
 class MainWindow : public QMainWindow, public MainWindowCallbacks {
     Q_OBJECT
@@ -120,6 +121,7 @@ private slots:
     void openMultiscaleDecompDialog();
     void openNarrowbandNormalizationDialog();
     void openNBtoRGBStarsDialog();
+    void openBlinkComparatorDialog();
     
     void openExtractLuminanceDialog();
     void openRecombineLuminanceDialog();
@@ -244,6 +246,7 @@ private:
     QPointer<class MultiscaleDecompDialog> m_multiscaleDecompDlg;
     QPointer<class NarrowbandNormalizationDialog> m_nbNormDlg;
     QPointer<class NBtoRGBStarsDialog> m_nbToRGBStarsDlg;
+    QPointer<class BlinkComparatorDialog> m_blinkComparatorDlg;
     QPointer<class SettingsDialog> m_settingsDlg;
     
 public:

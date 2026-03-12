@@ -15,6 +15,7 @@ HelpDialog::HelpDialog(QWidget *parent) : DialogBase(parent, tr("Help & Tutorial
 void HelpDialog::setupUI()
 {
     // Fixed size as requested: 800x600
+    resize(800, 600);
     
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(10, 10, 10, 10);
@@ -371,6 +372,14 @@ QString HelpDialog::buildHelpContent()
 
     html += "<h3>" + tr("Aberration Inspector") + "</h3>";
     html += "<p>" + tr("Displays a 3x3 grid of zoomed panels from the corners, edges, and center of your image. Useful for evaluating optical quality, coma, and field curvature across your frame.") + "</p>";
+
+    html += "<h3>" + tr("Blink Comparator") + "</h3>";
+    html += "<p>" + tr("Overlay and compare two active views by alternating their display:") + "</p>";
+    html += "<ul>";
+    html += "<li>" + tr("Select two views from the dropdown menus") + "</li>";
+    html += "<li>" + tr("Adjust blink rate (ms) and use Play/Pause to toggle the animation") + "</li>";
+    html += "<li>" + tr("Use zoom controls (+, -, Fit) and AutoStretch for better inspection") + "</li>";
+    html += "</ul>";
 
     html += "<h3>" + tr("Correction Brush") + "</h3>";
     html += "<p>" + tr("Interactive tool to remove artifacts and blemishes:") + "</p>";
