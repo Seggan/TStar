@@ -3,7 +3,7 @@ TStar Changelog
 
 Version 1.7.7
 -------------
-- Forced windows uninstall/reinstall to fix python environment
+- Forced windows app uninstall/reinstall to fix python environment
 - Multi threaded image loading (smooth and fast)
 - Now images open in a window with their aspect ratio (instead of fixed 4:3)
 

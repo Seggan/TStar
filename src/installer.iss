@@ -50,6 +50,10 @@ VersionInfoProductVersion={#MyAppVersion}
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 
+[CustomMessages]
+english.UninstallOldVersion=An older version of TStar was detected. It will be uninstalled before proceeding.
+italian.UninstallOldVersion=È stata rilevata una versione precedente di TStar. Verrà disinstallata prima di procedere.
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
@@ -71,10 +75,16 @@ var
   sUnInstPath: String;
   sUnInstallString: String;
 begin
-  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{' + '{B5F8E3A4-2D91-4C67-9A5E-7F2B3C8D1E9A}' + '}_is1';
+  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B5F8E3A4-2D91-4C67-9A5E-7F2B3C8D1E9A}_is1';
   sUnInstallString := '';
-  if not RegQueryStringValue(HKLM, sUnInstPath, 'UninstallString', sUnInstallString) then
-    RegQueryStringValue(HKCU, sUnInstPath, 'UninstallString', sUnInstallString);
+  
+  // Check HKLM 64-bit
+  if not RegQueryStringValue(HKLM64, sUnInstPath, 'UninstallString', sUnInstallString) then
+    // Check HKLM 32-bit
+    if not RegQueryStringValue(HKLM32, sUnInstPath, 'UninstallString', sUnInstallString) then
+      // Check HKCU
+      RegQueryStringValue(HKCU, sUnInstPath, 'UninstallString', sUnInstallString);
+      
   Result := sUnInstallString;
 end;
 
@@ -86,9 +96,12 @@ begin
   sUninstallString := GetUninstallString();
   if sUninstallString <> '' then
   begin
+    // Show feedback to user
+    MsgBox(CustomMessage('UninstallOldVersion'), mbInformation, MB_OK);
+
     // Remove quotes if present
     sUninstallString := RemoveQuotes(sUninstallString);
-    Exec(sUninstallString, '/SILENT /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, iResultCode);
+    Exec(sUninstallString, '/SILENT /SUPPRESSMSGBOXES', '', SW_SHOWNORMAL, ewWaitUntilTerminated, iResultCode);
   end;
   Result := True;
 end;
