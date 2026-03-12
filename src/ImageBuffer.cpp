@@ -535,7 +535,6 @@ static ChStats computeStatsHighPrecision(const std::vector<float>& data, int wid
                  float v = data[idx];
                  // We don't necessarily clamp to 0-1 here, allowing HDR values if needed, 
                  // but for STF we usually care about the main data range.
-                 // PixInsight STF typically handles 0-1 range.
                  if (v >= 0.0f && v <= 1.0f) {
                      samples.push_back(v);
                  }

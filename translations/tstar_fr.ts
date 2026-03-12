@@ -3632,10 +3632,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">%1 : Prise en charge RAW non disponible (compilée sans LibRaw).</translation>
         </message>
         <message>
-            <source>%1: RAW support not available.</source>
-            <translation type="finished">%1 : Prise en charge RAW non disponible.</translation>
-        </message>
-        <message>
             <source>16-bit</source>
             <translation type="finished">16-bit</translation>
         </message>

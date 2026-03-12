@@ -3630,10 +3630,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>%1: RAW support not available.</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>16-bit</source>
             <translation type="unfinished" />
         </message>

@@ -3632,10 +3632,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">%1: Supporto RAW non disponibile (compilato senza LibRaw).</translation>
         </message>
         <message>
-            <source>%1: RAW support not available.</source>
-            <translation type="finished">%1: Supporto RAW non disponibile.</translation>
-        </message>
-        <message>
             <source>16-bit</source>
             <translation type="finished">16-bit</translation>
         </message>

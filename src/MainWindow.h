@@ -17,6 +17,9 @@
 #include "dialogs/PixelMathDialog.h"
 #include <QMap>
 #include <QSettings>
+#include <QQueue>
+#include <QMutex>
+#include <memory>
 
 
 class VizierClient;
@@ -51,6 +54,22 @@ class NBtoRGBStarsDialog;
 struct Annotation;
 class BlinkComparatorDialog;
 
+// Background image loading result - for thread-safe queue communication
+enum ImageLoadLogLevel {
+    ImageLog_Success = 0,
+    ImageLog_Error = 1,
+    ImageLog_Info = 2
+};
+
+struct ImageFileLoadResult {
+    bool             success    = false;
+    ImageBuffer      buffer;           // valid only when success == true
+    QString          title;
+    QString          logMsg;
+    ImageLoadLogLevel logLevel = ImageLog_Info;
+    bool             logPopup   = false;
+};
+
 class MainWindow : public QMainWindow, public MainWindowCallbacks {
     Q_OBJECT
 public:
@@ -62,7 +81,7 @@ public:
     bool hasImage() const;
     void startLongProcess() override;
     void endLongProcess() override;
-    void createNewImageWindow(const ImageBuffer& buffer, const QString& title,
+    CustomMdiSubWindow* createNewImageWindow(const ImageBuffer& buffer, const QString& title,
                               ImageBuffer::DisplayMode mode = ImageBuffer::Display_Linear,
                               float autoStretchMedian = 0.25f, bool displayLinked = true);
     void pushUndo(); // Call before destructive actions
@@ -308,5 +327,11 @@ private:
     // Pixel Info
     class QLabel* m_pixelInfoLabel = nullptr;
     void updatePixelInfo(const QString& info);
+    
+    // Image Loading Queue - decouples fast file loading from slower UI window creation
+    QMutex m_imageLoadMutex;
+    QQueue<std::shared_ptr<struct ImageFileLoadResult>> m_imageLoadQueue;
+    QTimer* m_imageDisplayTimer = nullptr;
+    void processImageLoadQueue();  // Process one image from the queue per tick
 };
  #endif // MAINWINDOW_H

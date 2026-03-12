@@ -1071,15 +1071,15 @@ ImageViewer* CustomMdiSubWindow::viewer() const {
 void CustomMdiSubWindow::adjustToImageSize() {
     ImageViewer* v = m_contentArea->findChild<ImageViewer*>();
     if (!v) return;
-    QImage img = v->getBuffer().getDisplayImage(ImageBuffer::Display_Linear);
-    if (img.isNull()) return;
+    const ImageBuffer& buf = v->getBuffer();
+    if (!buf.isValid()) return;
     
     int sidebar = DpiHelper::sidebarWidth(this);
     int titleH = DpiHelper::titleBarHeight(this);
     int border = DpiHelper::borderWidth(this);
     
-    int w = img.width();
-    int h = img.height();
+    int w = buf.width();
+    int h = buf.height();
     int totalW = w + sidebar + border;
     int totalH = h + titleH + border;
     

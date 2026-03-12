@@ -26,6 +26,8 @@
 #include <QDropEvent>
 #include <cmath> // for std::abs
 #include <QSet>
+#include <QMutex>
+#include <QQueue>
 #include <exception>
 #include <QSet>
 #include <exception>
@@ -124,6 +126,7 @@
 #include "widgets/ResourceMonitorWidget.h"
 
 #include <QThreadPool>
+#include <QtConcurrent/QtConcurrentRun>
 #include "../core/ThreadState.h"
 
 MainWindow::~MainWindow() {
@@ -352,6 +355,10 @@ MainWindow::MainWindow(QWidget *parent)
             m_tempConsoleTimer->stop();
         }
     });
+
+    // Image display timer: process one loaded image per tick (50ms) to avoid UI lag
+    m_imageDisplayTimer = new QTimer(this);
+    connect(m_imageDisplayTimer, &QTimer::timeout, this, &MainWindow::processImageLoadQueue);
 
     // Sync Manual Collapse with Timer State
     connect(m_sidebar, &SidebarWidget::expandedToggled, [this](bool expanded){
@@ -1440,7 +1447,7 @@ static QString buildChildTitle(const QString& parentTitle, const QString& suffix
     return t.trimmed() + suffix;
 }
 
-void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& title,
+CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& title,
                                       ImageBuffer::DisplayMode mode,
                                       float autoStretchMedian, bool displayLinked) {
     ImageViewer* viewer = new ImageViewer(this); // Parent is temporary
@@ -1500,9 +1507,11 @@ void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& 
     sub->raise();
     
     // Restore maximized state of windows that were maximized before
-    for (auto* w : wasMaximized) {
-        if (w != sub && !w->isMaximized()) {
-            w->showMaximized();
+    if (!wasMaximized.isEmpty()) {
+        for (auto* w : wasMaximized) {
+            if (w != sub && !w->isMaximized()) {
+                w->showMaximized();
+            }
         }
     }
 
@@ -1512,21 +1521,42 @@ void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& 
     // 1. Get viewport dimensions (actual usable space)
     int areaW = m_mdiArea->viewport()->width();
     int areaH = m_mdiArea->viewport()->height();
-    int winW = 800; // Default width
-    int winH = 600; // Default height
-    
-    // 2. Base "Center" position
+
+    // 2. Compute window size that preserves the image aspect ratio,
+    //    capped to 75 % of the MDI viewport so the window always fits.
+    int imgW = buffer.width();
+    int imgH = buffer.height();
+    int winW, winH;
+    if (imgW > 0 && imgH > 0) {
+        double aspect = (double)imgW / imgH;
+        int maxW = std::max(400, (int)(areaW * 0.75));
+        int maxH = std::max(300, (int)(areaH * 0.75));
+        if ((double)maxW / maxH > aspect) {
+            winH = maxH;
+            winW = (int)(winH * aspect);
+        } else {
+            winW = maxW;
+            winH = (int)(winW / aspect);
+        }
+        winW = std::max(winW, 300);
+        winH = std::max(winH, 200);
+    } else {
+        winW = 800;
+        winH = 600;
+    }
+
+    // 3. Base "Center" position
     int startX = std::max(0, (areaW - winW) / 2);
     int startY = std::max(0, (areaH - winH) / 2);
     
-    // 3. Calculate steps based on window count
+    // 4. Calculate steps based on window count
     // Note: subWindowList() includes the window we just added (count >= 1)
     int count = m_mdiArea->subWindowList().size(); 
     int index = std::max(0, count - 1);
     
     int step = 25; // Cascade offset pixels
     
-    // 4. Calculate max steps that fit vertically
+    // 5. Calculate max steps that fit vertically
     // We want: startY + k*step + winH <= areaH
     int availableH = areaH - winH - startY;
     int maxSteps = (availableH > 0) ? (availableH / step) : 0;
@@ -1534,23 +1564,23 @@ void MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& 
     // Avoid division by zero or negative logic
     if (maxSteps < 2) maxSteps = 5; // Fallback if tight space
     
-    // 5. Determine cascade position (wrap around if hitting bottom)
+    // 6. Determine cascade position (wrap around if hitting bottom)
     int cascadeIdx = index % (maxSteps + 1);
     int batchIdx = index / (maxSteps + 1);
     
-    // 6. Calculate coordinates
+    // 7. Calculate coordinates
     // Shift X slightly for each batch so they don't perfectly overlap previous batches
     int x = startX + (cascadeIdx * step) + (batchIdx * step);
     int y = startY + (cascadeIdx * step);
     
-    // 7. Safety Bounds
+    // 8. Safety Bounds
     if (x + winW > areaW) x = std::max(0, areaW - winW); // Keep within right edge
     if (y + winH > areaH) y = std::max(0, areaH - winH); // Keep within bottom edge
     
     sub->move(x, y);
-    
-    sub->resize(800, 600);
+    sub->resize(winW, winH);
     viewer->fitToWindow(); // Ensure full image is visible
+    return sub;
 }
 
 void MainWindow::propagateViewChange(float scale, float hVal, float vVal) {
@@ -1574,6 +1604,198 @@ void MainWindow::propagateViewChange(float scale, float hVal, float vVal) {
 
 
 #include "io/XISFReader.h"
+#include <memory>
+
+// ---------------------------------------------------------------------------
+// Background image loading helpers
+// ---------------------------------------------------------------------------
+
+// Loads all images from a single file path (may produce multiple results for
+// multi-extension FITS / multi-image XISF). Designed to run on any thread.
+static QList<ImageFileLoadResult> loadImageFile(const QString& path)
+{
+    QList<ImageFileLoadResult> out;
+    QFileInfo fi(path);
+    const QString ext = fi.suffix().toLower();
+    QString err;
+
+    // --- FITS ---
+    if (ext == "fits" || ext == "fit") {
+        QMap<QString, FitsExtensionInfo> exts = FitsLoader::listExtensions(path, &err);
+        if (exts.isEmpty()) {
+            ImageFileLoadResult r;
+            if (FitsLoader::load(path, r.buffer, &err)) {
+                r.success = true;  r.title = fi.fileName();
+                r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
+                r.logLevel = ImageLog_Success;  r.logPopup = true;
+            } else {
+                r.logMsg = QCoreApplication::translate("MainWindow", "Failed to load %1: %2").arg(fi.fileName()).arg(err);
+                r.logLevel = ImageLog_Error;
+            }
+            out << r;  return out;
+        }
+        QList<FitsExtensionInfo> sorted = exts.values();
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const FitsExtensionInfo& a, const FitsExtensionInfo& b){ return a.index < b.index; });
+        bool anyLoaded = false;
+        for (const auto& info : sorted) {
+            ImageFileLoadResult r;  QString extErr;
+            if (FitsLoader::loadExtension(path, info.index, r.buffer, &extErr)) {
+                r.success = true;  r.title = fi.fileName();
+                if (sorted.size() > 1) r.title += QString(" [%1]").arg(info.name);
+                anyLoaded = true;
+            } else {
+                r.logMsg = QCoreApplication::translate("MainWindow", "Failed to load extension %1: %2").arg(info.name).arg(extErr);
+                r.logLevel = ImageLog_Error;
+            }
+            out << r;
+        }
+        if (anyLoaded) {
+            ImageFileLoadResult s;
+            s.logMsg   = QCoreApplication::translate("MainWindow", "Opened FITS: %1 (%2 extensions)").arg(fi.fileName()).arg(sorted.size());
+            s.logLevel = ImageLog_Success;  s.logPopup = true;
+            out << s;
+        }
+        return out;
+    }
+
+    // --- XISF ---
+    if (ext == "xisf") {
+        QList<XISFImageInfo> imgs = XISFReader::listImages(path, &err);
+        if (imgs.isEmpty()) {
+            ImageFileLoadResult r;
+            if (XISFReader::read(path, r.buffer, &err)) {
+                r.success = true;  r.title = fi.fileName();
+                r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
+                r.logLevel = ImageLog_Success;  r.logPopup = true;
+            } else {
+                r.logMsg = QCoreApplication::translate("MainWindow", "Failed to load %1: %2").arg(fi.fileName()).arg(err);
+                r.logLevel = ImageLog_Error;
+            }
+            out << r;  return out;
+        }
+        bool anyLoaded = false;
+        for (const auto& info : imgs) {
+            ImageFileLoadResult r;  QString imgErr;
+            if (XISFReader::readImage(path, info.index, r.buffer, &imgErr)) {
+                r.success = true;  r.title = fi.fileName();
+                if (imgs.size() > 1) r.title += QString(" [%1]").arg(info.name);
+                anyLoaded = true;
+            } else {
+                r.logMsg = QCoreApplication::translate("MainWindow", "Failed to load XISF image %1: %2").arg(info.name).arg(imgErr);
+                r.logLevel = ImageLog_Error;
+            }
+            out << r;
+        }
+        if (anyLoaded) {
+            ImageFileLoadResult s;
+            s.logMsg   = QCoreApplication::translate("MainWindow", "Opened XISF: %1 (%2 images)").arg(fi.fileName()).arg(imgs.size());
+            s.logLevel = ImageLog_Success;  s.logPopup = true;
+            out << s;
+        }
+        return out;
+    }
+
+    // --- TIFF ---
+    if (ext == "tiff" || ext == "tif") {
+        ImageFileLoadResult r;  QString dbg;
+        bool ok = r.buffer.loadTiff32(path, &err, &dbg);
+        if (!ok) ok = r.buffer.loadStandard(path);
+        if (ok) {
+            r.success = true;  r.title = fi.fileName();
+            r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
+            r.logLevel = ImageLog_Success;  r.logPopup = true;
+        } else {
+            r.logMsg = QCoreApplication::translate("MainWindow", "Failed to load %1: %2").arg(fi.fileName()).arg(err);
+            r.logLevel = ImageLog_Error;
+        }
+        out << r;  return out;
+    }
+
+    // --- RAW Camera Files ---
+    if (RawLoader::isSupportedExtension(ext)) {
+#ifdef HAVE_LIBRAW
+        ImageFileLoadResult r;  QString rawErr;
+        if (RawLoader::load(path, r.buffer, &rawErr)) {
+            r.buffer.setName(fi.fileName());
+            r.success = true;  r.title = fi.fileName();
+            if (!r.buffer.metadata().bayerPattern.isEmpty() &&
+                r.buffer.metadata().bayerPattern != "XTRANS") {
+                r.logMsg = QCoreApplication::translate("MainWindow",
+                    "Opened RAW: %1 (Bayer pattern: %2) – use Debayer to convert to colour.")
+                    .arg(fi.fileName()).arg(r.buffer.metadata().bayerPattern);
+            } else {
+                r.logMsg = QCoreApplication::translate("MainWindow", "Opened RAW: %1").arg(fi.fileName());
+            }
+            r.logLevel = ImageLog_Success;  r.logPopup = true;
+        } else {
+            r.logMsg = QCoreApplication::translate("MainWindow", "Failed to load RAW %1: %2").arg(fi.fileName()).arg(rawErr);
+            r.logLevel = ImageLog_Error;
+        }
+        out << r;
+#else
+        { ImageFileLoadResult r;
+          r.logMsg = QCoreApplication::translate("MainWindow",
+              "%1: RAW support not available (compiled without LibRaw).").arg(fi.fileName());
+          r.logLevel = ImageLog_Error;  out << r; }
+#endif
+        return out;
+    }
+
+    // --- Fallback (PNG, JPG, etc.) ---
+    {
+        ImageFileLoadResult r;
+        if (r.buffer.loadStandard(path)) {
+            r.success = true;  r.title = fi.fileName();
+            r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
+            r.logLevel = ImageLog_Success;  r.logPopup = true;
+        } else {
+            r.logMsg = QCoreApplication::translate("MainWindow", "Failed to load %1").arg(fi.fileName());
+            r.logLevel = ImageLog_Error;
+        }
+        out << r;
+    }
+    return out;
+}
+
+// Helper: Returns a thread pool configured to use (CPU cores - 2),
+// reserving one core for the UI thread to display images as they load.
+static QThreadPool* getImageLoadThreadPool() {
+    static QThreadPool pool;
+    static bool initialized = false;
+    if (!initialized) {
+        int idealThreads = QThread::idealThreadCount();
+        int workerThreads = std::max(1, idealThreads - 2);
+        pool.setMaxThreadCount(workerThreads);
+        initialized = true;
+    }
+    return &pool;
+}
+
+// Process one loaded image from the queue (called by timer on UI thread)
+void MainWindow::processImageLoadQueue() {
+    std::shared_ptr<ImageFileLoadResult> ptr;
+    {
+        QMutexLocker lock(&m_imageLoadMutex);
+        if (m_imageLoadQueue.isEmpty()) {
+            m_imageDisplayTimer->stop();
+            return;
+        }
+        ptr = m_imageLoadQueue.dequeue();
+    }
+    
+    // Now on UI thread, safely create the window
+    if (ptr->success) {
+        createNewImageWindow(ptr->buffer, ptr->title);
+    }
+    if (!ptr->logMsg.isEmpty()) {
+        MainWindow::LogType logType = Log_Info;
+        if (ptr->logLevel == ImageLog_Success) logType = Log_Success;
+        else if (ptr->logLevel == ImageLog_Error) logType = Log_Error;
+        log(ptr->logMsg, logType, ptr->logPopup);
+    }
+    showConsoleTemporarily(2000);
+}
 
 void MainWindow::openFile() {
     QString filter =
@@ -1592,152 +1814,26 @@ void MainWindow::openFile() {
 #endif
         tr("All Files (*)");
     QStringList paths = QFileDialog::getOpenFileNames(this, tr("Open Image(s)"), "", filter);
-
     if (paths.isEmpty()) return;
 
+    // Load files in parallel using (CPU cores - 1) threads.
+    // Results are queued and displayed one at a time on the UI thread to avoid lag.
     for (const QString& path : paths) {
-        QFileInfo fi(path);
-        QString ext = fi.suffix().toLower();
-        QString errorMsg;
-
-        // --- FITS / FIT ---
-        if (ext == "fits" || ext == "fit") {
-            // List extensions first
-            QMap<QString, FitsExtensionInfo> exts = FitsLoader::listExtensions(path, &errorMsg);
-            
-            // If failed to list or empty, try basic single load as fallback
-            if (exts.isEmpty()) {
-                 ImageBuffer buf;
-                 if (FitsLoader::load(path, buf, &errorMsg)) {
-                     createNewImageWindow(buf, fi.fileName());
-                     log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-                 } else {
-                     log(tr("Failed to load %1: %2").arg(fi.fileName()).arg(errorMsg), Log_Error);
-                 }
-                 continue;
-            }
-
-            // Load all extensions found
-            bool anyLoaded = false;
-            // Iterate in index order (0, 1, 2...)
-            // Map is sorted by key (Name), so we collect values and sort by index
-            QList<FitsExtensionInfo> sortedExts = exts.values();
-            std::sort(sortedExts.begin(), sortedExts.end(), [](const FitsExtensionInfo& a, const FitsExtensionInfo& b){
-                return a.index < b.index;
-            });
-
-            for (const auto& info : sortedExts) {
-                ImageBuffer buf;
-                QString extErr;
-                if (FitsLoader::loadExtension(path, info.index, buf, &extErr)) {
-                    QString name = fi.fileName();
-                    if (sortedExts.size() > 1) {
-                         name += QString(" [%1]").arg(info.name);
-                    }
-                    createNewImageWindow(buf, name);
-                    anyLoaded = true;
-                } else {
-                    log(tr("Failed to load extension %1: %2").arg(info.name).arg(extErr), Log_Error);
+        (void)QtConcurrent::run(getImageLoadThreadPool(), [this, path]() {
+            QList<ImageFileLoadResult> results = loadImageFile(path);
+            for (ImageFileLoadResult& r : results) {
+                auto ptr = std::make_shared<ImageFileLoadResult>(std::move(r));
+                {
+                    QMutexLocker lock(&m_imageLoadMutex);
+                    m_imageLoadQueue.enqueue(ptr);
                 }
             }
-            
-            if (anyLoaded) {
-                log(tr("Opened FITS: %1 (%2 extensions)").arg(fi.fileName()).arg(sortedExts.size()), Log_Success, true);
-            }
-        
-        } 
-        // --- XISF ---
-        else if (ext == "xisf") {
-             QList<XISFImageInfo> imgs = XISFReader::listImages(path, &errorMsg);
-             
-             if (imgs.isEmpty()) {
-                 // Fallback to single read
-                 ImageBuffer buf;
-                 if (XISFReader::read(path, buf, &errorMsg)) {
-                     createNewImageWindow(buf, fi.fileName());
-                     log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-                 } else {
-                     log(tr("Failed to load %1: %2").arg(fi.fileName()).arg(errorMsg), Log_Error);
-                 }
-                 continue;
-             }
-             
-             bool anyLoaded = false;
-             for (const auto& info : imgs) {
-                  ImageBuffer buf;
-                  QString imgErr;
-                  if (XISFReader::readImage(path, info.index, buf, &imgErr)) {
-                      QString name = fi.fileName();
-                      if (imgs.size() > 1) {
-                          // Make name look like "file.xisf [Image_0]" or "file.xisf [Ha]"
-                          name += QString(" [%1]").arg(info.name);
-                      }
-                      createNewImageWindow(buf, name);
-                      anyLoaded = true;
-                  } else {
-                      log(tr("Failed to load XISF image %1: %2").arg(info.name).arg(imgErr), Log_Error);
-                  }
-             }
-
-             if (anyLoaded) {
-                 log(tr("Opened XISF: %1 (%2 images)").arg(fi.fileName()).arg(imgs.size()), Log_Success, true);
-             }
-        }
-        // --- TIFF / Others ---
-        else if (ext == "tiff" || ext == "tif") {
-             ImageBuffer buf;
-             QString dbg;
-             bool success = buf.loadTiff32(path, &errorMsg, &dbg);
-             if (!success) {
-                 // Fallback
-                 if (buf.loadStandard(path)) {
-                     success = true;
-                     errorMsg.clear();
-                 }
-             }
-             if (success) {
-                 createNewImageWindow(buf, fi.fileName());
-                 log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-             } else {
-                 log(tr("Failed to load %1: %2").arg(fi.fileName()).arg(errorMsg), Log_Error);
-             }
-        } 
-        // --- RAW Camera Files ---
-        else if (RawLoader::isSupportedExtension(ext)) {
-#ifdef HAVE_LIBRAW
-            ImageBuffer buf;
-            QString rawErr;
-            if (RawLoader::load(path, buf, &rawErr)) {
-                buf.setName(fi.fileName());
-                createNewImageWindow(buf, fi.fileName());
-                // Inform the user about debayering if applicable
-                if (!buf.metadata().bayerPattern.isEmpty() &&
-                    buf.metadata().bayerPattern != "XTRANS") {
-                    log(tr("Opened RAW: %1 (Bayer pattern: %2) – use Debayer to convert to colour.")
-                            .arg(fi.fileName()).arg(buf.metadata().bayerPattern),
-                        Log_Success, true);
-                } else {
-                    log(tr("Opened RAW: %1").arg(fi.fileName()), Log_Success, true);
-                }
-            } else {
-                log(tr("Failed to load RAW %1: %2").arg(fi.fileName()).arg(rawErr), Log_Error);
-            }
-#else
-            log(tr("%1: RAW support not available (compiled without LibRaw).").arg(fi.fileName()), Log_Error);
-#endif
-        }
-        else {
-            ImageBuffer buf;
-            if (buf.loadStandard(path)) {
-                createNewImageWindow(buf, fi.fileName());
-                log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-            } else {
-                log(tr("Failed to load %1").arg(fi.fileName()), Log_Error);
-            }
-        }
-        
-        showConsoleTemporarily(2000);
-        QCoreApplication::processEvents(); 
+            // Start the display timer if not already running
+            QMetaObject::invokeMethod(this, [this]() {
+                if (!m_imageDisplayTimer->isActive())
+                    m_imageDisplayTimer->start(250);  // Process one image every 250ms
+            }, Qt::QueuedConnection);
+        });
     }
 }
 
@@ -3779,144 +3875,30 @@ void MainWindow::dragEnterEvent(QDragEnterEvent* event) {
 void MainWindow::dropEvent(QDropEvent* event) {
     const QMimeData* mimeData = event->mimeData();
     if (mimeData->hasUrls()) {
-        for (const QUrl& url : mimeData->urls()) {
-            QString path = url.toLocalFile();
-            QFileInfo fi(path);
-            QString ext = fi.suffix().toLower();
-            QString errorMsg;
-            
-            // FITS - Handle multi-extension files like openFile() does
-            if (ext == "fits" || ext == "fit") {
-                QMap<QString, FitsExtensionInfo> exts = FitsLoader::listExtensions(path, &errorMsg);
-                
-                if (exts.isEmpty()) {
-                    // Fallback to single load
-                    ImageBuffer buf;
-                    if (FitsLoader::load(path, buf, &errorMsg)) {
-                        createNewImageWindow(buf, fi.fileName());
-                        log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-                    } else {
-                        log(tr("Failed to load %1: %2").arg(fi.fileName()).arg(errorMsg), Log_Error, true);
-                    }
-                } else {
-                    // Load all extensions
-                    QList<FitsExtensionInfo> sortedExts = exts.values();
-                    std::sort(sortedExts.begin(), sortedExts.end(), [](const FitsExtensionInfo& a, const FitsExtensionInfo& b){
-                        return a.index < b.index;
-                    });
-                    
-                    bool anyLoaded = false;
-                    for (const auto& info : sortedExts) {
-                        ImageBuffer buf;
-                        QString extErr;
-                        if (FitsLoader::loadExtension(path, info.index, buf, &extErr)) {
-                            QString name = fi.fileName();
-                            if (sortedExts.size() > 1) {
-                                name += QString(" [%1]").arg(info.name);
-                            }
-                            createNewImageWindow(buf, name);
-                            anyLoaded = true;
-                        } else {
-                            log(tr("Failed to load extension %1: %2").arg(info.name).arg(extErr), Log_Error);
-                        }
-                    }
-                    
-                    if (anyLoaded) {
-                        log(tr("Opened FITS: %1 (%2 extensions)").arg(fi.fileName()).arg(sortedExts.size()), Log_Success, true);
+        QStringList paths;
+        for (const QUrl& url : mimeData->urls())
+            paths << url.toLocalFile();
+
+        // Load files in parallel using (CPU cores - 1) threads.
+        // Results are queued and displayed one at a time on the UI thread to avoid lag.
+        for (const QString& path : paths) {
+            (void)QtConcurrent::run(getImageLoadThreadPool(), [this, path]() {
+                QList<ImageFileLoadResult> results = loadImageFile(path);
+                for (ImageFileLoadResult& r : results) {
+                    auto ptr = std::make_shared<ImageFileLoadResult>(std::move(r));
+                    {
+                        QMutexLocker lock(&m_imageLoadMutex);
+                        m_imageLoadQueue.enqueue(ptr);
                     }
                 }
-            }
-            // XISF - Handle multi-image files like openFile() does
-            else if (ext == "xisf") {
-                QList<XISFImageInfo> imgs = XISFReader::listImages(path, &errorMsg);
-                
-                if (imgs.isEmpty()) {
-                    // Fallback to single read
-                    ImageBuffer buf;
-                    if (XISFReader::read(path, buf, &errorMsg)) {
-                        createNewImageWindow(buf, fi.fileName());
-                        log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-                    } else {
-                        log(tr("Failed to load %1: %2").arg(fi.fileName()).arg(errorMsg), Log_Error, true);
-                    }
-                } else {
-                    bool anyLoaded = false;
-                    for (const auto& info : imgs) {
-                        ImageBuffer buf;
-                        QString imgErr;
-                        if (XISFReader::readImage(path, info.index, buf, &imgErr)) {
-                            QString name = fi.fileName();
-                            if (imgs.size() > 1) {
-                                name += QString(" [%1]").arg(info.name);
-                            }
-                            createNewImageWindow(buf, name);
-                            anyLoaded = true;
-                        } else {
-                            log(tr("Failed to load XISF image %1: %2").arg(info.name).arg(imgErr), Log_Error);
-                        }
-                    }
-                    
-                    if (anyLoaded) {
-                        log(tr("Opened XISF: %1 (%2 images)").arg(fi.fileName()).arg(imgs.size()), Log_Success, true);
-                    }
-                }
-            }
-            // TIFF
-            else if (ext == "tiff" || ext == "tif") {
-                ImageBuffer buf;
-                QString dbg;
-                bool success = buf.loadTiff32(path, &errorMsg, &dbg);
-                if (!success) {
-                    // Fallback
-                    if (buf.loadStandard(path)) {
-                        success = true;
-                        errorMsg.clear();
-                    }
-                }
-                if (success) {
-                    createNewImageWindow(buf, fi.fileName());
-                    log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-                } else {
-                    log(tr("Failed to load %1: %2").arg(fi.fileName()).arg(errorMsg), Log_Error, true);
-                }
-            }
-            // PNG/JPG
-            else if (ext == "png" || ext == "jpg" || ext == "jpeg") {
-                ImageBuffer buf;
-                if (buf.loadStandard(path)) {
-                    createNewImageWindow(buf, fi.fileName());
-                    log(tr("Opened: %1").arg(fi.fileName()), Log_Success, true);
-                } else {
-                    log(tr("Failed to load %1").arg(fi.fileName()), Log_Error, true);
-                }
-            }
-            // RAW Camera Files
-            else if (RawLoader::isSupportedExtension(ext)) {
-#ifdef HAVE_LIBRAW
-                ImageBuffer buf;
-                QString rawErr;
-                if (RawLoader::load(path, buf, &rawErr)) {
-                    buf.setName(fi.fileName());
-                    createNewImageWindow(buf, fi.fileName());
-                    if (!buf.metadata().bayerPattern.isEmpty() &&
-                        buf.metadata().bayerPattern != "XTRANS") {
-                        log(tr("Opened RAW: %1 (Bayer pattern: %2) – use Debayer to convert to colour.")
-                                .arg(fi.fileName()).arg(buf.metadata().bayerPattern),
-                            Log_Success, true);
-                    } else {
-                        log(tr("Opened RAW: %1").arg(fi.fileName()), Log_Success, true);
-                    }
-                } else {
-                    log(tr("Failed to load RAW %1: %2").arg(fi.fileName()).arg(rawErr), Log_Error, true);
-                }
-#else
-                log(tr("%1: RAW support not available.").arg(fi.fileName()), Log_Error, true);
-#endif
-            }
-            
-            showConsoleTemporarily(2000);
-            QCoreApplication::processEvents();
+                // Start the display timer if not already running
+                QMetaObject::invokeMethod(this, [this]() {
+                    if (!m_imageDisplayTimer->isActive())
+                        m_imageDisplayTimer->start(50);  // Process one image every 50ms
+                }, Qt::QueuedConnection);
+            });
         }
+
         event->acceptProposedAction();
     }
 }
