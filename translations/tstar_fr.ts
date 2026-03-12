@@ -4148,6 +4148,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Lier Zoom et Pan</translation>
         </message>
         <message>
+            <source>Loading image %1/%2...</source>
+            <translation type="finished">Chargement image %1/%2...</translation>
+        </message>
+        <message>
             <source>Logarithmic</source>
             <translation type="finished">Logarithmique</translation>
         </message>

@@ -4148,6 +4148,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Vincular Zoom y Pan</translation>
         </message>
         <message>
+            <source>Loading image %1/%2...</source>
+            <translation type="finished">Cargando imagen %1/%2...</translation>
+        </message>
+        <message>
             <source>Logarithmic</source>
             <translation type="finished">Logarítmico</translation>
         </message>

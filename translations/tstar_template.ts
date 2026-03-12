@@ -4146,6 +4146,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Loading image %1/%2...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Logarithmic</source>
             <translation type="unfinished" />
         </message>

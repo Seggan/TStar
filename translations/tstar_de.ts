@@ -4148,6 +4148,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Zoom und Pan verknüpfen</translation>
         </message>
         <message>
+            <source>Loading image %1/%2...</source>
+            <translation type="finished">Lade Bild %1/%2...</translation>
+        </message>
+        <message>
             <source>Logarithmic</source>
             <translation type="finished">Logarithmisch</translation>
         </message>

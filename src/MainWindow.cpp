@@ -1784,7 +1784,6 @@ void MainWindow::processImageLoadQueue() {
         ptr = m_imageLoadQueue.dequeue();
     }
     
-    // Now on UI thread, safely create the window
     if (ptr->success) {
         createNewImageWindow(ptr->buffer, ptr->title);
     }
@@ -1816,25 +1815,54 @@ void MainWindow::openFile() {
     QStringList paths = QFileDialog::getOpenFileNames(this, tr("Open Image(s)"), "", filter);
     if (paths.isEmpty()) return;
 
-    // Load files in parallel using (CPU cores - 1) threads.
-    // Results are queued and displayed one at a time on the UI thread to avoid lag.
-    for (const QString& path : paths) {
-        (void)QtConcurrent::run(getImageLoadThreadPool(), [this, path]() {
-            QList<ImageFileLoadResult> results = loadImageFile(path);
-            for (ImageFileLoadResult& r : results) {
-                auto ptr = std::make_shared<ImageFileLoadResult>(std::move(r));
-                {
-                    QMutexLocker lock(&m_imageLoadMutex);
-                    m_imageLoadQueue.enqueue(ptr);
+    int total = paths.size();
+    auto loadedCount = std::make_shared<std::atomic<int>>(0);
+
+    // Run the high-level orchestration in a background thread
+    (void)QtConcurrent::run([this, paths, total, loadedCount]() {
+        QList<std::shared_ptr<ImageFileLoadResult>> allResults;
+        QMutex resultsMutex;
+
+        // Use a semaphore or manual counting to manage parallel loads
+        // The user wants ALL cores except 1.
+        int maxThreads = std::max(1, QThread::idealThreadCount() - 1);
+        QThreadPool pool;
+        pool.setMaxThreadCount(maxThreads);
+
+        QList<QFuture<void>> futures;
+        for (const QString& path : paths) {
+            futures << QtConcurrent::run(&pool, [this, path, total, loadedCount, &allResults, &resultsMutex]() {
+                QList<ImageFileLoadResult> results = loadImageFile(path);
+                
+                int current = ++(*loadedCount);
+                // Update progress on UI thread
+                QMetaObject::invokeMethod(this, [this, current, total]() {
+                    log(tr("Loading image %1/%2...").arg(current).arg(total), Log_Info, false, true);
+                }, Qt::QueuedConnection);
+
+                QMutexLocker lock(&resultsMutex);
+                for (auto& r : results) {
+                    allResults << std::make_shared<ImageFileLoadResult>(std::move(r));
+                }
+            });
+        }
+
+        // Wait for all to finish
+        for (auto& f : futures) f.waitForFinished();
+
+        // Once all finished, move to UI display queue
+        QMetaObject::invokeMethod(this, [this, allResults]() {
+            {
+                QMutexLocker lock(&m_imageLoadMutex);
+                for (auto& res : allResults) {
+                    m_imageLoadQueue.enqueue(res);
                 }
             }
-            // Start the display timer if not already running
-            QMetaObject::invokeMethod(this, [this]() {
-                if (!m_imageDisplayTimer->isActive())
-                    m_imageDisplayTimer->start(250);  // Process one image every 250ms
-            }, Qt::QueuedConnection);
-        });
-    }
+            // Start the display timer with 100ms delay
+            if (!m_imageDisplayTimer->isActive())
+                m_imageDisplayTimer->start(100);
+        }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::saveFile() {
@@ -2367,7 +2395,7 @@ void MainWindow::openSCNRDialog() {
 }
 
 // Replaces MainWindow::log
-void MainWindow::log(const QString& msg, LogType type, bool autoShow) {
+void MainWindow::log(const QString& msg, LogType type, bool autoShow, bool isTransientParam) {
     // 1. Log to File System immediately
     Logger::Level level = Logger::Info;
     QString prefix = "";
@@ -2382,7 +2410,7 @@ void MainWindow::log(const QString& msg, LogType type, bool autoShow) {
     
     // Log plain text version to file
     Logger::log(level, prefix + msg, "Console");
-
+    
     // 2. Log to UI
     if (!m_sidebar) return;
     
@@ -2397,14 +2425,14 @@ void MainWindow::log(const QString& msg, LogType type, bool autoShow) {
     for (const QString& line : lines) {
         QString trimmed = line.trimmed();
         if (trimmed.isEmpty()) continue;
-
+        
         // 1. Aggressive cleaning of bridge/python logging metadata
         static QRegularExpression logMetadataRe("(\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2},\\d{3}\\s+MainProcess\\s+.*?\\s+(INFO|DEBUG|WARNING|ERROR)\\s*)|(\\[Bridge\\]\\s*)");
         trimmed.remove(logMetadataRe);
-
+        
         // 2. Transience detection (Should this line overwrite the previous one?)
-        // Treat ALMOST EVERYTHING from bridge/worker as transient unless it's a critical milestone or success
-        bool isTransient = trimmed.contains("Progress:", Qt::CaseInsensitive) || 
+        bool isTransient = isTransientParam || 
+                           trimmed.contains("Progress:", Qt::CaseInsensitive) || 
                            trimmed.contains("chunk ", Qt::CaseInsensitive) || 
                            trimmed.contains("%") ||
                            trimmed.contains("DEBUG:", Qt::CaseInsensitive) ||

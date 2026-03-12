@@ -4148,6 +4148,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Collega Zoom e Pan su tutte le finestre</translation>
         </message>
         <message>
+            <source>Loading image %1/%2...</source>
+            <translation type="finished">Caricamento immagine %1/%2...</translation>
+        </message>
+        <message>
             <source>Logarithmic</source>
             <translation type="finished">Logaritmico</translation>
         </message>

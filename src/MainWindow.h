@@ -215,7 +215,7 @@ private:
 
 public:
     enum LogType { Log_Info, Log_Success, Log_Warning, Log_Error, Log_Action };
-    void log(const QString& msg, LogType type = Log_Info, bool autoShow = false);
+    void log(const QString& msg, LogType type = Log_Info, bool autoShow = false, bool isTransient = false);
 
 protected:
     void resizeEvent(class QResizeEvent* event) override;

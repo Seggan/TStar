@@ -64,3 +64,31 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function GetUninstallString(): String;
+var
+  sUnInstPath: String;
+  sUnInstallString: String;
+begin
+  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{' + '{B5F8E3A4-2D91-4C67-9A5E-7F2B3C8D1E9A}' + '}_is1';
+  sUnInstallString := '';
+  if not RegQueryStringValue(HKLM, sUnInstPath, 'UninstallString', sUnInstallString) then
+    RegQueryStringValue(HKCU, sUnInstPath, 'UninstallString', sUnInstallString);
+  Result := sUnInstallString;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  sUninstallString: String;
+  iResultCode: Integer;
+begin
+  sUninstallString := GetUninstallString();
+  if sUninstallString <> '' then
+  begin
+    // Remove quotes if present
+    sUninstallString := RemoveQuotes(sUninstallString);
+    Exec(sUninstallString, '/SILENT /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, iResultCode);
+  end;
+  Result := True;
+end;
