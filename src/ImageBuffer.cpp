@@ -2735,6 +2735,7 @@ void ImageBuffer::applyMagentaCorrection(float amount, int method) {
 }
 
 
+void ImageBuffer::cropRotated(float cx, float cy, float w, float h, float angleDegrees) {
     WriteLock lock(this);  // Thread-safe write access
     if (m_data.empty()) return;
     if (w <= 1 || h <= 1) return;
