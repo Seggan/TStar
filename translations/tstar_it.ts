@@ -3863,6 +3863,46 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Impossibile applicare visualizzazione: Nessun visualizzatore attivo</translation>
         </message>
         <message>
+            <source>Cannot commit project file: %1</source>
+            <translation type="finished">Impossibile finalizzare il file progetto: %1</translation>
+        </message>
+        <message>
+            <source>Cannot create project directory: %1</source>
+            <translation type="finished">Impossibile creare la directory del progetto: %1</translation>
+        </message>
+        <message>
+            <source>Cannot create temporary snapshot file.</source>
+            <translation type="finished">Impossibile creare il file snapshot temporaneo.</translation>
+        </message>
+        <message>
+            <source>Cannot finalize compressed snapshot file.</source>
+            <translation type="finished">Impossibile finalizzare il file snapshot compresso.</translation>
+        </message>
+        <message>
+            <source>Cannot open project file for writing: %1</source>
+            <translation type="finished">Impossibile aprire il file progetto in scrittura: %1</translation>
+        </message>
+        <message>
+            <source>Cannot open project file: %1</source>
+            <translation type="finished">Impossibile aprire il file progetto: %1</translation>
+        </message>
+        <message>
+            <source>Cannot read temporary snapshot file.</source>
+            <translation type="finished">Impossibile leggere il file snapshot temporaneo.</translation>
+        </message>
+        <message>
+            <source>Cannot restore '%1' from source image.</source>
+            <translation type="finished">Impossibile ripristinare "%1" dall'immagine sorgente.</translation>
+        </message>
+        <message>
+            <source>Cannot restore '%1': snapshot and source image are missing.</source>
+            <translation type="finished">Impossibile ripristinare "%1": snapshot e immagine sorgente mancanti.</translation>
+        </message>
+        <message>
+            <source>Cannot write compressed snapshot file.</source>
+            <translation type="finished">Impossibile scrivere il file snapshot compresso.</translation>
+        </message>
+        <message>
             <source>Catalog Background Extraction (CBE)</source>
             <translation type="finished">Estrazione Sfondo da Catalogo (CBE)</translation>
         </message>
@@ -3877,6 +3917,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Channel View</source>
             <translation type="finished">Vista Canale</translation>
+        </message>
+        <message>
+            <source>Close Workspace Project</source>
+            <translation type="finished">Chiudi Progetto Workspace</translation>
         </message>
         <message>
             <source>Color Management</source>
@@ -4039,6 +4083,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Caricamento estensione %1 fallito: %2</translation>
         </message>
         <message>
+            <source>Failed to load project snapshot '%1': %2</source>
+            <translation type="finished">Impossibile caricare lo snapshot del progetto "%1": %2</translation>
+        </message>
+        <message>
             <source>Failed to open Statistical Stretch dialog: %1</source>
             <translation type="finished">Impossibile aprire la finestra di dialogo Statistical Stretch: %1</translation>
         </message>
@@ -4049,6 +4097,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Failed to save image with annotations.</source>
             <translation type="finished">Salvataggio immagine con annotazioni fallito.</translation>
+        </message>
+        <message>
+            <source>Failed to save project snapshot for '%1': %2</source>
+            <translation type="finished">Impossibile salvare lo snapshot del progetto per "%1": %2</translation>
         </message>
         <message>
             <source>False Color Visualization</source>
@@ -4159,6 +4211,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Modalità Interattiva: Selezione Punti GHS</translation>
         </message>
         <message>
+            <source>Invalid project file: %1</source>
+            <translation type="finished">File progetto non valido: %1</translation>
+        </message>
+        <message>
             <source>Invert Image Colors</source>
             <translation type="finished">Inverti Colori Immagine</translation>
         </message>
@@ -4243,12 +4299,20 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Specchio Vert.</translation>
         </message>
         <message>
+            <source>Missing source images</source>
+            <translation type="finished">Immagini sorgente mancanti</translation>
+        </message>
+        <message>
             <source>Mono</source>
             <translation type="finished">Mono</translation>
         </message>
         <message>
             <source>Multiscale Decomposition</source>
             <translation type="finished">Decomposizione multiscala</translation>
+        </message>
+        <message>
+            <source>NB to RGB Stars</source>
+            <translation type="finished">NB a RGB Stars</translation>
         </message>
         <message>
             <source>NB → RGB Stars</source>
@@ -4267,8 +4331,16 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Nuovo Progetto...</translation>
         </message>
         <message>
+            <source>New Workspace Project...</source>
+            <translation type="finished">Nuovo Progetto Workspace...</translation>
+        </message>
+        <message>
             <source>New version found: %1</source>
             <translation type="finished">Nuova versione trovata: %1</translation>
+        </message>
+        <message>
+            <source>New workspace project created.</source>
+            <translation type="finished">Nuovo progetto workspace creato.</translation>
         </message>
         <message>
             <source>No Image</source>
@@ -4317,6 +4389,14 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Open Project...</source>
             <translation type="finished">Apri Progetto...</translation>
+        </message>
+        <message>
+            <source>Open Workspace Project</source>
+            <translation type="finished">Apri Progetto Workspace</translation>
+        </message>
+        <message>
+            <source>Open Workspace Project...</source>
+            <translation type="finished">Apri Progetto Workspace...</translation>
         </message>
         <message>
             <source>Open an image first.</source>
@@ -4591,6 +4671,18 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Processo</translation>
         </message>
         <message>
+            <source>Project</source>
+            <translation type="finished">Progetto</translation>
+        </message>
+        <message>
+            <source>Project Load Error</source>
+            <translation type="finished">Errore Caricamento Progetto</translation>
+        </message>
+        <message>
+            <source>Project Save Error</source>
+            <translation type="finished">Errore Salvataggio Progetto</translation>
+        </message>
+        <message>
             <source>Project created: %1</source>
             <translation type="finished">Progetto creato: %1</translation>
         </message>
@@ -4724,6 +4816,18 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Opzioni di Salvataggio</translation>
         </message>
         <message>
+            <source>Save Workspace Project</source>
+            <translation type="finished">Salva Progetto Workspace</translation>
+        </message>
+        <message>
+            <source>Save Workspace Project As</source>
+            <translation type="finished">Salva Progetto Workspace Come</translation>
+        </message>
+        <message>
+            <source>Save Workspace Project As...</source>
+            <translation type="finished">Salva Progetto Workspace Come...</translation>
+        </message>
+        <message>
             <source>Saved with Annotations: %1</source>
             <translation type="finished">Salvato con Annotazioni: %1</translation>
         </message>
@@ -4746,6 +4850,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Select image.</source>
             <translation type="finished">Seleziona immagine.</translation>
+        </message>
+        <message>
+            <source>Select relink root folder</source>
+            <translation type="finished">Seleziona cartella radice per il ricollegamento</translation>
         </message>
         <message>
             <source>Selective Color Correction</source>
@@ -4782,6 +4890,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Show Overlay</source>
             <translation type="finished">Mostra Sovrapposizione</translation>
+        </message>
+        <message>
+            <source>Some source images are missing. Do you want to select a folder for automatic relink?</source>
+            <translation type="finished">Alcune immagini sorgente sono mancanti. Vuoi selezionare una cartella per il ricollegamento automatico?</translation>
         </message>
         <message>
             <source>Square Root</source>
@@ -4824,6 +4936,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">File TIFF (*.tiff *.tif);;</translation>
         </message>
         <message>
+            <source>TStar Workspace Project (*.tstarproj)</source>
+            <translation type="finished">Progetto Workspace TStar (*.tstarproj)</translation>
+        </message>
+        <message>
             <source>TStar is up to date.</source>
             <translation type="finished">TStar è aggiornato.</translation>
         </message>
@@ -4838,6 +4954,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Temperature / Tint applied permanently</source>
             <translation type="finished">Temperatura / Tinta applicata definitivamente</translation>
+        </message>
+        <message>
+            <source>The workspace project '%1' has unsaved changes (%2). Do you want to save it?</source>
+            <translation type="finished">Il progetto workspace "%1" ha modifiche non salvate (%2). Vuoi salvarlo?</translation>
         </message>
         <message>
             <source>Tile Images (Smart Grid)</source>
@@ -4868,6 +4988,14 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Annulla (Ctrl+Z)</translation>
         </message>
         <message>
+            <source>Untitled</source>
+            <translation type="finished">Senza Titolo</translation>
+        </message>
+        <message>
+            <source>Untitled Workspace Project</source>
+            <translation type="finished">Progetto Workspace Senza Titolo</translation>
+        </message>
+        <message>
             <source>Update check failed: %1</source>
             <translation type="finished">Controllo aggiornamenti fallito: %1</translation>
         </message>
@@ -4892,6 +5020,22 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Wavescale HDR applicato.</translation>
         </message>
         <message>
+            <source>Workspace project closed.</source>
+            <translation type="finished">Progetto workspace chiuso.</translation>
+        </message>
+        <message>
+            <source>Workspace project loaded: %1</source>
+            <translation type="finished">Progetto workspace caricato: %1</translation>
+        </message>
+        <message>
+            <source>Workspace project modified</source>
+            <translation type="finished">Progetto workspace modificato</translation>
+        </message>
+        <message>
+            <source>Workspace project saved: %1</source>
+            <translation type="finished">Progetto workspace salvato: %1</translation>
+        </message>
+        <message>
             <source>XISF Files (*.xisf);;</source>
             <translation type="finished">File XISF (*.xisf);;</translation>
         </message>
@@ -4906,6 +5050,22 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Zoom Out</source>
             <translation type="finished">Zoom Indietro</translation>
+        </message>
+        <message>
+            <source>before closing project</source>
+            <translation type="finished">prima di chiudere il progetto</translation>
+        </message>
+        <message>
+            <source>before creating a new project</source>
+            <translation type="finished">prima di creare un nuovo progetto</translation>
+        </message>
+        <message>
+            <source>before exiting the application</source>
+            <translation type="finished">prima di uscire dall'applicazione</translation>
+        </message>
+        <message>
+            <source>before opening another project</source>
+            <translation type="finished">prima di aprire un altro progetto</translation>
         </message>
     </context>
     <context>

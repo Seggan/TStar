@@ -6,6 +6,7 @@
 #include <QGraphicsPixmapItem>
 #include <QGraphicsRectItem>
 #include <vector>
+#include <QVector>
 #include <QPolygonF>
 #include <QScrollBar> // Added
 #include "ImageBuffer.h"
@@ -95,6 +96,15 @@ public:
     void setFalseColor(bool falseColor);
     void setChannelView(ImageBuffer::ChannelView cv);
     QImage getCurrentDisplayImage() const { return m_displayImage; }
+
+    // Source path tracking (used by workspace project persistence)
+    QString filePath() const { return m_filePath; }
+    void setFilePath(const QString& path) { m_filePath = path; }
+
+    // Snapshot accessors for project-level history persistence
+    QVector<ImageBuffer> undoHistory() const;
+    QVector<ImageBuffer> redoHistory() const;
+    void setHistory(const QVector<ImageBuffer>& undoHistory, const QVector<ImageBuffer>& redoHistory);
     
     // Modification State
     bool isModified() const { return m_isModified; }
@@ -247,6 +257,7 @@ private:
     ImageBuffer::ChannelView m_channelView = ImageBuffer::ChannelRGB;
     bool m_isModified = false;
     bool m_showMaskOverlay = true;
+    QString m_filePath;
 };
 
 #endif // IMAGEVIEWER_H

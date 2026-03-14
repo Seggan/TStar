@@ -157,6 +157,7 @@ signals:
     // Emitted when the window is shaded (collapsed to title bar) or unshaded.
     // When shading (shaded=true), thumbnail holds a grab of the content area.
     void shadingChanged(bool shaded, const QPixmap& thumbnail);
+    void layoutChanged();
     
 protected:
     // Animations
@@ -166,6 +167,7 @@ protected:
 protected:
     void showEvent(QShowEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
+    void moveEvent(QMoveEvent* event) override;
 
     void resizeEvent(QResizeEvent *event) override;
     bool event(QEvent *event) override;

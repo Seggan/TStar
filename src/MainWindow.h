@@ -21,6 +21,8 @@
 #include <QMutex>
 #include <memory>
 
+class QJsonObject;
+
 
 class VizierClient;
 class StretchDialog;
@@ -66,6 +68,7 @@ struct ImageFileLoadResult {
     bool             success    = false;
     ImageBuffer      buffer;           // valid only when success == true
     QString          title;
+    QString          sourcePath;
     QString          logMsg;
     ImageLoadLogLevel logLevel = ImageLog_Info;
     bool             logPopup   = false;
@@ -161,6 +164,13 @@ private slots:
     void openExistingProject();
     void openConvertDialog();
     void openScriptDialog();
+
+    // Workspace Project Management
+    void newWorkspaceProject();
+    void openWorkspaceProject();
+    void saveWorkspaceProject();
+    void saveWorkspaceProjectAs();
+    void closeWorkspaceProject();
     
     // Mask Tool Actions
     void createMaskAction();
@@ -191,6 +201,14 @@ private slots:
 private:
     void updateDisplay() override;
     void updateMenus(); // Enable/Disable Undo/Redo
+    void markWorkspaceProjectDirty();
+    bool maybeSaveWorkspaceProject(const QString& reason);
+    bool saveWorkspaceProjectTo(const QString& projectFilePath);
+    bool loadWorkspaceProjectFrom(const QString& projectFilePath);
+    QJsonObject captureWorkspaceProjectState(const QString& dataDirPath, const QString& projectBaseDir);
+    bool restoreWorkspaceProjectState(const QJsonObject& root, const QString& dataDirPath, const QString& projectBaseDir);
+    bool closeAllWorkspaceWindows();
+    void connectSubwindowProjectTracking(CustomMdiSubWindow* sub);
 
     // Returns all open image viewers as PMImageRef variables for Pixel Math.
     QVector<PMImageRef> getImageRefsForPixelMath() const;
@@ -210,12 +228,27 @@ private:
 
     QAction* m_undoAction;
     QAction* m_redoAction;
+    QAction* m_newWorkspaceProjectAction = nullptr;
+    QAction* m_openWorkspaceProjectAction = nullptr;
+    QAction* m_saveWorkspaceProjectAction = nullptr;
+    QAction* m_saveWorkspaceProjectAsAction = nullptr;
+    QAction* m_closeWorkspaceProjectAction = nullptr;
 
     
     // State
     
     ImageBuffer::DisplayMode m_displayMode = ImageBuffer::Display_Linear;
     bool m_displayLinked = true;
+
+    struct WorkspaceProjectState {
+        bool active = false;
+        bool dirty = false;
+        bool untitled = false;
+        QString filePath;
+        QString displayName;
+    };
+    WorkspaceProjectState m_workspaceProject;
+    bool m_restoringWorkspaceProject = false;
 
 public:
     enum LogType { Log_Info, Log_Success, Log_Warning, Log_Error, Log_Action };

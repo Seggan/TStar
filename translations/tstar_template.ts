@@ -3861,6 +3861,46 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cannot commit project file: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot create project directory: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot create temporary snapshot file.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot finalize compressed snapshot file.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot open project file for writing: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot open project file: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot read temporary snapshot file.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot restore '%1' from source image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot restore '%1': snapshot and source image are missing.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cannot write compressed snapshot file.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Catalog Background Extraction (CBE)</source>
             <translation type="unfinished" />
         </message>
@@ -3874,6 +3914,10 @@
         </message>
         <message>
             <source>Channel View</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close Workspace Project</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4037,6 +4081,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Failed to load project snapshot '%1': %2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Failed to open Statistical Stretch dialog: %1</source>
             <translation type="unfinished" />
         </message>
@@ -4046,6 +4094,10 @@
         </message>
         <message>
             <source>Failed to save image with annotations.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed to save project snapshot for '%1': %2</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4157,6 +4209,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Invalid project file: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Invert Image Colors</source>
             <translation type="unfinished" />
         </message>
@@ -4241,11 +4297,19 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Missing source images</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Mono</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Multiscale Decomposition</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>NB to RGB Stars</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4265,7 +4329,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>New Workspace Project...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>New version found: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>New workspace project created.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4314,6 +4386,14 @@
         </message>
         <message>
             <source>Open Project...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Open Workspace Project</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Open Workspace Project...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4589,6 +4669,18 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Project</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Project Load Error</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Project Save Error</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Project created: %1</source>
             <translation type="unfinished" />
         </message>
@@ -4721,6 +4813,18 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Save Workspace Project</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Save Workspace Project As</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Save Workspace Project As...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Saved with Annotations: %1</source>
             <translation type="unfinished" />
         </message>
@@ -4742,6 +4846,10 @@
         </message>
         <message>
             <source>Select image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Select relink root folder</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4778,6 +4886,10 @@
         </message>
         <message>
             <source>Show Overlay</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Some source images are missing. Do you want to select a folder for automatic relink?</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4821,6 +4933,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>TStar Workspace Project (*.tstarproj)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>TStar is up to date.</source>
             <translation type="unfinished" />
         </message>
@@ -4834,6 +4950,10 @@
         </message>
         <message>
             <source>Temperature / Tint applied permanently</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>The workspace project '%1' has unsaved changes (%2). Do you want to save it?</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4865,6 +4985,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Untitled</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Untitled Workspace Project</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Update check failed: %1</source>
             <translation type="unfinished" />
         </message>
@@ -4889,6 +5017,22 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Workspace project closed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Workspace project loaded: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Workspace project modified</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Workspace project saved: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>XISF Files (*.xisf);;</source>
             <translation type="unfinished" />
         </message>
@@ -4902,6 +5046,22 @@
         </message>
         <message>
             <source>Zoom Out</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>before closing project</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>before creating a new project</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>before exiting the application</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>before opening another project</source>
             <translation type="unfinished" />
         </message>
     </context>

@@ -793,12 +793,14 @@ void CustomMdiSubWindow::showMaximized() {
     m_isMaximized = true;
     m_titleBar->setMaximized(true);
     QMdiSubWindow::showMaximized();
+    emit layoutChanged();
 }
 
 void CustomMdiSubWindow::showNormal() {
     m_isMaximized = false;
     m_titleBar->setMaximized(false);
     QMdiSubWindow::showNormal();
+    emit layoutChanged();
 }
 
 void CustomMdiSubWindow::toggleShade() {
@@ -914,6 +916,8 @@ void CustomMdiSubWindow::toggleShade() {
         // Notify interested parties (e.g. RightSidebarWidget)
         emit shadingChanged(false, QPixmap());
     }
+
+    emit layoutChanged();
 }
 
 bool CustomMdiSubWindow::event(QEvent *event) {
@@ -1129,11 +1133,18 @@ void CustomMdiSubWindow::setSubWindowTitle(const QString& title) {
         if (m_linkStrip) m_linkStrip->setFixedHeight(h);
         if (m_adaptStrip) m_adaptStrip->setFixedHeight(h);
     }
+    emit layoutChanged();
 }
 
 void CustomMdiSubWindow::resizeEvent(QResizeEvent *event) {
     // If shaded, we don't update m_originalWidth/Height
     QMdiSubWindow::resizeEvent(event);
+    emit layoutChanged();
+}
+
+void CustomMdiSubWindow::moveEvent(QMoveEvent *event) {
+    QMdiSubWindow::moveEvent(event);
+    emit layoutChanged();
 }
 
 void CustomMdiSubWindow::dragEnterEvent(QDragEnterEvent *event) {
@@ -1312,6 +1323,10 @@ void CustomMdiSubWindow::handleDrop(QDropEvent* event) {
 }
 
 bool CustomMdiSubWindow::canClose() {
+    if (property("bypassCloseChecks").toBool()) {
+        return true;
+    }
+
     // Skip unsaved changes check for tool windows - their internal viewers are just for preview
     if (m_isToolWindow) {
         return true;

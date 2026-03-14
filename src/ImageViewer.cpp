@@ -1177,4 +1177,39 @@ void ImageViewer::setModified(bool modified) {
     emit modifiedChanged(m_isModified);
 }
 
+QVector<ImageBuffer> ImageViewer::undoHistory() const {
+    QVector<ImageBuffer> out;
+    out.reserve(static_cast<int>(m_undoStack.size()));
+    for (const auto& item : m_undoStack) {
+        out.push_back(item);
+    }
+    return out;
+}
+
+QVector<ImageBuffer> ImageViewer::redoHistory() const {
+    QVector<ImageBuffer> out;
+    out.reserve(static_cast<int>(m_redoStack.size()));
+    for (const auto& item : m_redoStack) {
+        out.push_back(item);
+    }
+    return out;
+}
+
+void ImageViewer::setHistory(const QVector<ImageBuffer>& undoHistory, const QVector<ImageBuffer>& redoHistory) {
+    m_undoStack.clear();
+    m_redoStack.clear();
+
+    m_undoStack.reserve(static_cast<size_t>(undoHistory.size()));
+    for (const auto& item : undoHistory) {
+        m_undoStack.push_back(item);
+    }
+
+    m_redoStack.reserve(static_cast<size_t>(redoHistory.size()));
+    for (const auto& item : redoHistory) {
+        m_redoStack.push_back(item);
+    }
+
+    emit historyChanged();
+}
+
 

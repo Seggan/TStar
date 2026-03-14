@@ -124,6 +124,14 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QSaveFile>
+#include <QDir>
+#include <QFileInfo>
+#include <QTemporaryFile>
+#include <QDirIterator>
 
 #include "widgets/ResourceMonitorWidget.h"
 
@@ -779,6 +787,47 @@ MainWindow::MainWindow(QWidget *parent)
     // 1. Open / Save (Files)
     addBtn(tr("Open"), "images/open.png", &MainWindow::openFile)->setShortcut(QKeySequence::Open);
     addBtn(tr("Save"), "images/save.png", &MainWindow::saveFile)->setShortcut(QKeySequence::Save);
+
+    QToolButton* projectBtn = new QToolButton(this);
+    projectBtn->setText(tr("Project"));
+    projectBtn->setPopupMode(QToolButton::InstantPopup);
+    projectBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    projectBtn->setAutoRaise(true);
+    projectBtn->setStyleSheet(popupBtnStyle);
+
+    QMenu* projectMenu = new QMenu(this);
+    projectMenu->setStyleSheet(
+        "QMenu { "
+        "   background-color: #2b2b2b; "
+        "   color: #e0e0e0; "
+        "   border: 1px solid #555; "
+        "} "
+        "QMenu::item { "
+        "   padding: 5px 25px 5px 10px; "
+        "} "
+        "QMenu::item:selected { "
+        "   background-color: #444; "
+        "} "
+        "QMenu::separator { "
+        "   height: 1px; "
+        "   background: #555; "
+        "   margin: 4px 0; "
+        "}"
+    );
+    m_newWorkspaceProjectAction = projectMenu->addAction(tr("New Workspace Project..."));
+    connect(m_newWorkspaceProjectAction, &QAction::triggered, this, &MainWindow::newWorkspaceProject);
+    m_openWorkspaceProjectAction = projectMenu->addAction(tr("Open Workspace Project..."));
+    connect(m_openWorkspaceProjectAction, &QAction::triggered, this, &MainWindow::openWorkspaceProject);
+    projectMenu->addSeparator();
+    m_saveWorkspaceProjectAction = projectMenu->addAction(tr("Save Workspace Project"));
+    connect(m_saveWorkspaceProjectAction, &QAction::triggered, this, &MainWindow::saveWorkspaceProject);
+    m_saveWorkspaceProjectAsAction = projectMenu->addAction(tr("Save Workspace Project As..."));
+    connect(m_saveWorkspaceProjectAsAction, &QAction::triggered, this, &MainWindow::saveWorkspaceProjectAs);
+    projectMenu->addSeparator();
+    m_closeWorkspaceProjectAction = projectMenu->addAction(tr("Close Workspace Project"));
+    connect(m_closeWorkspaceProjectAction, &QAction::triggered, this, &MainWindow::closeWorkspaceProject);
+    projectBtn->setMenu(projectMenu);
+    mainToolbar->addWidget(projectBtn);
     
     // Spacer
     { QWidget* s = new QWidget(this); s->setFixedWidth(2); mainToolbar->addWidget(s); }
@@ -1544,6 +1593,98 @@ static QString buildChildTitle(const QString& parentTitle, const QString& suffix
     return t.trimmed() + suffix;
 }
 
+static QString sanitizeProjectComponent(const QString& input) {
+    QString out = input;
+    out.replace(QRegularExpression("[^A-Za-z0-9_\\-]"), "_");
+    while (out.contains("__")) out.replace("__", "_");
+    out = out.trimmed();
+    if (out.isEmpty()) out = "item";
+    return out;
+}
+
+static bool saveProjectBufferSnapshot(const ImageBuffer& buffer, const QString& filePath, QString* errOut) {
+    QDir().mkpath(QFileInfo(filePath).absolutePath());
+    QTemporaryFile tmp(QFileInfo(filePath).absolutePath() + "/snapshot_XXXXXX.fits");
+    tmp.setAutoRemove(false);
+    if (!tmp.open()) {
+        if (errOut) *errOut = QObject::tr("Cannot create temporary snapshot file.");
+        return false;
+    }
+    QString tmpPath = tmp.fileName();
+    tmp.close();
+    QFile::remove(tmpPath); // Remove empty file so CFITSIO can create it properly without error 105
+
+    QString err;
+    if (!buffer.save(tmpPath, "FITS", ImageBuffer::Depth_32Float, &err)) {
+        QFile::remove(tmpPath);
+        if (errOut) *errOut = err;
+        return false;
+    }
+
+    QFile raw(tmpPath);
+    if (!raw.open(QIODevice::ReadOnly)) {
+        QFile::remove(tmpPath);
+        if (errOut) *errOut = QObject::tr("Cannot read temporary snapshot file.");
+        return false;
+    }
+    const QByteArray uncompressed = raw.readAll();
+    raw.close();
+    QFile::remove(tmpPath);
+
+    const QByteArray compressed = qCompress(uncompressed, 9);
+    QSaveFile out(filePath);
+    if (!out.open(QIODevice::WriteOnly)) {
+        if (errOut) *errOut = QObject::tr("Cannot write compressed snapshot file.");
+        return false;
+    }
+    out.write(compressed);
+    if (!out.commit()) {
+        if (errOut) *errOut = QObject::tr("Cannot finalize compressed snapshot file.");
+        return false;
+    }
+
+    return true;
+}
+
+static bool loadProjectBufferSnapshot(const QString& filePath, ImageBuffer& outBuffer, QString* errOut) {
+    QFile in(filePath);
+    if (in.open(QIODevice::ReadOnly)) {
+        const QByteArray payload = in.readAll();
+        in.close();
+
+        const QByteArray uncompressed = qUncompress(payload);
+        if (!uncompressed.isEmpty()) {
+            QTemporaryFile tmp(QFileInfo(filePath).absolutePath() + "/restore_XXXXXX.fits");
+            tmp.setAutoRemove(false);
+            if (tmp.open()) {
+                const QString tmpPath = tmp.fileName();
+                tmp.write(uncompressed);
+                tmp.close();
+
+                QString err;
+                const bool ok = FitsLoader::load(tmpPath, outBuffer, &err);
+                QFile::remove(tmpPath);
+                if (ok) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Legacy compatibility path: older projects saved plain FITS snapshots.
+    QString err;
+    if (FitsLoader::load(filePath, outBuffer, &err)) {
+        return true;
+    }
+    if (outBuffer.loadStandard(filePath)) {
+        return true;
+    }
+    if (errOut) {
+        *errOut = err.isEmpty() ? QString("Unknown error") : err;
+    }
+    return false;
+}
+
 CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, const QString& title,
                                       ImageBuffer::DisplayMode mode,
                                       float autoStretchMedian, bool displayLinked) {
@@ -1560,6 +1701,9 @@ CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, 
     
     // Connect History Sync (live update of Undo/Redo menus)
     connect(viewer, &ImageViewer::historyChanged, this, &MainWindow::updateMenus);
+    connect(viewer, &ImageViewer::historyChanged, this, &MainWindow::markWorkspaceProjectDirty);
+    connect(viewer, &ImageViewer::bufferChanged, this, &MainWindow::markWorkspaceProjectDirty);
+    connect(viewer, &ImageViewer::modifiedChanged, this, &MainWindow::markWorkspaceProjectDirty);
     
     // Cleanup state maps on destruction to avoid dangling pointers
     connect(viewer, &QObject::destroyed, this, [this, viewer](){
@@ -1598,6 +1742,7 @@ CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, 
     }
     
     m_mdiArea->addSubWindow(sub);
+    connectSubwindowProjectTracking(sub);
     sub->show();
     sub->showNormal(); // Ensure new views always open non-maximized
     m_mdiArea->setActiveSubWindow(sub);
@@ -1697,6 +1842,11 @@ CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, 
     sub->move(x, y);
     sub->resize(winW, winH);
     viewer->fitToWindow(); // Ensure full image is visible
+
+    if (m_workspaceProject.active && !m_restoringWorkspaceProject) {
+        markWorkspaceProjectDirty();
+    }
+
     return sub;
 }
 
@@ -1742,7 +1892,7 @@ static QList<ImageFileLoadResult> loadImageFile(const QString& path)
         if (exts.isEmpty()) {
             ImageFileLoadResult r;
             if (FitsLoader::load(path, r.buffer, &err)) {
-                r.success = true;  r.title = fi.fileName();
+                r.success = true;  r.title = fi.fileName();  r.sourcePath = path;
                 r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
                 r.logLevel = ImageLog_Success;  r.logPopup = true;
             } else {
@@ -1758,7 +1908,7 @@ static QList<ImageFileLoadResult> loadImageFile(const QString& path)
         for (const auto& info : sorted) {
             ImageFileLoadResult r;  QString extErr;
             if (FitsLoader::loadExtension(path, info.index, r.buffer, &extErr)) {
-                r.success = true;  r.title = fi.fileName();
+                r.success = true;  r.title = fi.fileName();  r.sourcePath = path;
                 if (sorted.size() > 1) r.title += QString(" [%1]").arg(info.name);
                 anyLoaded = true;
             } else {
@@ -1782,7 +1932,7 @@ static QList<ImageFileLoadResult> loadImageFile(const QString& path)
         if (imgs.isEmpty()) {
             ImageFileLoadResult r;
             if (XISFReader::read(path, r.buffer, &err)) {
-                r.success = true;  r.title = fi.fileName();
+                r.success = true;  r.title = fi.fileName();  r.sourcePath = path;
                 r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
                 r.logLevel = ImageLog_Success;  r.logPopup = true;
             } else {
@@ -1795,7 +1945,7 @@ static QList<ImageFileLoadResult> loadImageFile(const QString& path)
         for (const auto& info : imgs) {
             ImageFileLoadResult r;  QString imgErr;
             if (XISFReader::readImage(path, info.index, r.buffer, &imgErr)) {
-                r.success = true;  r.title = fi.fileName();
+                r.success = true;  r.title = fi.fileName();  r.sourcePath = path;
                 if (imgs.size() > 1) r.title += QString(" [%1]").arg(info.name);
                 anyLoaded = true;
             } else {
@@ -1819,7 +1969,7 @@ static QList<ImageFileLoadResult> loadImageFile(const QString& path)
         bool ok = r.buffer.loadTiff32(path, &err, &dbg);
         if (!ok) ok = r.buffer.loadStandard(path);
         if (ok) {
-            r.success = true;  r.title = fi.fileName();
+            r.success = true;  r.title = fi.fileName();  r.sourcePath = path;
             r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
             r.logLevel = ImageLog_Success;  r.logPopup = true;
         } else {
@@ -1835,7 +1985,7 @@ static QList<ImageFileLoadResult> loadImageFile(const QString& path)
         ImageFileLoadResult r;  QString rawErr;
         if (RawLoader::load(path, r.buffer, &rawErr)) {
             r.buffer.setName(fi.fileName());
-            r.success = true;  r.title = fi.fileName();
+            r.success = true;  r.title = fi.fileName();  r.sourcePath = path;
             if (!r.buffer.metadata().bayerPattern.isEmpty() &&
                 r.buffer.metadata().bayerPattern != "XTRANS") {
                 r.logMsg = QCoreApplication::translate("MainWindow",
@@ -1863,7 +2013,7 @@ static QList<ImageFileLoadResult> loadImageFile(const QString& path)
     {
         ImageFileLoadResult r;
         if (r.buffer.loadStandard(path)) {
-            r.success = true;  r.title = fi.fileName();
+            r.success = true;  r.title = fi.fileName();  r.sourcePath = path;
             r.logMsg  = QCoreApplication::translate("MainWindow", "Opened: %1").arg(fi.fileName());
             r.logLevel = ImageLog_Success;  r.logPopup = true;
         } else {
@@ -1902,7 +2052,11 @@ void MainWindow::processImageLoadQueue() {
     }
     
     if (ptr->success) {
-        createNewImageWindow(ptr->buffer, ptr->title);
+        CustomMdiSubWindow* sub = createNewImageWindow(ptr->buffer, ptr->title);
+        if (sub && sub->viewer()) {
+            sub->viewer()->setFilePath(ptr->sourcePath);
+            sub->viewer()->setModified(false);
+        }
     }
     if (!ptr->logMsg.isEmpty()) {
         MainWindow::LogType logType = Log_Info;
@@ -2070,6 +2224,7 @@ void MainWindow::saveFile() {
          if (!displayImg.save(path, format.toLatin1().constData())) {
               QMessageBox::critical(this, tr("Error"), tr("Failed to save image with annotations."));
          } else {
+                v->setFilePath(path);
               log(tr("Saved with Annotations: %1").arg(path), Log_Success, true);
               showConsoleTemporarily(2000);
          }
@@ -2089,6 +2244,7 @@ void MainWindow::saveFile() {
     if (!v->getBuffer().save(path, format, d, &err)) { // Use viewer buffer
         QMessageBox::critical(this, tr("Error"), tr("Save Failed:\n") + err);
     } else {
+        v->setFilePath(path);
         v->setModified(false); // Clear modified flag
         log(tr("Saved: %1").arg(path), Log_Success, true);
         showConsoleTemporarily(2000);
@@ -3323,6 +3479,8 @@ CustomMdiSubWindow* MainWindow::setupToolSubwindow(CustomMdiSubWindow* sub, QWid
         targetSub->setAttribute(Qt::WA_DeleteOnClose);
     }
 
+    connectSubwindowProjectTracking(targetSub);
+
     targetSub->setWidget(dlg);
     targetSub->setSubWindowTitle(title);
     targetSub->setToolWindow(true); // Enable tool mode
@@ -3383,6 +3541,10 @@ CustomMdiSubWindow* MainWindow::setupToolSubwindow(CustomMdiSubWindow* sub, QWid
     targetSub->activateWindow();
     
     centerToolWindow(targetSub); // Ensure every tool is centered by default
+
+    if (m_workspaceProject.active && !m_restoringWorkspaceProject) {
+        markWorkspaceProjectDirty();
+    }
     
     return targetSub;
 }
@@ -3537,38 +3699,22 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         setProperty("shutdownRequested", true);
     }
 
+    if (!maybeSaveWorkspaceProject(tr("before exiting the application"))) {
+        event->ignore();
+        setProperty("shutdownRequested", false);
+        return;
+    }
+
     // === FORCE CLEANUP ===
     Threading::setThreadRun(false);
     QThreadPool::globalInstance()->clear();
     QThreadPool::globalInstance()->waitForDone(500);
 
-    // Attempt to close all MDI windows first
-    if (m_mdiArea) {
-        // Disable animations to ensure closeAllSubWindows doesn't stop
-        for (auto* sub : m_mdiArea->subWindowList()) {
-            if (auto* csw = qobject_cast<CustomMdiSubWindow*>(sub)) {
-                csw->setSkipCloseAnimation(true);
-            }
-        }
-
-        m_mdiArea->closeAllSubWindows();
-        
-        // Wait for animations to finish (Async close)
-        // Give time for fade-out effects (150ms approx) + buffer
-        // If user canceled a save prompt, the window remains open and loop terminates after timeout
-        QTime deadline = QTime::currentTime().addMSecs(600);
-        while (!m_mdiArea->subWindowList().isEmpty() && QTime::currentTime() < deadline) {
-            QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
-            QThread::msleep(10);
-        }
-        
-        // If still open windows (e.g. user said NO to unsaved changes)
-        if (!m_mdiArea->subWindowList().isEmpty()) {
-            event->ignore();
-            // Reset shutdown flag so user can try again
-            setProperty("shutdownRequested", false);
-            return;
-        }
+    // Attempt to close all MDI windows transactionally.
+    if (!closeAllWorkspaceWindows()) {
+        event->ignore();
+        setProperty("shutdownRequested", false);
+        return;
     }
 
     if (m_isClosing) {
@@ -4294,6 +4440,588 @@ void MainWindow::logMessage(const QString& message, int severity, bool showPopup
         default: type = Log_Info; break;
     }
     log(message, type, showPopup);
+}
+
+void MainWindow::connectSubwindowProjectTracking(CustomMdiSubWindow* sub) {
+    if (!sub) return;
+    connect(sub, &CustomMdiSubWindow::layoutChanged, this, &MainWindow::markWorkspaceProjectDirty, Qt::UniqueConnection);
+    connect(sub, &QObject::destroyed, this, &MainWindow::markWorkspaceProjectDirty, Qt::UniqueConnection);
+}
+
+void MainWindow::markWorkspaceProjectDirty() {
+    if (!m_workspaceProject.active || m_restoringWorkspaceProject) return;
+    m_workspaceProject.dirty = true;
+}
+
+bool MainWindow::closeAllWorkspaceWindows() {
+    if (!m_mdiArea) return true;
+
+    QList<QPointer<CustomMdiSubWindow>> windows;
+    for (QMdiSubWindow* sub : m_mdiArea->subWindowList(QMdiArea::CreationOrder)) {
+        if (auto* csw = qobject_cast<CustomMdiSubWindow*>(sub)) {
+            windows.push_back(csw);
+        }
+    }
+
+    // Preflight phase: if user cancels/denies on any window, do not close anything.
+    for (const auto& win : windows) {
+        if (!win) continue;
+        if (!win->canClose()) {
+            return false;
+        }
+    }
+
+    // Commit phase: close all without re-prompting.
+    for (const auto& win : windows) {
+        if (!win) continue;
+        win->setProperty("bypassCloseChecks", true);
+        win->setSkipCloseAnimation(true);
+    }
+
+    for (const auto& win : windows) {
+        if (win) win->close();
+    }
+
+    QTime deadline = QTime::currentTime().addMSecs(800);
+    while (!m_mdiArea->subWindowList().isEmpty() && QTime::currentTime() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+        QThread::msleep(10);
+    }
+
+    for (QMdiSubWindow* sub : m_mdiArea->subWindowList()) {
+        if (auto* csw = qobject_cast<CustomMdiSubWindow*>(sub)) {
+            csw->setProperty("bypassCloseChecks", false);
+        }
+    }
+
+    return m_mdiArea->subWindowList().isEmpty();
+}
+
+bool MainWindow::maybeSaveWorkspaceProject(const QString& reason) {
+    if (!m_workspaceProject.active || !m_workspaceProject.dirty) return true;
+
+    QMessageBox::StandardButton res = QMessageBox::warning(
+        this,
+        tr("Workspace project modified"),
+        tr("The workspace project '%1' has unsaved changes (%2). Do you want to save it?")
+            .arg(m_workspaceProject.displayName.isEmpty() ? tr("Untitled") : m_workspaceProject.displayName)
+            .arg(reason),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save);
+
+    if (res == QMessageBox::Cancel) return false;
+    if (res == QMessageBox::Discard) return true;
+
+    QString targetPath = m_workspaceProject.filePath;
+    if (targetPath.isEmpty()) {
+        targetPath = QFileDialog::getSaveFileName(
+            this,
+            tr("Save Workspace Project"),
+            QDir::homePath(),
+            tr("TStar Workspace Project (*.tstarproj)"));
+        if (targetPath.isEmpty()) return false;
+    }
+
+    return saveWorkspaceProjectTo(targetPath);
+}
+
+QJsonObject MainWindow::captureWorkspaceProjectState(const QString& dataDirPath, const QString& projectBaseDir) {
+    QJsonObject root;
+    root["version"] = 1;
+    root["app"] = "TStar";
+    root["name"] = m_workspaceProject.displayName;
+    root["savedUtc"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
+    QJsonArray images;
+    QJsonArray tools;
+    QDir dataDir(dataDirPath);
+    dataDir.mkpath(".");
+
+    auto rectToJson = [](const QRect& r) {
+        QJsonObject o;
+        o["x"] = r.x();
+        o["y"] = r.y();
+        o["w"] = r.width();
+        o["h"] = r.height();
+        return o;
+    };
+
+    int imageIdx = 0;
+    const auto subs = m_mdiArea->subWindowList(QMdiArea::CreationOrder);
+    for (QMdiSubWindow* rawSub : subs) {
+        auto* sub = qobject_cast<CustomMdiSubWindow*>(rawSub);
+        if (!sub) continue;
+
+        if (sub->isToolWindow()) {
+            QJsonObject toolObj;
+            toolObj["title"] = sub->windowTitle();
+            toolObj["geometry"] = rectToJson(sub->geometry());
+            toolObj["shaded"] = sub->isShaded();
+            toolObj["maximized"] = sub->isMaximized();
+            toolObj["visible"] = sub->isVisible();
+            tools.append(toolObj);
+            continue;
+        }
+
+        ImageViewer* v = sub->viewer();
+        if (!v || !v->getBuffer().isValid()) continue;
+
+        QString base = QString("view_%1_%2")
+                           .arg(imageIdx++, 4, 10, QLatin1Char('0'))
+                           .arg(sanitizeProjectComponent(sub->windowTitle()));
+        QString currentRel = base + "_current.tsnap";
+        QString currentAbs = dataDir.filePath(currentRel);
+
+        QString saveErr;
+        if (!saveProjectBufferSnapshot(v->getBuffer(), currentAbs, &saveErr)) {
+            log(tr("Failed to save project snapshot for '%1': %2").arg(sub->windowTitle()).arg(saveErr), Log_Error, true);
+            continue;
+        }
+
+        QJsonArray undoEntries;
+        const QVector<ImageBuffer> undoHistory = v->undoHistory();
+        for (int i = 0; i < undoHistory.size(); ++i) {
+            QString rel = QString("%1_undo_%2.tsnap").arg(base).arg(i, 3, 10, QLatin1Char('0'));
+            QString abs = dataDir.filePath(rel);
+            if (saveProjectBufferSnapshot(undoHistory[i], abs, &saveErr)) {
+                undoEntries.append(rel);
+            }
+        }
+
+        QJsonArray redoEntries;
+        const QVector<ImageBuffer> redoHistory = v->redoHistory();
+        for (int i = 0; i < redoHistory.size(); ++i) {
+            QString rel = QString("%1_redo_%2.tsnap").arg(base).arg(i, 3, 10, QLatin1Char('0'));
+            QString abs = dataDir.filePath(rel);
+            if (saveProjectBufferSnapshot(redoHistory[i], abs, &saveErr)) {
+                redoEntries.append(rel);
+            }
+        }
+
+        QJsonObject viewObj;
+        viewObj["title"] = sub->windowTitle();
+        viewObj["sourcePath"] = v->filePath(); // legacy key
+        viewObj["sourcePathAbs"] = v->filePath();
+        viewObj["sourcePathRel"] = v->filePath().isEmpty() ? QString() : QDir(projectBaseDir).relativeFilePath(v->filePath());
+        viewObj["sourceFileName"] = v->filePath().isEmpty() ? QString() : QFileInfo(v->filePath()).fileName();
+        viewObj["currentSnapshot"] = currentRel;
+        viewObj["undoSnapshots"] = undoEntries;
+        viewObj["redoSnapshots"] = redoEntries;
+        viewObj["modified"] = v->isModified();
+        viewObj["displayMode"] = static_cast<int>(v->getDisplayMode());
+        viewObj["displayLinked"] = v->isDisplayLinked();
+        viewObj["displayInverted"] = v->isDisplayInverted();
+        viewObj["displayFalseColor"] = v->isDisplayFalseColor();
+        viewObj["autoStretchMedian"] = v->getAutoStretchMedian();
+        viewObj["channelView"] = static_cast<int>(v->channelView());
+        viewObj["zoom"] = v->getScale();
+        viewObj["hScroll"] = v->getHBarLoc();
+        viewObj["vScroll"] = v->getVBarLoc();
+        viewObj["linked"] = v->isLinked();
+        viewObj["geometry"] = rectToJson(sub->geometry());
+        viewObj["shaded"] = sub->isShaded();
+        viewObj["maximized"] = sub->isMaximized();
+        images.append(viewObj);
+    }
+
+    root["images"] = images;
+    root["tools"] = tools;
+    return root;
+}
+
+bool MainWindow::restoreWorkspaceProjectState(const QJsonObject& root, const QString& dataDirPath, const QString& projectBaseDir) {
+    QDir dataDir(dataDirPath);
+    if (!closeAllWorkspaceWindows()) {
+        return false;
+    }
+
+    QHash<QString, QString> relinkCache;
+    QString relinkRootDir;
+    bool relinkPrompted = false;
+
+    auto resolveSourcePath = [&](const QJsonObject& viewObj) -> QString {
+        const QString absPath = viewObj["sourcePathAbs"].toString();
+        const QString relPath = viewObj["sourcePathRel"].toString();
+        const QString legacy = viewObj["sourcePath"].toString();
+        const QString fileName = viewObj["sourceFileName"].toString();
+
+        auto tryPath = [](const QString& p) -> QString {
+            if (!p.isEmpty() && QFileInfo::exists(p)) return QFileInfo(p).absoluteFilePath();
+            return QString();
+        };
+
+        QString found = tryPath(absPath);
+        if (!found.isEmpty()) return found;
+
+        if (!relPath.isEmpty()) {
+            found = tryPath(QDir(projectBaseDir).absoluteFilePath(relPath));
+            if (!found.isEmpty()) return found;
+        }
+
+        if (!legacy.isEmpty()) {
+            found = tryPath(legacy);
+            if (!found.isEmpty()) return found;
+            found = tryPath(QDir(projectBaseDir).absoluteFilePath(legacy));
+            if (!found.isEmpty()) return found;
+        }
+
+        QString keyName = fileName;
+        if (keyName.isEmpty() && !legacy.isEmpty()) keyName = QFileInfo(legacy).fileName();
+        if (keyName.isEmpty()) keyName = QFileInfo(absPath).fileName();
+        if (keyName.isEmpty()) return QString();
+
+        if (relinkCache.contains(keyName)) {
+            const QString cached = relinkCache.value(keyName);
+            return QFileInfo::exists(cached) ? cached : QString();
+        }
+
+        if (!relinkPrompted) {
+            relinkPrompted = true;
+            auto choice = QMessageBox::question(
+                this,
+                tr("Missing source images"),
+                tr("Some source images are missing. Do you want to select a folder for automatic relink?"),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::Yes);
+            if (choice == QMessageBox::Yes) {
+                relinkRootDir = QFileDialog::getExistingDirectory(
+                    this,
+                    tr("Select relink root folder"),
+                    QDir::homePath());
+            }
+        }
+
+        if (relinkRootDir.isEmpty()) return QString();
+
+        QDirIterator it(relinkRootDir, QDir::Files, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString candidate = it.next();
+            if (QFileInfo(candidate).fileName().compare(keyName, Qt::CaseInsensitive) == 0) {
+                relinkCache.insert(keyName, candidate);
+                return candidate;
+            }
+        }
+
+        relinkCache.insert(keyName, QString());
+        return QString();
+    };
+
+    auto jsonToRect = [](const QJsonObject& o) {
+        return QRect(o["x"].toInt(), o["y"].toInt(), o["w"].toInt(), o["h"].toInt());
+    };
+
+    QVector<ImageViewer*> linkedViewers;
+    const QJsonArray images = root["images"].toArray();
+    for (const QJsonValue& value : images) {
+        const QJsonObject viewObj = value.toObject();
+        QString snapRel = viewObj["currentSnapshot"].toString();
+        if (snapRel.isEmpty()) continue;
+
+        ImageBuffer buffer;
+        QString loadErr;
+        const bool hasSnapshot = !snapRel.isEmpty() && QFileInfo::exists(dataDir.filePath(snapRel));
+        if (hasSnapshot) {
+            if (!loadProjectBufferSnapshot(dataDir.filePath(snapRel), buffer, &loadErr)) {
+                log(tr("Failed to load project snapshot '%1': %2").arg(snapRel).arg(loadErr), Log_Error, true);
+                continue;
+            }
+        } else {
+            const QString resolvedSource = resolveSourcePath(viewObj);
+            if (resolvedSource.isEmpty()) {
+                log(tr("Cannot restore '%1': snapshot and source image are missing.").arg(viewObj["title"].toString()), Log_Error, true);
+                continue;
+            }
+            const QList<ImageFileLoadResult> lr = loadImageFile(resolvedSource);
+            bool okLoad = false;
+            for (const auto& entry : lr) {
+                if (entry.success) {
+                    buffer = entry.buffer;
+                    okLoad = true;
+                    break;
+                }
+            }
+            if (!okLoad) {
+                if (!buffer.loadStandard(resolvedSource)) {
+                    log(tr("Cannot restore '%1' from source image.").arg(viewObj["title"].toString()), Log_Error, true);
+                    continue;
+                }
+            }
+        }
+
+        auto* sub = createNewImageWindow(
+            buffer,
+            viewObj["title"].toString(),
+            static_cast<ImageBuffer::DisplayMode>(viewObj["displayMode"].toInt(static_cast<int>(ImageBuffer::Display_Linear))),
+            static_cast<float>(viewObj["autoStretchMedian"].toDouble(0.25)),
+            viewObj["displayLinked"].toBool(true));
+
+        if (!sub || !sub->viewer()) continue;
+        ImageViewer* v = sub->viewer();
+        const QString sourceResolved = resolveSourcePath(viewObj);
+        v->setFilePath(sourceResolved.isEmpty() ? viewObj["sourcePath"].toString() : sourceResolved);
+        v->setInverted(viewObj["displayInverted"].toBool(false));
+        v->setFalseColor(viewObj["displayFalseColor"].toBool(false));
+        v->setChannelView(static_cast<ImageBuffer::ChannelView>(viewObj["channelView"].toInt(static_cast<int>(ImageBuffer::ChannelRGB))));
+
+        QVector<ImageBuffer> undoHistory;
+        for (const QJsonValue& undoV : viewObj["undoSnapshots"].toArray()) {
+            ImageBuffer ub;
+            QString err;
+            if (loadProjectBufferSnapshot(dataDir.filePath(undoV.toString()), ub, &err)) {
+                undoHistory.push_back(ub);
+            }
+        }
+
+        QVector<ImageBuffer> redoHistory;
+        for (const QJsonValue& redoV : viewObj["redoSnapshots"].toArray()) {
+            ImageBuffer rb;
+            QString err;
+            if (loadProjectBufferSnapshot(dataDir.filePath(redoV.toString()), rb, &err)) {
+                redoHistory.push_back(rb);
+            }
+        }
+        v->setHistory(undoHistory, redoHistory);
+        v->setModified(viewObj["modified"].toBool(false));
+        v->syncView(
+            static_cast<float>(viewObj["zoom"].toDouble(1.0)),
+            static_cast<float>(viewObj["hScroll"].toDouble(0.0)),
+            static_cast<float>(viewObj["vScroll"].toDouble(0.0)));
+
+        QRect g = jsonToRect(viewObj["geometry"].toObject());
+        if (g.isValid()) sub->setGeometry(g);
+        if (viewObj["maximized"].toBool(false)) sub->showMaximized();
+        if (viewObj["shaded"].toBool(false) && !sub->isShaded()) sub->toggleShade();
+
+        if (viewObj["linked"].toBool(false)) linkedViewers.push_back(v);
+    }
+
+    // Restore link group semantics across all views marked as linked.
+    for (int i = 0; i < linkedViewers.size(); ++i) {
+        for (int j = i + 1; j < linkedViewers.size(); ++j) {
+            connect(linkedViewers[i], &ImageViewer::viewChanged, linkedViewers[j], &ImageViewer::syncView, Qt::UniqueConnection);
+            connect(linkedViewers[j], &ImageViewer::viewChanged, linkedViewers[i], &ImageViewer::syncView, Qt::UniqueConnection);
+        }
+        linkedViewers[i]->setLinked(true);
+    }
+
+    auto openToolByTitle = [this](const QString& title) {
+        if (!currentViewer() && title != tr("Settings") && title != tr("Blink Comparator")) {
+            // Most tools require an image to initialize properly. Skip if none.
+            return;
+        }
+        
+        if (title == tr("Statistical Stretch")) openStretchDialog();
+        else if (title == tr("ABE")) openAbeDialog();
+        else if (title == tr("Catalog Background Extraction (MARS-like)")) openCbeDialog();
+        else if (title == tr("SCNR")) openSCNRDialog();
+        else if (title == tr("Wavescale HDR")) openWavescaleHDRDialog();
+        else if (title == tr("Arcsinh Stretch")) openArcsinhStretchDialog();
+        else if (title == tr("Histogram Stretch")) openHistogramStretchDialog();
+        else if (title == tr("Color Saturation")) openSaturationDialog();
+        else if (title == tr("Temperature / Tint")) openTemperatureTintDialog();
+        else if (title == tr("Magenta Correction")) openMagentaCorrectionDialog();
+        else if (title == tr("Rotate / Crop")) cropTool();
+        else if (title == tr("Pixel Math")) openPixelMathDialog();
+        else if (title == tr("Multiscale Decomposition")) openMultiscaleDecompDialog();
+        else if (title == tr("Generalized Hyperbolic Stretch")) openGHSDialog();
+        else if (title == tr("Curves Transformation")) openCurvesDialog();
+        else if (title == tr("Background Neutralization")) openBackgroundNeutralizationDialog();
+        else if (title == tr("Photometric Color Calibration")) openPCCDialog();
+        else if (title == tr("Plate Solving")) openPlateSolvingDialog();
+        else if (title == tr("Star Analysis")) openStarAnalysisDialog();
+        else if (title == tr("Debayer")) openDebayerDialog();
+        else if (title == tr("Continuum Subtraction")) openContinuumSubtractionDialog();
+        else if (title == tr("Align Channels")) openAlignChannelsDialog();
+        else if (title == tr("Narrowband Normalization")) openNarrowbandNormalizationDialog();
+        else if (title == tr("NB to RGB Stars") || title == tr("NB → RGB Stars")) openNBtoRGBStarsDialog();
+        else if (title == tr("Annotation Tool")) openImageAnnotatorDialog();
+        else if (title == tr("Extract Luminance")) openExtractLuminanceDialog();
+        else if (title == tr("Recombine Luminance")) openRecombineLuminanceDialog();
+        else if (title == tr("Correction Brush")) openCorrectionBrushDialog();
+        else if (title == tr("CLAHE")) openClaheDialog();
+        else if (title == tr("Aberration Inspector")) openAberrationInspectorDialog();
+        else if (title == tr("PCC Distribution")) openPCCDistributionDialog();
+        else if (title == tr("Blink Comparator")) openBlinkComparatorDialog();
+        else if (title == tr("Combine Channels")) combineChannels();
+        else if (title == tr("Selective Color Correction")) openSelectiveColorDialog();
+        else if (title == tr("Star Stretch")) openStarStretchDialog();
+        else if (title == tr("Star Recomposition")) openStarRecompositionDialog();
+        else if (title == tr("Perfect Palette")) openPerfectPaletteDialog();
+        else if (title == tr("Aberration Remover")) openRARDialog();
+        else if (title == tr("Cosmic Clarity")) {
+            // Requires parameter dialog context; skip auto-open.
+        }
+        else if (title == tr("GraXpert")) {
+            // Requires parameter dialog context; skip auto-open.
+        }
+        else if (title == tr("Remove Stars (StarNet)")) {
+            // Requires parameter dialog context; skip auto-open.
+        }
+        else if (title == tr("Settings")) onSettingsAction();
+    };
+
+    const QJsonArray tools = root["tools"].toArray();
+    for (const QJsonValue& value : tools) {
+        const QJsonObject toolObj = value.toObject();
+        const QString title = toolObj["title"].toString();
+        if (title.isEmpty()) continue;
+
+        openToolByTitle(title);
+
+        CustomMdiSubWindow* target = nullptr;
+        for (QMdiSubWindow* rawSub : m_mdiArea->subWindowList(QMdiArea::ActivationHistoryOrder)) {
+            auto* sub = qobject_cast<CustomMdiSubWindow*>(rawSub);
+            if (!sub || !sub->isToolWindow()) continue;
+            if (sub->windowTitle() == title) {
+                target = sub;
+                break;
+            }
+        }
+        if (!target) continue;
+
+        QRect g = jsonToRect(toolObj["geometry"].toObject());
+        if (g.isValid()) target->setGeometry(g);
+        if (toolObj["maximized"].toBool(false)) target->showMaximized();
+        if (toolObj["shaded"].toBool(false) && !target->isShaded()) target->toggleShade();
+        if (!toolObj["visible"].toBool(true)) target->hide();
+    }
+
+    return true;
+}
+
+bool MainWindow::saveWorkspaceProjectTo(const QString& projectFilePath) {
+    if (projectFilePath.isEmpty()) return false;
+
+    QFileInfo fi(projectFilePath);
+    QDir baseDir = fi.absoluteDir();
+    if (!baseDir.exists() && !baseDir.mkpath(".")) {
+        QMessageBox::critical(this, tr("Project Save Error"), tr("Cannot create project directory: %1").arg(baseDir.absolutePath()));
+        return false;
+    }
+
+    QString fileName = fi.completeBaseName();
+    if (fileName.isEmpty()) fileName = "workspace";
+    QString dataDirPath = baseDir.filePath(fileName + "_data");
+
+    QJsonObject root = captureWorkspaceProjectState(dataDirPath, baseDir.absolutePath());
+    QSaveFile out(projectFilePath);
+    if (!out.open(QIODevice::WriteOnly)) {
+        QMessageBox::critical(this, tr("Project Save Error"), tr("Cannot open project file for writing: %1").arg(projectFilePath));
+        return false;
+    }
+
+    out.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    if (!out.commit()) {
+        QMessageBox::critical(this, tr("Project Save Error"), tr("Cannot commit project file: %1").arg(projectFilePath));
+        return false;
+    }
+
+    m_workspaceProject.active = true;
+    m_workspaceProject.dirty = false;
+    m_workspaceProject.untitled = false;
+    m_workspaceProject.filePath = projectFilePath;
+    m_workspaceProject.displayName = fileName;
+    log(tr("Workspace project saved: %1").arg(projectFilePath), Log_Success, true);
+    return true;
+}
+
+bool MainWindow::loadWorkspaceProjectFrom(const QString& projectFilePath) {
+    QFile file(projectFilePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::critical(this, tr("Project Load Error"), tr("Cannot open project file: %1").arg(projectFilePath));
+        return false;
+    }
+
+    QJsonParseError parseErr;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseErr);
+    if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
+        QMessageBox::critical(this, tr("Project Load Error"), tr("Invalid project file: %1").arg(parseErr.errorString()));
+        return false;
+    }
+
+    QFileInfo fi(projectFilePath);
+    QString dataDirPath = fi.absoluteDir().filePath(fi.completeBaseName() + "_data");
+
+    m_restoringWorkspaceProject = true;
+    bool ok = restoreWorkspaceProjectState(doc.object(), dataDirPath, fi.absoluteDir().absolutePath());
+    m_restoringWorkspaceProject = false;
+    if (!ok) {
+        return false;
+    }
+
+    m_workspaceProject.active = true;
+    m_workspaceProject.dirty = false;
+    m_workspaceProject.untitled = false;
+    m_workspaceProject.filePath = projectFilePath;
+    m_workspaceProject.displayName = fi.completeBaseName();
+    log(tr("Workspace project loaded: %1").arg(projectFilePath), Log_Success, true);
+    return true;
+}
+
+void MainWindow::newWorkspaceProject() {
+    if (!maybeSaveWorkspaceProject(tr("before creating a new project"))) {
+        return;
+    }
+    if (!closeAllWorkspaceWindows()) {
+        return;
+    }
+
+    m_workspaceProject.active = true;
+    m_workspaceProject.dirty = false;
+    m_workspaceProject.untitled = true;
+    m_workspaceProject.filePath.clear();
+    m_workspaceProject.displayName = tr("Untitled Workspace Project");
+    log(tr("New workspace project created."), Log_Success, true);
+}
+
+void MainWindow::openWorkspaceProject() {
+    if (!maybeSaveWorkspaceProject(tr("before opening another project"))) {
+        return;
+    }
+
+    QString projectFile = QFileDialog::getOpenFileName(
+        this,
+        tr("Open Workspace Project"),
+        QDir::homePath(),
+        tr("TStar Workspace Project (*.tstarproj)"));
+    if (projectFile.isEmpty()) return;
+
+    loadWorkspaceProjectFrom(projectFile);
+}
+
+void MainWindow::saveWorkspaceProject() {
+    if (!m_workspaceProject.active) {
+        newWorkspaceProject();
+        if (!m_workspaceProject.active) return;
+    }
+
+    if (m_workspaceProject.filePath.isEmpty()) {
+        saveWorkspaceProjectAs();
+        return;
+    }
+    saveWorkspaceProjectTo(m_workspaceProject.filePath);
+}
+
+void MainWindow::saveWorkspaceProjectAs() {
+    QString path = QFileDialog::getSaveFileName(
+        this,
+        tr("Save Workspace Project As"),
+        QDir::homePath(),
+        tr("TStar Workspace Project (*.tstarproj)"));
+    if (path.isEmpty()) return;
+    saveWorkspaceProjectTo(path);
+}
+
+void MainWindow::closeWorkspaceProject() {
+    if (!maybeSaveWorkspaceProject(tr("before closing project"))) {
+        return;
+    }
+    if (!closeAllWorkspaceWindows()) {
+        return;
+    }
+
+    m_workspaceProject = WorkspaceProjectState{};
+    log(tr("Workspace project closed."), Log_Info, true);
 }
 
 // ========== Stacking Suite ==========
