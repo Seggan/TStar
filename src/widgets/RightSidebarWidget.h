@@ -8,6 +8,7 @@
 #include <QVariantAnimation>
 #include <QLabel>
 #include <QMap>
+#include <QCheckBox>
 
 class CustomMdiSubWindow;
 class QEnterEvent;
@@ -35,12 +36,13 @@ public:
     int totalVisibleWidth() const;
 
     // Called by MainWindow when a subwindow is shaded
-    void addThumbnail(CustomMdiSubWindow* sub, const QPixmap& thumb, const QString& title);
+    void addThumbnail(CustomMdiSubWindow* sub, const QPixmap& thumb, const QString& title, int creationSortIndex = -1);
     // Called by MainWindow when a subwindow is unshaded or closed
     void removeThumbnail(CustomMdiSubWindow* sub);
 
     void collapse() { setExpanded(false); }
     bool isExpanded() const { return m_expanded; }
+    bool isHideMinimizedViewsEnabled() const { return m_hideMinimizedViews; }
 
     /**
      * @brief Update the anchor position so the right edge stays fixed.
@@ -51,6 +53,7 @@ public:
 signals:
     void expandedToggled(bool expanded);
     void thumbnailActivated(CustomMdiSubWindow* sub);
+    void hideMinimizedViewsToggled(bool hidden);
 
 private slots:
     void onTabClicked();
@@ -63,13 +66,19 @@ private:
     QPushButton*  m_tabBtn;
 
     // Content area (slides in from right)
+    QWidget*      m_contentWrapper;
     QScrollArea*  m_contentContainer;
     QWidget*      m_listWidget;
     QVBoxLayout*  m_listLayout;
+    
+    // Top bar in content area
+    QWidget*      m_topContainer;
+    QCheckBox*    m_hideMinimizedViewsCb;
 
     // Animation
     QVariantAnimation* m_widthAnim;
     bool m_expanded  = false;
+    bool m_hideMinimizedViews = false;
     int  m_expandedWidth = 175; // Half of left sidebar default (350)
     int  m_anchorRight   = -1;  // Right-edge X anchor (set via setAnchorGeometry)
 

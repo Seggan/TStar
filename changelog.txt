@@ -1,6 +1,11 @@
 TStar Changelog
 ===============
 
+Version 1.7.9
+-------------
+- Added more tiled views options (tile vertically, tile horizontally)
+- Added a toggle in the previews section to completely hide minimized views
+
 Version 1.7.8
 -------------
 - Added right side panel to show previews of the collapsed views

@@ -7400,6 +7400,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Hide minimized views</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Previews</source>
             <translation type="unfinished" />
         </message>

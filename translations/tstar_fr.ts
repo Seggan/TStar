@@ -7403,6 +7403,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Vues compressées</translation>
         </message>
         <message>
+            <source>Hide minimized views</source>
+            <translation type="finished">Masquer les vues minimisées</translation>
+        </message>
+        <message>
             <source>Previews</source>
             <translation type="finished">Aperçus</translation>
         </message>

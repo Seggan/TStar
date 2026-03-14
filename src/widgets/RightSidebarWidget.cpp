@@ -9,6 +9,7 @@
 #include <QMouseEvent>
 #include <QEnterEvent>
 #include <QPainter>
+#include <QSettings>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ThumbnailItem: fixed-size preview tile with elided title label
@@ -17,8 +18,8 @@ class ThumbnailItem : public QWidget {
     Q_OBJECT
 public:
     ThumbnailItem(const QPixmap& thumb, const QString& title,
-                  CustomMdiSubWindow* sub, QWidget* parent = nullptr)
-        : QWidget(parent), m_sub(sub)
+                  CustomMdiSubWindow* sub, int creationIdx = -1, QWidget* parent = nullptr)
+        : QWidget(parent), m_sub(sub), m_creationIndex(creationIdx)
     {
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         setAttribute(Qt::WA_StyledBackground, true);
@@ -65,6 +66,7 @@ public:
     }
 
     CustomMdiSubWindow* sub() const { return m_sub; }
+    int creationIndex() const { return m_creationIndex; }
 
 signals:
     void clicked(CustomMdiSubWindow* sub);
@@ -85,6 +87,7 @@ protected:
 
 private:
     CustomMdiSubWindow* m_sub;
+    int                 m_creationIndex;
     QLabel*             m_thumbLabel;
     QLabel*             m_titleLabel;
 };
@@ -128,9 +131,43 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
 
     // 1. Content area (left of tab, slides horizontally)
-    m_contentContainer = new QScrollArea(this);
-    m_contentContainer->setFixedWidth(0);
-    m_contentContainer->setStyleSheet("background-color: rgba(0, 0, 0, 128); border: none;");
+    m_contentWrapper = new QWidget(this);
+    m_contentWrapper->setFixedWidth(0);
+    m_contentWrapper->setStyleSheet("background-color: rgba(0, 0, 0, 128);");
+    
+    QVBoxLayout* wrapperLayout = new QVBoxLayout(m_contentWrapper);
+    wrapperLayout->setContentsMargins(0, 0, 0, 0);
+    wrapperLayout->setSpacing(0);
+    
+    // Top Bar (Hide Minimized Views Checkbox)
+    m_topContainer = new QWidget(m_contentWrapper);
+    m_topContainer->setFixedHeight(26);
+    m_topContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_topContainer->setStyleSheet("background-color: #202020; border-bottom: 1px solid #1a1a1a; border-left: none; border-right: none; border-top: none;");
+    
+    QHBoxLayout* topLayout = new QHBoxLayout(m_topContainer);
+    topLayout->setContentsMargins(8, 0, 8, 0);
+    topLayout->setSpacing(0);
+    
+    m_hideMinimizedViewsCb = new QCheckBox(tr("Hide minimized views"), m_topContainer);
+    m_hideMinimizedViewsCb->setStyleSheet("QCheckBox { color: #aaa; font-size: 11px; } QCheckBox::indicator { width: 12px; height: 12px; }");
+    
+    QSettings settings;
+    m_hideMinimizedViews = settings.value("RightSidebar/hideMinimizedViews", false).toBool();
+    m_hideMinimizedViewsCb->setChecked(m_hideMinimizedViews);
+    
+    connect(m_hideMinimizedViewsCb, &QCheckBox::toggled, [this](bool checked){
+        m_hideMinimizedViews = checked;
+        QSettings settings;
+        settings.setValue("RightSidebar/hideMinimizedViews", checked);
+        emit hideMinimizedViewsToggled(checked);
+    });
+    
+    topLayout->addWidget(m_hideMinimizedViewsCb);
+    wrapperLayout->addWidget(m_topContainer);
+
+    m_contentContainer = new QScrollArea(m_contentWrapper);
+    m_contentContainer->setStyleSheet("background-color: transparent; border: none;");
     m_contentContainer->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_contentContainer->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
@@ -144,6 +181,8 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
     m_listWidget->setStyleSheet("background: transparent;");
     m_contentContainer->setWidget(m_listWidget);
     m_contentContainer->setWidgetResizable(true);
+    
+    wrapperLayout->addWidget(m_contentContainer);
 
     // 2. Tab strip (right edge)
     m_tabContainer = new QWidget(this);
@@ -165,7 +204,7 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
     tabLayout->addWidget(m_tabBtn);
     tabLayout->addStretch();
 
-    mainLayout->addWidget(m_contentContainer);
+    mainLayout->addWidget(m_contentWrapper);
     mainLayout->addWidget(m_tabContainer);
 
     // Animation
@@ -173,8 +212,8 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
     m_widthAnim->setDuration(250);
     m_widthAnim->setEasingCurve(QEasingCurve::OutQuad);
     connect(m_widthAnim, &QVariantAnimation::valueChanged, [this](const QVariant& val) {
-        m_contentContainer->setFixedWidth(val.toInt());
-        int newW = totalVisibleWidth();
+        m_contentWrapper->setFixedWidth(val.toInt());
+        int newW = totalVisibleWidth(); // Note: we need totalVisibleWidth to use contentWrapper width
         resize(newW, height());
         // Keep the right edge anchored
         if (m_anchorRight >= 0) {
@@ -184,7 +223,7 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
 }
 
 int RightSidebarWidget::totalVisibleWidth() const {
-    return m_tabContainer->width() + m_contentContainer->width();
+    return m_tabContainer->width() + m_contentWrapper->width();
 }
 
 void RightSidebarWidget::setAnchorGeometry(int rightX, int topY, int h) {
@@ -205,19 +244,29 @@ void RightSidebarWidget::setExpanded(bool expanded) {
     emit expandedToggled(expanded);
 
     m_widthAnim->stop();
-    m_widthAnim->setStartValue(m_contentContainer->width());
+    m_widthAnim->setStartValue(m_contentWrapper->width());
     m_widthAnim->setEndValue(expanded ? m_expandedWidth : 0);
     m_widthAnim->start();
 }
 
-void RightSidebarWidget::addThumbnail(CustomMdiSubWindow* sub, const QPixmap& thumb, const QString& title) {
+void RightSidebarWidget::addThumbnail(CustomMdiSubWindow* sub, const QPixmap& thumb, const QString& title, int creationSortIndex) {
     if (!sub || m_items.contains(sub)) return;
 
-    auto* item = new ThumbnailItem(thumb, title, sub, m_listWidget);
+    auto* item = new ThumbnailItem(thumb, title, sub, creationSortIndex, m_listWidget);
     connect(item, &ThumbnailItem::clicked, this, &RightSidebarWidget::thumbnailActivated);
 
-    // Insert before the trailing stretch (last item)
-    m_listLayout->insertWidget(m_listLayout->count() - 1, item);
+    // Insert according to creationSortIndex
+    int insertIdx = 0;
+    int count = m_listLayout->count() - 1; // don't count the trailing stretch
+    for (; insertIdx < count; ++insertIdx) {
+        if (auto* existingItem = qobject_cast<ThumbnailItem*>(m_listLayout->itemAt(insertIdx)->widget())) {
+            if (creationSortIndex != -1 && existingItem->creationIndex() > creationSortIndex) {
+                break;
+            }
+        }
+    }
+    
+    m_listLayout->insertWidget(insertIdx, item);
     m_items[sub] = item;
 
     // Auto-open if first thumbnail added

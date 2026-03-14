@@ -7403,6 +7403,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Vistas comprimidas</translation>
         </message>
         <message>
+            <source>Hide minimized views</source>
+            <translation type="finished">Ocultar vistas minimizadas</translation>
+        </message>
+        <message>
             <source>Previews</source>
             <translation type="finished">Vistas Previas</translation>
         </message>

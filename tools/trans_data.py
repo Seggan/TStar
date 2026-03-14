@@ -3201,4 +3201,5 @@ TRANSLATIONS = {
     "Amount (Mod B):": {'it': 'Quantità (Mod B):', 'es': 'Cantidad (Mod B):', 'fr': 'Quantité (Mod B) :', 'de': 'Menge (Mod B):'},
     "Luma Threshold:": {'it': 'Soglia Luma:', 'es': 'Umbral de Luma:', 'fr': 'Seuil de Luma :', 'de': 'Luminanz-Schwellenwert:'},
     "Restrict to Stars (Star Mask)": {'it': 'Limita alle Stelle (Maschera Stelle)', 'es': 'Restringir a Estrellas (Máscara de Estrellas)', 'fr': 'Restreindre aux étoiles (Masque d\'étoiles)', 'de': 'Auf Sterne beschränken (Sternmaske)'},
+    "Hide minimized views": {'it': 'Nascondi viste minimizzate', 'es': 'Ocultar vistas minimizadas', 'fr': 'Masquer les vues minimisées', 'de': 'Minimierte Ansichten ausblenden'},
 }

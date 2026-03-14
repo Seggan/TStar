@@ -7403,6 +7403,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Komprimierte Ansichten</translation>
         </message>
         <message>
+            <source>Hide minimized views</source>
+            <translation type="finished">Minimierte Ansichten ausblenden</translation>
+        </message>
+        <message>
             <source>Previews</source>
             <translation type="finished">Vorschaubilder</translation>
         </message>

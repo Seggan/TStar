@@ -342,9 +342,25 @@ MainWindow::MainWindow(QWidget *parent)
     // Connect right sidebar: activate window when thumbnail is clicked
     connect(m_rightSidebar, &RightSidebarWidget::thumbnailActivated, this, [this](CustomMdiSubWindow* sub) {
         if (sub && m_mdiArea) {
+            if (sub->isHidden()) sub->show();
             if (sub->isShaded()) sub->toggleShade();
             m_mdiArea->setActiveSubWindow(sub);
             sub->raise();
+        }
+    });
+
+    connect(m_rightSidebar, &RightSidebarWidget::hideMinimizedViewsToggled, this, [this](bool hidden) {
+        if (!m_mdiArea) return;
+        for (auto* window : m_mdiArea->subWindowList()) {
+            if (auto* sub = qobject_cast<CustomMdiSubWindow*>(window)) {
+                if (sub->isShaded()) {
+                    if (hidden) {
+                        sub->hide();
+                    } else {
+                        sub->show();
+                    }
+                }
+            }
         }
     });
     
@@ -1305,7 +1321,7 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::tileImageViews() {
     // Collect only image views (not tool windows)
     QList<CustomMdiSubWindow*> imageWindows;
-    for (auto* sub : m_mdiArea->subWindowList()) {
+    for (auto* sub : m_mdiArea->subWindowList(QMdiArea::CreationOrder)) {
         auto* csw = qobject_cast<CustomMdiSubWindow*>(sub);
         if (csw && !csw->isToolWindow() && csw->viewer()) {
             imageWindows.append(csw);
@@ -1355,7 +1371,7 @@ void MainWindow::tileImageViews() {
 
 void MainWindow::tileImageViewsVertical() {
     QList<CustomMdiSubWindow*> imageWindows;
-    for (auto* sub : m_mdiArea->subWindowList()) {
+    for (auto* sub : m_mdiArea->subWindowList(QMdiArea::CreationOrder)) {
         auto* csw = qobject_cast<CustomMdiSubWindow*>(sub);
         if (csw && !csw->isToolWindow() && csw->viewer()) imageWindows.append(csw);
     }
@@ -1381,7 +1397,7 @@ void MainWindow::tileImageViewsVertical() {
 
 void MainWindow::tileImageViewsHorizontal() {
     QList<CustomMdiSubWindow*> imageWindows;
-    for (auto* sub : m_mdiArea->subWindowList()) {
+    for (auto* sub : m_mdiArea->subWindowList(QMdiArea::CreationOrder)) {
         auto* csw = qobject_cast<CustomMdiSubWindow*>(sub);
         if (csw && !csw->isToolWindow() && csw->viewer()) imageWindows.append(csw);
     }
@@ -1591,7 +1607,11 @@ CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, 
     if (m_rightSidebar) {
         connect(sub, &CustomMdiSubWindow::shadingChanged, this, [this, sub](bool shaded, const QPixmap& thumb) {
             if (shaded) {
-                m_rightSidebar->addThumbnail(sub, thumb, sub->windowTitle());
+                int creationIdx = m_mdiArea->subWindowList(QMdiArea::CreationOrder).indexOf(sub);
+                m_rightSidebar->addThumbnail(sub, thumb, sub->windowTitle(), creationIdx);
+                if (m_rightSidebar->isHideMinimizedViewsEnabled()) {
+                    sub->hide();
+                }
             } else {
                 m_rightSidebar->removeThumbnail(sub);
             }

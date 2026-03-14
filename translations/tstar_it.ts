@@ -7403,6 +7403,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Anteprime compresse</translation>
         </message>
         <message>
+            <source>Hide minimized views</source>
+            <translation type="finished">Nascondi viste minimizzate</translation>
+        </message>
+        <message>
             <source>Previews</source>
             <translation type="finished">Anteprime</translation>
         </message>
