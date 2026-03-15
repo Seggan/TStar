@@ -7763,6 +7763,14 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Azul</translation>
         </message>
         <message>
+            <source>Blue Hue</source>
+            <translation type="finished">Tono Azul</translation>
+        </message>
+        <message>
+            <source>Blue Sat</source>
+            <translation type="finished">Saturación Azul</translation>
+        </message>
+        <message>
             <source>Blue-Yellow</source>
             <translation type="finished">Azul-Amarillo</translation>
         </message>
@@ -7785,6 +7793,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Color</source>
             <translation type="finished">Color</translation>
+        </message>
+        <message>
+            <source>Color Calibration</source>
+            <translation type="finished">Calibración de Color</translation>
         </message>
         <message>
             <source>Color Grading</source>
@@ -7825,6 +7837,14 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Green</source>
             <translation type="finished">Verde</translation>
+        </message>
+        <message>
+            <source>Green Hue</source>
+            <translation type="finished">Tono Verde</translation>
+        </message>
+        <message>
+            <source>Green Sat</source>
+            <translation type="finished">Saturación Verde</translation>
         </message>
         <message>
             <source>HSL</source>
@@ -7871,6 +7891,14 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Rojo</translation>
         </message>
         <message>
+            <source>Red Hue</source>
+            <translation type="finished">Tono Rojo</translation>
+        </message>
+        <message>
+            <source>Red Sat</source>
+            <translation type="finished">Saturación Roja</translation>
+        </message>
+        <message>
             <source>Red-Cyan</source>
             <translation type="finished">Rojo-Cian</translation>
         </message>
@@ -7897,6 +7925,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Shadows</source>
             <translation type="finished">Sombras</translation>
+        </message>
+        <message>
+            <source>Shadows Tint</source>
+            <translation type="finished">Matiz de Sombras</translation>
         </message>
         <message>
             <source>Sharpness</source>

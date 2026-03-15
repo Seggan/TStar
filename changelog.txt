@@ -1,6 +1,11 @@
 TStar Changelog
 ===============
 
+Version 1.8.0
+-------------
+- New feature: RawEditor (Lightroom style light and color editor)
+- Minor bugfixes
+
 Version 1.7.10
 -------------
 - New: implemented full workspace project management system

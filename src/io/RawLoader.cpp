@@ -189,7 +189,6 @@ bool load(const QString& filePath, ImageBuffer& buf, QString* errorMsg)
         return false;
     }
 
-    // Make sure we have raw sensor data (some DNGs built from Lightroom may lack it)
     if (!lr->rawdata.raw_image && !lr->rawdata.color3_image && !lr->rawdata.color4_image) {
         if (errorMsg)
             *errorMsg = "No RAW sensor data available in this file.";

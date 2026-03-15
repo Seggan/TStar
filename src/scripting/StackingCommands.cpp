@@ -1754,7 +1754,6 @@ bool StackingCommands::cmdConvert(const ScriptCommand& cmd) {
                                 // Check for raw data availability
                                 if (lr->rawdata.raw_image == nullptr &&
                                     (lr->rawdata.color3_image || lr->rawdata.color4_image)) {
-                                    // DNG-from-Lightroom or other non-standard format
                                     std::lock_guard<std::mutex> lock(logMutex);
                                     if (s_runner) s_runner->logMessage(QString("Cannot open %1 in CFA mode: no RAW data available").arg(file), "red");
                                     libraw_close(lr);

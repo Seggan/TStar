@@ -99,6 +99,9 @@ bool Params::isIdentity() const {
     if (temperature != 0.0f || tint != 0.0f || saturation != 0.0f || vibrance != 0.0f) return false;
     if (sharpness != 0.0f || clarity != 0.0f || structure != 0.0f || dehaze != 0.0f) return false;
     if (caRedCyan != 0.0f || caBlueYellow != 0.0f) return false;
+    if (redHue != 0.0f || greenHue != 0.0f || blueHue != 0.0f) return false;
+    if (redSat != 0.0f || greenSat != 0.0f || blueSat != 0.0f) return false;
+    if (shadowsTint != 0.0f) return false;
     if (vignetteAmount != 0.0f || grainAmount != 0.0f) return false;
     for (auto& h : hsl) {
         if (h.hue != 0.0f || h.saturation != 0.0f || h.luminance != 0.0f) return false;
@@ -232,31 +235,18 @@ void Processor::applyFilmicExposure(float& r, float& g, float& b, float brightne
 }
 
 // ─── Shadow multiplier helper ────────────────────────────────────────────────
-static float getShadowMult(float luma, float sh, float bl) {
-    float mult = 1.0f;
+static float getShadowMult(float luma, float sh) {
+    if (sh == 0.0f) return 1.0f;
     float safeLuma = std::max(luma, 0.0001f);
 
-    if (bl != 0.0f) {
-        // Broader black-region support than strict RAW-domain thresholds,
-        // so the control remains effective on normalized images too.
-        constexpr float limit = 0.22f;
-        if (safeLuma < limit) {
-            float x = safeLuma / limit;
-            float mask = std::pow(1.0f - x, 1.6f);
-            float factor = std::clamp(std::pow(2.0f, bl * 0.95f), 0.2f, 4.5f);
-            mult *= (1.0f - mask) + mask * factor; // mix(1, factor, mask)
-        }
+    constexpr float limit = 0.38f; 
+    if (safeLuma < limit) {
+        float x = safeLuma / limit;
+        float mask = std::pow(1.0f - x, 1.35f);
+        float factor = std::clamp(std::pow(2.0f, sh * 1.25f), 0.2f, 4.5f);
+        return (1.0f - mask) + mask * factor;
     }
-    if (sh != 0.0f) {
-        constexpr float limit = 0.38f;
-        if (safeLuma < limit) {
-            float x = safeLuma / limit;
-            float mask = std::pow(1.0f - x, 1.35f);
-            float factor = std::clamp(std::pow(2.0f, sh * 1.25f), 0.2f, 4.5f);
-            mult *= (1.0f - mask) + mask * factor;
-        }
-    }
-    return mult;
+    return 1.0f;
 }
 
 // ─── Tonal Adjustments ───────────────────────────────────────────────────────
@@ -272,20 +262,41 @@ void Processor::applyTonalAdjustments(float& r, float& g, float& b,
         blurredLuma *= wMult;
     }
 
+    // Moving the bottom-left corner of the curve: new_val = (val - offset) / (1 - offset)
+    if (blacks != 0.0f) {
+        // Map parameter (typical range -1.4 to 1.4) to a black point shift up to ~0.25 (linear)
+        float blackPointShift = -blacks * 0.12f; 
+        
+        auto applyBlackPoint = [blackPointShift](float val) {
+            if (blackPointShift > 0.0f) {
+                // Compression: make blacks blacker
+                return std::max(0.0f, (val - blackPointShift) / (1.0f - blackPointShift));
+            } else {
+                // Extension (lifting): offset the floor
+                return val * (1.0f + blackPointShift) - blackPointShift;
+            }
+        };
+
+        r = applyBlackPoint(r);
+        g = applyBlackPoint(g);
+        b = applyBlackPoint(b);
+        blurredLuma = applyBlackPoint(blurredLuma);
+    }
+
     float pixelLuma = getLuma(std::max(r, 0.0f), std::max(g, 0.0f), std::max(b, 0.0f));
     float safePixelLuma = std::max(pixelLuma, 0.0001f);
     float safeBlurredLuma = std::max(blurredLuma, 0.0001f);
 
-    // Halo protection
+    // Halo protection (Shadows only now)
     float percPixel = std::sqrt(safePixelLuma);
     float percBlurred = std::sqrt(safeBlurredLuma);
     float edgeDiff = std::fabs(percPixel - percBlurred);
     float haloProt = smoothstep(0.05f, 0.25f, edgeDiff);
 
-    // Shadows + Blacks
-    if (shadows != 0.0f || blacks != 0.0f) {
-        float spatialMult = getShadowMult(safeBlurredLuma, shadows, blacks);
-        float pixelMult   = getShadowMult(safePixelLuma, shadows, blacks);
+    // Shadows
+    if (shadows != 0.0f) {
+        float spatialMult = getShadowMult(safeBlurredLuma, shadows);
+        float pixelMult   = getShadowMult(safePixelLuma, shadows);
         float finalMult = spatialMult + haloProt * (pixelMult - spatialMult);
         r *= finalMult; g *= finalMult; b *= finalMult;
     }
@@ -374,6 +385,70 @@ void Processor::applyWhiteBalance(float& r, float& g, float& b, float temp, floa
     b *= tB * tnB;
 }
 
+// ─── Color Calibration (Per-channel hue + saturation) ───────────────────────────
+void Processor::applyColorCalibration(float& r, float& g, float& b,
+                                      float redHue, float greenHue, float blueHue,
+                                      float redSat, float greenSat, float blueSat,
+                                      float shadowsTint) {
+    if (redHue == 0.0f && greenHue == 0.0f && blueHue == 0.0f &&
+        redSat == 0.0f && greenSat == 0.0f && blueSat == 0.0f &&
+        shadowsTint == 0.0f) return;
+
+    float origR = r, origG = g, origB = b;
+
+    // Channel-specific hue shifts using color mixing:
+    // Each hue parameter (-1..+1) shifts that channel's color towards adjacent hues
+    // Positive: shift towards next hue (Red→Yellow, Green→Cyan, Blue→Magenta)
+    // Negative: shift towards previous hue
+    if (redHue != 0.0f) {
+        float amount = std::clamp(std::abs(redHue), 0.0f, 1.0f);
+        float sign = (redHue < 0.0f) ? -1.0f : 1.0f;
+        // Increase red, adjust green/blue for hue shift
+        r = origR * (1.0f - amount * 0.3f) + origG * amount * 0.3f * sign;
+        g = origG * (1.0f + amount * 0.15f * sign);
+        b = origB * (1.0f - amount * 0.15f * sign);
+        origR = r; origG = g; origB = b;
+    }
+    if (greenHue != 0.0f) {
+        float amount = std::clamp(std::abs(greenHue), 0.0f, 1.0f);
+        float sign = (greenHue < 0.0f) ? -1.0f : 1.0f;
+        r = origR * (1.0f - amount * 0.15f * sign);
+        g = origG * (1.0f - amount * 0.3f) + origB * amount * 0.3f * sign;
+        b = origB * (1.0f + amount * 0.15f * sign);
+        origR = r; origG = g; origB = b;
+    }
+    if (blueHue != 0.0f) {
+        float amount = std::clamp(std::abs(blueHue), 0.0f, 1.0f);
+        float sign = (blueHue < 0.0f) ? -1.0f : 1.0f;
+        r = origR * (1.0f + amount * 0.15f * sign);
+        g = origG * (1.0f - amount * 0.15f * sign);
+        b = origB * (1.0f - amount * 0.3f) + origR * amount * 0.3f * sign;
+    }
+
+    // Apply per-channel saturation (multiplicative in deviation from luma)
+    float luma = getLuma(r, g, b);
+    if (redSat != 0.0f) {
+        r = luma + (r - luma) * (1.0f + redSat);
+    }
+    if (greenSat != 0.0f) {
+        g = luma + (g - luma) * (1.0f + greenSat);
+    }
+    if (blueSat != 0.0f) {
+        b = luma + (b - luma) * (1.0f + blueSat);
+    }
+
+    // Apply shadow tint (color cast in dark areas)
+    if (shadowsTint != 0.0f) {
+        float pixLuma = getLuma(r, g, b);
+        float shadowMask = smoothstep(0.3f, 0.0f, pixLuma);  // Only shadows
+        // Warm/cool tint: positive = warm (R+, B-), negative = cool
+        float tintR = shadowsTint * 0.15f;
+        float tintB = -shadowsTint * 0.15f;
+        r += tintR * shadowMask;
+        b += tintB * shadowMask;
+    }
+}
+
 // ─── Creative Color (Saturation + Vibrance) ──────────────────────────────────
 void Processor::applyCreativeColor(float& r, float& g, float& b, float sat, float vib) {
     float luma = getLuma(r, g, b);
@@ -401,7 +476,7 @@ void Processor::applyCreativeColor(float& r, float& g, float& b, float sat, floa
         float skinCenter = 25.0f;
         float hueDist = std::min(std::fabs(h2 - skinCenter), 360.0f - std::fabs(h2 - skinCenter));
         float isSkin = smoothstep(35.0f, 10.0f, hueDist);
-        float skinDampener = 1.0f - isSkin * 0.4f; // mix(1.0, 0.6, isSkin)
+        float skinDampener = 1.0f - isSkin * 0.6f;
         float amount = vib * satMask * skinDampener * 3.0f;
         r = luma + (r - luma) * (1.0f + amount);
         g = luma + (g - luma) * (1.0f + amount);
@@ -551,11 +626,11 @@ void Processor::applyDehaze(float& r, float& g, float& b, float amount) {
 // ─── Local Contrast ──────────────────────────────────────────────────────────
 void Processor::applyLocalContrast(float& r, float& g, float& b,
                                    float blurredR, float blurredG, float blurredB,
-                                   float amount, int mode) {
+                                   float amount, int mode, bool isRaw) {
     if (amount == 0.0f) return;
 
     float centerLuma = getLuma(r, g, b);
-    float shadowThreshold = 0.03f;
+    float shadowThreshold = isRaw ? 0.1f : 0.03f;
     float shadowProt = smoothstep(0.0f, shadowThreshold, centerLuma);
     float hlProt = 1.0f - smoothstep(0.9f, 1.0f, centerLuma);
     float midMask = shadowProt * hlProt;
@@ -853,35 +928,19 @@ void Processor::apply(ImageBuffer& buffer, const Params& params) {
                 r = g = b = data[idx];
             }
 
-            // Local contrast (sharpness)
-            if (params.sharpness != 0.0f && !sharpnessBlurred.empty()) {
-                float bl = sharpnessBlurred[y * w + x];
-                applyLocalContrast(r, g, b, bl, bl, bl, params.sharpness, 0);
-            }
-            // Local contrast (clarity)
-            if (params.clarity != 0.0f && !clarityBlurred.empty()) {
-                float bl = clarityBlurred[y * w + x];
-                applyLocalContrast(r, g, b, bl, bl, bl, params.clarity, 1);
-            }
-            // Local contrast (structure)
-            if (params.structure != 0.0f && !structureBlurred.empty()) {
-                float bl = structureBlurred[y * w + x];
-                applyLocalContrast(r, g, b, bl, bl, bl, params.structure, 1);
-            }
-
-            // Exposure
+            // Exposure (linear)
             applyLinearExposure(r, g, b, params.exposure);
-
-            // Dehaze
-            applyDehaze(r, g, b, params.dehaze);
 
             // White Balance
             applyWhiteBalance(r, g, b, params.temperature, params.tint);
 
-            // Brightness
+            // Brightness (filmic)
             applyFilmicExposure(r, g, b, params.brightness);
 
-            // Tonal adjustments (contrast, shadows, whites, blacks)
+            // Dehaze
+            applyDehaze(r, g, b, params.dehaze);
+
+            // Tonal adjustments (contrast, shadows, whites, blacks) - BEFORE color adjustments
             if (params.contrast != 0.0f || params.shadows != 0.0f ||
                 params.whites != 0.0f || params.blacks != 0.0f) {
                 float blurred = tonalBlurred.empty() ? getLuma(r, g, b) : tonalBlurred[y * w + x];
@@ -894,6 +953,10 @@ void Processor::apply(ImageBuffer& buffer, const Params& params) {
                 float blurred = tonalBlurred.empty() ? getLuma(r, g, b) : tonalBlurred[y * w + x];
                 applyHighlightsAdjustment(r, g, b, blurred, params.highlights);
             }
+
+            // Color Calibration (per-channel hue and saturation) - AFTER tonal adjustments
+            applyColorCalibration(r, g, b, params.redHue, params.greenHue, params.blueHue,
+                                  params.redSat, params.greenSat, params.blueSat, params.shadowsTint);
 
             // HSL Panel
             if (needsHSL) {
@@ -912,6 +975,20 @@ void Processor::apply(ImageBuffer& buffer, const Params& params) {
 
             // Saturation + Vibrance
             applyCreativeColor(r, g, b, params.saturation, params.vibrance);
+
+            // Local contrast (sharpness, clarity, structure) - AFTER all color/tone adjustments
+            if (params.sharpness != 0.0f && !sharpnessBlurred.empty()) {
+                float bl = sharpnessBlurred[y * w + x];
+                applyLocalContrast(r, g, b, bl, bl, bl, params.sharpness * 2.5f, 0, true); // scale 100/40 = 2.5
+            }
+            if (params.clarity != 0.0f && !clarityBlurred.empty()) {
+                float bl = clarityBlurred[y * w + x];
+                applyLocalContrast(r, g, b, bl, bl, bl, params.clarity * 0.5f, 1, true);   // scale 100/200 = 0.5
+            }
+            if (params.structure != 0.0f && !structureBlurred.empty()) {
+                float bl = structureBlurred[y * w + x];
+                applyLocalContrast(r, g, b, bl, bl, bl, params.structure * 0.5f, 1, true); // scale 100/200 = 0.5
+            }
 
             // Convert to sRGB for curves/vignette/grain
             auto linearToSrgb = [](float c) -> float {

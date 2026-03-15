@@ -3456,4 +3456,13 @@ TRANSLATIONS = {
     "Roughness": {'it': "Ruvidità", 'es': "Rugosidad", 'fr': "Rugosité", 'de': "Rauheit"},
     "Basic": {'it': "Base", 'es': "Básico", 'fr': "Basique", 'de': "Grundlegend"},
     "Feather": {'it': "Sfumatura", 'es': "Difuminado", 'fr': "Estompage", 'de': "Weichheit"},
+    "Blue Hue": {'it': "Tonalità Blu", 'es': "Tono Azul", 'fr': "Teinte Bleue", 'de': "Blauton"},
+    "Blue Sat": {'it': "Saturazione Blu", 'es': "Saturación Azul", 'fr': "Saturation Bleue", 'de': "Blausättigung"},
+    "Color Calibration": {'it': "Calibrazione del Colore", 'es': "Calibración de Color", 'fr': "Calibration des Couleurs", 'de': "Farbkalibrierung"},
+    "Green Hue": {'it': "Tonalità Verde", 'es': "Tono Verde", 'fr': "Teinte Verte", 'de': "Grünton"},
+    "Green Sat": {'it': "Saturazione Verde", 'es': "Saturación Verde", 'fr': "Saturation Verte", 'de': "Grünsättigung"},
+    "Red Hue": {'it': "Tonalità Rossa", 'es': "Tono Rojo", 'fr': "Teinte Rouge", 'de': "Rotton"},
+    "Red Sat": {'it': "Saturazione Rossa", 'es': "Saturación Roja", 'fr': "Saturation Rouge", 'de': "Rotsättigung"},
+    "Shadows Tint": {'it': "Tinta Ombre", 'es': "Matiz de Sombras", 'fr': "Teinte des Ombres", 'de': "Tönung der Schatten"},
+
 }

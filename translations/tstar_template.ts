@@ -7760,6 +7760,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Blue Hue</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blue Sat</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Blue-Yellow</source>
             <translation type="unfinished" />
         </message>
@@ -7781,6 +7789,10 @@
         </message>
         <message>
             <source>Color</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color Calibration</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7821,6 +7833,14 @@
         </message>
         <message>
             <source>Green</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Green Hue</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Green Sat</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7868,6 +7888,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Red Hue</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Red Sat</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Red-Cyan</source>
             <translation type="unfinished" />
         </message>
@@ -7893,6 +7921,10 @@
         </message>
         <message>
             <source>Shadows</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Shadows Tint</source>
             <translation type="unfinished" />
         </message>
         <message>

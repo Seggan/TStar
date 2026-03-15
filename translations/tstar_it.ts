@@ -7763,6 +7763,14 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Blu</translation>
         </message>
         <message>
+            <source>Blue Hue</source>
+            <translation type="finished">Tonalità Blu</translation>
+        </message>
+        <message>
+            <source>Blue Sat</source>
+            <translation type="finished">Saturazione Blu</translation>
+        </message>
+        <message>
             <source>Blue-Yellow</source>
             <translation type="finished">Blu-Giallo</translation>
         </message>
@@ -7785,6 +7793,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Color</source>
             <translation type="finished">Colore</translation>
+        </message>
+        <message>
+            <source>Color Calibration</source>
+            <translation type="finished">Calibrazione del Colore</translation>
         </message>
         <message>
             <source>Color Grading</source>
@@ -7825,6 +7837,14 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Green</source>
             <translation type="finished">Verde</translation>
+        </message>
+        <message>
+            <source>Green Hue</source>
+            <translation type="finished">Tonalità Verde</translation>
+        </message>
+        <message>
+            <source>Green Sat</source>
+            <translation type="finished">Saturazione Verde</translation>
         </message>
         <message>
             <source>HSL</source>
@@ -7871,6 +7891,14 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Rosso</translation>
         </message>
         <message>
+            <source>Red Hue</source>
+            <translation type="finished">Tonalità Rossa</translation>
+        </message>
+        <message>
+            <source>Red Sat</source>
+            <translation type="finished">Saturazione Rossa</translation>
+        </message>
+        <message>
             <source>Red-Cyan</source>
             <translation type="finished">Rosso-Ciano</translation>
         </message>
@@ -7897,6 +7925,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Shadows</source>
             <translation type="finished">Ombre</translation>
+        </message>
+        <message>
+            <source>Shadows Tint</source>
+            <translation type="finished">Tinta Ombre</translation>
         </message>
         <message>
             <source>Sharpness</source>

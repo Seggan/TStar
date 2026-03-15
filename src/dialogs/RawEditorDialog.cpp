@@ -538,8 +538,6 @@ QWidget* RawEditorDialog::buildHSLSection() {
             connectControl(m_controls.last());
         };
 
-        // RapidRAW-compatible hue scale: UI range [-100,100] maps to [-30,+30].
-        // In processing this is multiplied by 2, giving up to about +/-60 degrees.
         addCtrl(tr("Hue"),        &m_params.hsl[i].hue,        -30.0f, 30.0f, 0.0f);
         addCtrl(tr("Saturation"), &m_params.hsl[i].saturation, -1.0f, 1.0f, 0.0f);
         addCtrl(tr("Luminance"),  &m_params.hsl[i].luminance,  -1.0f, 1.0f, 0.0f);
@@ -627,6 +625,17 @@ QWidget* RawEditorDialog::buildControlPanel() {
         { tr("Tint"),        &m_params.tint,        -1.0f, 1.0f, 0.0f, 200 },
         { tr("Saturation"),  &m_params.saturation,  -1.0f, 1.0f, 0.0f, 200 },
         { tr("Vibrance"),    &m_params.vibrance,    -1.0f, 1.0f, 0.0f, 200 },
+    }));
+
+    // Color Calibration (per-channel hue and saturation)
+    layout->addWidget(buildSection(tr("Color Calibration"), {
+        { tr("Red Hue"),     &m_params.redHue,   -1.0f, 1.0f, 0.0f, 200 },
+        { tr("Green Hue"),   &m_params.greenHue, -1.0f, 1.0f, 0.0f, 200 },
+        { tr("Blue Hue"),    &m_params.blueHue,  -1.0f, 1.0f, 0.0f, 200 },
+        { tr("Red Sat"),     &m_params.redSat,   -1.0f, 1.0f, 0.0f, 200 },
+        { tr("Green Sat"),   &m_params.greenSat, -1.0f, 1.0f, 0.0f, 200 },
+        { tr("Blue Sat"),    &m_params.blueSat,  -1.0f, 1.0f, 0.0f, 200 },
+        { tr("Shadows Tint"), &m_params.shadowsTint, -1.0f, 1.0f, 0.0f, 200 },
     }));
 
     // Detail section

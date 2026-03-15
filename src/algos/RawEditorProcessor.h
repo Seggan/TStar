@@ -66,6 +66,15 @@ struct Params {
     float saturation  = 0.0f;  // -1 to +1
     float vibrance    = 0.0f;  // -1 to +1
 
+    // Color Calibration (per-channel hue and saturation adjustments)
+    float redHue      = 0.0f;  // -1 to +1 
+    float greenHue    = 0.0f;  // -1 to +1
+    float blueHue     = 0.0f;  // -1 to +1
+    float redSat      = 0.0f;  // -1 to +1 
+    float greenSat    = 0.0f;  // -1 to +1
+    float blueSat     = 0.0f;  // -1 to +1
+    float shadowsTint = 0.0f;  // -1 to +1 (shadow color tint)
+
     // HSL (8 color ranges)
     std::array<HslAdjustment, 8> hsl = {};
 
@@ -149,6 +158,12 @@ private:
     static void applyWhiteBalance(float& r, float& g, float& b,
                                   float temp, float tint);
 
+    // Color Calibration: per-channel hue and saturation adjustments
+    static void applyColorCalibration(float& r, float& g, float& b,
+                                      float redHue, float greenHue, float blueHue,
+                                      float redSat, float greenSat, float blueSat,
+                                      float shadowsTint);
+
     // Saturation + Vibrance (with skin protection)
     static void applyCreativeColor(float& r, float& g, float& b,
                                    float sat, float vib);
@@ -171,7 +186,7 @@ private:
     // Operates on pixel + blurred version
     static void applyLocalContrast(float& r, float& g, float& b,
                                    float blurredR, float blurredG, float blurredB,
-                                   float amount, int mode);
+                                   float amount, int mode, bool isRaw);
 
     // Curves (cubic Hermite spline)
     static float applyCurve(float val, const std::vector<CurvePoint>& points);

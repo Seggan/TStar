@@ -7763,6 +7763,14 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Blau</translation>
         </message>
         <message>
+            <source>Blue Hue</source>
+            <translation type="finished">Blauton</translation>
+        </message>
+        <message>
+            <source>Blue Sat</source>
+            <translation type="finished">Blausättigung</translation>
+        </message>
+        <message>
             <source>Blue-Yellow</source>
             <translation type="finished">Blau-Gelb</translation>
         </message>
@@ -7785,6 +7793,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>Color</source>
             <translation type="finished">Farbe</translation>
+        </message>
+        <message>
+            <source>Color Calibration</source>
+            <translation type="finished">Farbkalibrierung</translation>
         </message>
         <message>
             <source>Color Grading</source>
@@ -7825,6 +7837,14 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>Green</source>
             <translation type="finished">Grün</translation>
+        </message>
+        <message>
+            <source>Green Hue</source>
+            <translation type="finished">Grünton</translation>
+        </message>
+        <message>
+            <source>Green Sat</source>
+            <translation type="finished">Grünsättigung</translation>
         </message>
         <message>
             <source>HSL</source>
@@ -7871,6 +7891,14 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Rot</translation>
         </message>
         <message>
+            <source>Red Hue</source>
+            <translation type="finished">Rotton</translation>
+        </message>
+        <message>
+            <source>Red Sat</source>
+            <translation type="finished">Rotsättigung</translation>
+        </message>
+        <message>
             <source>Red-Cyan</source>
             <translation type="finished">Rot-Cyan</translation>
         </message>
@@ -7897,6 +7925,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>Shadows</source>
             <translation type="finished">Tiefen</translation>
+        </message>
+        <message>
+            <source>Shadows Tint</source>
+            <translation type="finished">Tönung der Schatten</translation>
         </message>
         <message>
             <source>Sharpness</source>
