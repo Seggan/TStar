@@ -397,13 +397,24 @@ fi
 echo ""
 log_step 7 "Copying scripts..."
 
+# 7.1 Python Bridge Scripts (src/scripts)
 if [ -d "src/scripts" ]; then
     ensure_dir "$RESOURCES_DIR/scripts"
     cp -R src/scripts/* "$RESOURCES_DIR/scripts/"
-    echo "  - Scripts: OK"
+    echo "  - Python bridge scripts: OK"
 else
-    log_warning "Scripts folder not found."
+    log_warning "Python bridge scripts folder (src/scripts) not found."
 fi
+
+# 7.2 TStar Scripts (scripts)
+if [ -d "scripts" ]; then
+    ensure_dir "$RESOURCES_DIR/scripts"
+    cp -R scripts/* "$RESOURCES_DIR/scripts/"
+    echo "  - TStar scripts (.tss): OK"
+else
+    log_warning "TStar scripts folder (scripts) not found."
+fi
+
 
 # --- Copy images ---
 echo ""

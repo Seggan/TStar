@@ -106,11 +106,17 @@ QString ScriptBrowserDialog::scriptsDir() const {
     parentDir.cdUp();
     scriptsPath = parentDir.absolutePath() + "/scripts";
     if (QDir(scriptsPath).exists()) {
-        return scriptsPath;
+        return QDir(scriptsPath).absolutePath();
+    }
+    
+    scriptsPath = parentDir.absolutePath() + "/src/scripts";
+    if (QDir(scriptsPath).exists()) {
+        return QDir(scriptsPath).absolutePath();
     }
     
     return QString();
 }
+
 
 void ScriptBrowserDialog::loadScripts() {
     m_scriptList->clear();

@@ -179,24 +179,57 @@ void ScriptDialog::setupUI() {
 void ScriptDialog::populatePredefinedScripts() {
     m_predefinedCombo->addItem(tr("(Select predefined script)"), QString());
     
-    // Look for scripts in app directory and user scripts
-    QStringList scriptDirs = {
-        QCoreApplication::applicationDirPath() + "/scripts",
-        QDir::homePath() + "/TStar/scripts",
-        "scripts"  // Relative to app
-    };
+    QString appDir = QCoreApplication::applicationDirPath();
+    QStringList scriptDirs;
     
-    for (const QString& dir : scriptDirs) {
+    // 1. App Bundle Resources (macOS)
+#ifdef Q_OS_MAC
+    scriptDirs << appDir + "/../Resources/scripts";
+#endif
+
+    // 2. Standard application location (Windows/Linux)
+    scriptDirs << appDir + "/scripts";
+    
+    // 3. User directory
+    scriptDirs << QDir::homePath() + "/TStar/scripts";
+    
+    // 4. Development fallbacks (if running from build folder)
+    QDir parentDir(appDir);
+    parentDir.cdUp();
+    scriptDirs << parentDir.absolutePath() + "/scripts";
+    scriptDirs << parentDir.absolutePath() + "/src/scripts";
+
+    // 5. Current directory (last resort)
+    scriptDirs << "scripts";
+
+    // Deduplicate and filter existing dirs
+    QStringList validDirs;
+    for (const QString& d : scriptDirs) {
+        QDir qd(d);
+        if (qd.exists()) {
+            QString abs = qd.absolutePath();
+            if (!validDirs.contains(abs)) {
+                validDirs << abs;
+            }
+        }
+    }
+    
+    // Track added filenames to avoid duplicates in the UI if scripts exist in multiple search paths
+    QSet<QString> addedFiles;
+
+    for (const QString& dir : validDirs) {
         QDir scriptDir(dir);
-        if (!scriptDir.exists()) continue;
-        
         QStringList scripts = scriptDir.entryList({"*.tss"}, QDir::Files);
         for (const QString& script : scripts) {
+            if (addedFiles.contains(script)) continue;
+            
             QString name = QFileInfo(script).baseName().replace('_', ' ');
             m_predefinedCombo->addItem(name, scriptDir.absoluteFilePath(script));
+            addedFiles.insert(script);
         }
     }
 }
+
 
 //=============================================================================
 // SCRIPT LOADING

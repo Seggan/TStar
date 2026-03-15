@@ -224,16 +224,32 @@ echo   - Copied %VC_COPY_COUNT% MSVC DLLs to avoid crashes on clean machines.
 
 echo.
 echo [STEP 11] Copying Scripts...
+
+REM 11.1 Python Bridge Scripts - src/scripts
 if exist "src\scripts" (
     xcopy "src\scripts" "%DIST_DIR%\scripts\" /E /I /Q /EXCLUDE:tools\xcopy_exclude.txt >nul 2>&1
     if exist "%DIST_DIR%\scripts" (
-        echo   - scripts folder: OK
+        echo   - Python bridge scripts: OK
     ) else (
-        echo   [WARNING] scripts folder: copy may have failed
+        echo   [WARNING] Python bridge scripts: copy may have failed
     )
 ) else (
     echo   - No scripts folder found in src\scripts
 )
+
+REM 11.2 TStar Scripts - root scripts folder
+if exist "scripts" (
+    xcopy "scripts" "%DIST_DIR%\scripts\" /E /I /Q /EXCLUDE:tools\xcopy_exclude.txt >nul 2>&1
+    if exist "%DIST_DIR%\scripts" (
+        echo   - TStar scripts: OK
+    ) else (
+        echo   [WARNING] TStar scripts: copy may have failed
+    )
+) else (
+    echo   - No TStar scripts found in root scripts folder
+)
+
+
 
 echo.
 echo.
