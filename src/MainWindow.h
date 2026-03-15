@@ -47,6 +47,7 @@ class SidebarWidget;
 class RightSidebarWidget;
 class HeaderPanel;
 class AstroSpikeDialog;
+class RawEditorDialog;
 class DebayerDialog;
 class ContinuumSubtractionDialog;
 class AlignChannelsDialog;
@@ -137,6 +138,7 @@ private slots:
     void openWavescaleHDRDialog();
     void openSaturationDialog();
     void openAstroSpikeDialog();
+    void openRawEditorDialog();
     void openHeaderEditorDialog();
     void openDebayerDialog();
     void openContinuumSubtractionDialog();
@@ -304,6 +306,7 @@ private:
     QPointer<class StarAnalysisDialog> m_starAnalysisDlg;
     QPointer<class HeaderViewerDialog> m_headerDlg;
     QPointer<class AstroSpikeDialog> m_astroSpikeDlg;
+    QPointer<class RawEditorDialog> m_rawEditorDlg;
     QPointer<class DebayerDialog> m_debayerDlg;
     QPointer<class ContinuumSubtractionDialog> m_continuumDlg;
     QPointer<class AlignChannelsDialog> m_alignChannelsDlg;

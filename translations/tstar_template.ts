@@ -5025,6 +5025,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Opening RawEditor Tool...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Opening Recombine Luminance...</source>
             <translation type="unfinished" />
         </message>
@@ -5186,6 +5190,10 @@
         </message>
         <message>
             <source>RGB Required</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>RawEditor (Light and Color)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7714,6 +7722,217 @@
         </message>
         <message>
             <source>© 2026 Riccardo Alberghi</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>RawEditorDialog</name>
+        <message>
+            <source>Amount</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Aqua</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Balance</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Basic</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blacks</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blending</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blue</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blue-Yellow</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Brightness</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Chromatic Aberration</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Clarity</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color Grading</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Compare (Show Original)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Contrast</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Dehaze</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Detail</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Exposure</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Feather</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Fit</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Grain</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Green</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>HSL</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Highlights</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Hue</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Luminance</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Magenta</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Midpoint</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Midtones</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Orange</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Purple</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>RawEditor (Light and Color)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Red</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Red-Cyan</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Redo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reset to Defaults</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Roughness</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Roundness</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Saturation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Shadows</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Sharpness</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Size</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Structure</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Temperature</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Tint</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Vibrance</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Vignette</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Whites</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Yellow</source>
             <translation type="unfinished" />
         </message>
     </context>

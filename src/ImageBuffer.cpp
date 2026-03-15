@@ -2407,8 +2407,14 @@ std::vector<float> ImageBuffer::computeGHSLUT(const GHSParams& params, int size)
 
 void ImageBuffer::blendResult(const ImageBuffer& original, bool inverseMask) {
     WriteLock lock(this);  // Thread-safe write access
-    
+
     if (!hasMask() || m_mask.data.empty()) return;
+
+    // Ensure original's pixel data is loaded (swap-safe read).
+    // ReadLock on original must be acquired AFTER WriteLock on this to maintain
+    // a consistent lock-ordering convention (caller always locks 'this' first).
+    ReadLock origLock(&original);
+
     if (m_data.size() != original.m_data.size()) return;
 
     long n_pixels = (long)m_width * m_height;

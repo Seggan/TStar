@@ -530,6 +530,8 @@ set(TSTAR_SOURCES
     src/algos/PerfectPaletteRunner.h
     src/algos/StatisticalStretch.cpp
     src/algos/StatisticalStretch.h
+    src/algos/RawEditorProcessor.cpp
+    src/algos/RawEditorProcessor.h
     
     # Background
     src/background/BackgroundExtraction.cpp
@@ -620,6 +622,8 @@ set(TSTAR_SOURCES
     src/dialogs/StarRecompositionDialog.h
     src/dialogs/AstroSpikeDialog.cpp
     src/dialogs/AstroSpikeDialog.h
+    src/dialogs/RawEditorDialog.cpp
+    src/dialogs/RawEditorDialog.h
     src/dialogs/PerfectPaletteDialog.cpp
     src/dialogs/PerfectPaletteDialog.h
     src/dialogs/BackgroundNeutralizationDialog.cpp

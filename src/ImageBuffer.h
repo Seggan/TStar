@@ -366,12 +366,40 @@ public:
     class ReadLock {
     public:
         explicit ReadLock(const ImageBuffer* buf) : m_buf(buf) {
-            if (m_buf) {
-                // Swap-in BEFORE acquiring read lock (forceSwapIn needs write lock)
-                if (m_buf->m_isSwapped) {
-                    const_cast<ImageBuffer*>(m_buf)->forceSwapIn();
-                }
+            if (!m_buf) return;
+            auto* mutable_buf = const_cast<ImageBuffer*>(m_buf);
+            // Retry loop: guarantees that when this constructor returns, we hold a
+            // read lock AND the buffer data is in memory (m_isSwapped == false).
+            //
+            // Why a loop is necessary:
+            //   The naive approach of calling forceSwapIn() then lockRead() has a
+            //   TOCTOU race: SwapManager can re-swap the buffer in the window
+            //   between forceSwapIn() releasing the write lock and lockRead()
+            //   acquiring the read lock.  If that happens, data() called inside
+            //   the locked scope would see m_isSwapped==true and attempt
+            //   forceSwapIn() -> lockForWrite(), which DEADLOCKS because the same
+            //   thread already holds a read lock (QReadWriteLock does not support
+            //   upgrading read → write locks).
+            //
+            // Correct protocol:
+            //   1. Acquire read lock first.
+            //   2. Once the read lock is held, SwapManager's tryLockForWrite()
+            //      will fail, so the buffer cannot be swapped out any further.
+            //   3. If m_isSwapped is still true (the buffer was swapped before we
+            //      grabbed the read lock), release the read lock, perform swap-in
+            //      under an exclusive write lock, then retry from step 1.
+            //      In practice this loop body executes at most twice.
+            while (true) {
                 m_buf->lockRead();
+                if (!m_buf->m_isSwapped) return;  // Data in memory — success.
+
+                // Buffer is swapped but we hold a read lock.
+                // Cannot swap-in here (would need write lock → deadlock on same thread).
+                // Release read lock, do the swap-in exclusively, then retry.
+                m_buf->unlock();
+                mutable_buf->lockWrite();
+                if (m_buf->m_isSwapped) mutable_buf->doSwapIn();
+                mutable_buf->m_mutex->unlock();
             }
         }
         ~ReadLock() { if (m_buf) m_buf->unlock(); }

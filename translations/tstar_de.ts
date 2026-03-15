@@ -5027,6 +5027,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Öffne Preprocessing-Dialog...</translation>
         </message>
         <message>
+            <source>Opening RawEditor Tool...</source>
+            <translation type="finished">Öffne RawEditor-Werkzeug...</translation>
+        </message>
+        <message>
             <source>Opening Recombine Luminance...</source>
             <translation type="finished">Öffne Luminanzrekombination...</translation>
         </message>
@@ -5189,6 +5193,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>RGB Required</source>
             <translation type="finished">RGB Erforderlich</translation>
+        </message>
+        <message>
+            <source>RawEditor (Light and Color)</source>
+            <translation type="finished">RawEditor (Licht und Farbe)</translation>
         </message>
         <message>
             <source>Recombine Luminance</source>
@@ -7718,6 +7726,217 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>© 2026 Riccardo Alberghi</source>
             <translation type="finished">© 2026 Riccardo Alberghi</translation>
+        </message>
+    </context>
+    <context>
+        <name>RawEditorDialog</name>
+        <message>
+            <source>Amount</source>
+            <translation type="finished">Menge</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="finished">Anwenden</translation>
+        </message>
+        <message>
+            <source>Aqua</source>
+            <translation type="finished">Aqua</translation>
+        </message>
+        <message>
+            <source>Balance</source>
+            <translation type="finished">Balance</translation>
+        </message>
+        <message>
+            <source>Basic</source>
+            <translation type="finished">Grundlegend</translation>
+        </message>
+        <message>
+            <source>Blacks</source>
+            <translation type="finished">Schwarztöne</translation>
+        </message>
+        <message>
+            <source>Blending</source>
+            <translation type="finished">Mischen</translation>
+        </message>
+        <message>
+            <source>Blue</source>
+            <translation type="finished">Blau</translation>
+        </message>
+        <message>
+            <source>Blue-Yellow</source>
+            <translation type="finished">Blau-Gelb</translation>
+        </message>
+        <message>
+            <source>Brightness</source>
+            <translation type="finished">Helligkeit</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="finished">Abbrechen</translation>
+        </message>
+        <message>
+            <source>Chromatic Aberration</source>
+            <translation type="finished">Chromatische Aberration</translation>
+        </message>
+        <message>
+            <source>Clarity</source>
+            <translation type="finished">Klarheit</translation>
+        </message>
+        <message>
+            <source>Color</source>
+            <translation type="finished">Farbe</translation>
+        </message>
+        <message>
+            <source>Color Grading</source>
+            <translation type="finished">Color Grading</translation>
+        </message>
+        <message>
+            <source>Compare (Show Original)</source>
+            <translation type="finished">Vergleichen (Original anzeigen)</translation>
+        </message>
+        <message>
+            <source>Contrast</source>
+            <translation type="finished">Kontrast</translation>
+        </message>
+        <message>
+            <source>Dehaze</source>
+            <translation type="finished">Dunst entfernen</translation>
+        </message>
+        <message>
+            <source>Detail</source>
+            <translation type="finished">Details</translation>
+        </message>
+        <message>
+            <source>Exposure</source>
+            <translation type="finished">Belichtung</translation>
+        </message>
+        <message>
+            <source>Feather</source>
+            <translation type="finished">Weichheit</translation>
+        </message>
+        <message>
+            <source>Fit</source>
+            <translation type="finished">Einpassen</translation>
+        </message>
+        <message>
+            <source>Grain</source>
+            <translation type="finished">Körnung</translation>
+        </message>
+        <message>
+            <source>Green</source>
+            <translation type="finished">Grün</translation>
+        </message>
+        <message>
+            <source>HSL</source>
+            <translation type="finished">HSL</translation>
+        </message>
+        <message>
+            <source>Highlights</source>
+            <translation type="finished">Lichter</translation>
+        </message>
+        <message>
+            <source>Hue</source>
+            <translation type="finished">Farbton</translation>
+        </message>
+        <message>
+            <source>Luminance</source>
+            <translation type="finished">Luminanz</translation>
+        </message>
+        <message>
+            <source>Magenta</source>
+            <translation type="finished">Magenta</translation>
+        </message>
+        <message>
+            <source>Midpoint</source>
+            <translation type="finished">Mittelpunkt</translation>
+        </message>
+        <message>
+            <source>Midtones</source>
+            <translation type="finished">Mitteltöne</translation>
+        </message>
+        <message>
+            <source>Orange</source>
+            <translation type="finished">Orange</translation>
+        </message>
+        <message>
+            <source>Purple</source>
+            <translation type="finished">Lila</translation>
+        </message>
+        <message>
+            <source>RawEditor (Light and Color)</source>
+            <translation type="finished">RawEditor (Licht und Farbe)</translation>
+        </message>
+        <message>
+            <source>Red</source>
+            <translation type="finished">Rot</translation>
+        </message>
+        <message>
+            <source>Red-Cyan</source>
+            <translation type="finished">Rot-Cyan</translation>
+        </message>
+        <message>
+            <source>Redo</source>
+            <translation type="finished">Wiederholen</translation>
+        </message>
+        <message>
+            <source>Reset to Defaults</source>
+            <translation type="finished">Auf Standardwerte zurücksetzen</translation>
+        </message>
+        <message>
+            <source>Roughness</source>
+            <translation type="finished">Rauheit</translation>
+        </message>
+        <message>
+            <source>Roundness</source>
+            <translation type="finished">Rundheit</translation>
+        </message>
+        <message>
+            <source>Saturation</source>
+            <translation type="finished">Sättigung</translation>
+        </message>
+        <message>
+            <source>Shadows</source>
+            <translation type="finished">Tiefen</translation>
+        </message>
+        <message>
+            <source>Sharpness</source>
+            <translation type="finished">Schärfe</translation>
+        </message>
+        <message>
+            <source>Size</source>
+            <translation type="finished">Größe</translation>
+        </message>
+        <message>
+            <source>Structure</source>
+            <translation type="finished">Struktur</translation>
+        </message>
+        <message>
+            <source>Temperature</source>
+            <translation type="finished">Temperatur</translation>
+        </message>
+        <message>
+            <source>Tint</source>
+            <translation type="finished">Tönung</translation>
+        </message>
+        <message>
+            <source>Undo</source>
+            <translation type="finished">Rückgängig</translation>
+        </message>
+        <message>
+            <source>Vibrance</source>
+            <translation type="finished">Dynamik</translation>
+        </message>
+        <message>
+            <source>Vignette</source>
+            <translation type="finished">Vignettierung</translation>
+        </message>
+        <message>
+            <source>Whites</source>
+            <translation type="finished">Weißtöne</translation>
+        </message>
+        <message>
+            <source>Yellow</source>
+            <translation type="finished">Gelb</translation>
         </message>
     </context>
     <context>
@@ -10254,7 +10473,7 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         </message>
         <message>
             <source>Compare (Show Original)</source>
-            <translation type="finished">Vergleichen (Original zeigen)</translation>
+            <translation type="finished">Vergleichen (Original anzeigen)</translation>
         </message>
         <message>
             <source>Compression:</source>

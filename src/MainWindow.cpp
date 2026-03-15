@@ -58,6 +58,10 @@
 #include "dialogs/CosmicClarityDialog.h"
 #include "dialogs/StarNetDialog.h"
 #include "dialogs/RARDialog.h"
+#include "dialogs/RawEditorDialog.h"
+#include "dialogs/AstroSpikeDialog.h"
+#include "dialogs/SaturationDialog.h"
+#include "dialogs/ChannelCombinationDialog.h"
 #include "dialogs/StarStretchDialog.h"
 #include "dialogs/StarRecompositionDialog.h"
 #include "dialogs/PerfectPaletteDialog.h"
@@ -798,6 +802,8 @@ MainWindow::MainWindow(QWidget *parent)
         QString dir = QFileDialog::getExistingDirectory(this, tr("Select Home Directory"), QDir::currentPath());
         if (!dir.isEmpty()) {
             QDir::setCurrent(dir);
+            QSettings settings("TStar", "TStar");
+            settings.setValue("General/LastWorkingDir", dir);
             log(tr("Home Directory changed to: %1").arg(dir), Log_Success);
             
             // Also update ScriptRunner default CWD if available
@@ -1209,6 +1215,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     // --- F. Effects ---
     QMenu* effectMenu = processMenu->addMenu(tr("Effects"));
+    addMenuAction(effectMenu, tr("RawEditor (Light and Color)"), "", [this](){
+        openRawEditorDialog();
+    });
     addMenuAction(effectMenu, tr("AstroSpike (Diffraction Spikes)"), "", [this](){
         openAstroSpikeDialog();
     });
@@ -2099,6 +2108,14 @@ void MainWindow::openFile() {
     QStringList paths = QFileDialog::getOpenFileNames(this, tr("Open Image(s)"), startDir, filter);
     if (paths.isEmpty()) return;
 
+    // Persist the user's last chosen working directory immediately.
+    const QString chosenDir = QFileInfo(paths.first()).absolutePath();
+    if (!chosenDir.isEmpty() && QDir(chosenDir).exists()) {
+        QDir::setCurrent(chosenDir);
+        QSettings settings("TStar", "TStar");
+        settings.setValue("General/LastWorkingDir", chosenDir);
+    }
+
     int total = paths.size();
     auto loadedCount = std::make_shared<std::atomic<int>>(0);
 
@@ -2161,6 +2178,14 @@ void MainWindow::saveFile() {
     QString startDir = getProjectWorkingDirectory();
     QString path = QFileDialog::getSaveFileName(this, tr("Save Image As"), startDir, 
         tr("FITS (*.fits);;XISF (*.xisf);;TIFF (*.tif *.tiff);;PNG (*.png);;JPG (*.jpg)"), &selectedFilter);
+    if (!path.isEmpty()) {
+        const QString chosenDir = QFileInfo(path).absolutePath();
+        if (!chosenDir.isEmpty() && QDir(chosenDir).exists()) {
+            QDir::setCurrent(chosenDir);
+            QSettings settings("TStar", "TStar");
+            settings.setValue("General/LastWorkingDir", chosenDir);
+        }
+    }
         
     if (path.isEmpty()) return;
     
@@ -2679,6 +2704,18 @@ void MainWindow::openAstroSpikeDialog() {
 
     log(tr("Opening AstroSpike Tool..."), Log_Info, true);
     AstroSpikeDialog dlg(viewer, this);
+    dlg.exec();
+}
+
+void MainWindow::openRawEditorDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer || !viewer->getBuffer().isValid()) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please open an image first."));
+        return;
+    }
+
+    log(tr("Opening RawEditor Tool..."), Log_Info, true);
+    RawEditorDialog dlg(viewer, this);
     dlg.exec();
 }
 
@@ -5032,14 +5069,25 @@ QString MainWindow::getWorkspaceProjectsDir() const {
 }
 
 QString MainWindow::getProjectWorkingDirectory() const {
-    // If a workspace project is active, return its directory
-    // Otherwise, return the AppData directory
+    // If a workspace project is active, return its directory.
     if (m_workspaceProject.active && !m_workspaceProject.filePath.isEmpty()) {
-        return QFileInfo(m_workspaceProject.filePath).absoluteDir().absolutePath();
+        const QString projDir = QFileInfo(m_workspaceProject.filePath).absoluteDir().absolutePath();
+        if (!projDir.isEmpty() && QDir(projDir).exists()) return projDir;
     }
-    
-    // Default to AppData/TStar directory
-    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+
+    // Prefer current working directory (the explicit Home directory the user set).
+    const QString cwd = QDir::currentPath();
+    if (!cwd.isEmpty() && QDir(cwd).exists()) return cwd;
+
+    // Then fallback to persisted last working directory.
+    QSettings settings("TStar", "TStar");
+    const QString lastDir = settings.value("General/LastWorkingDir").toString();
+    if (!lastDir.isEmpty() && QDir(lastDir).exists()) return lastDir;
+
+    // Final fallback: Desktop, then Home.
+    const QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    if (!desktopPath.isEmpty() && QDir(desktopPath).exists()) return desktopPath;
+    return QDir::homePath();
 }
 
 void MainWindow::newWorkspaceProject() {
@@ -5068,9 +5116,16 @@ void MainWindow::openWorkspaceProject() {
     QString projectFile = QFileDialog::getOpenFileName(
         this,
         tr("Open Workspace Project"),
-        getWorkspaceProjectsDir(),
+        getProjectWorkingDirectory(),
         tr("TStar Workspace Project (*.tstarproj)"));
     if (projectFile.isEmpty()) return;
+
+    const QString chosenDir = QFileInfo(projectFile).absolutePath();
+    if (!chosenDir.isEmpty() && QDir(chosenDir).exists()) {
+        QDir::setCurrent(chosenDir);
+        QSettings settings("TStar", "TStar");
+        settings.setValue("General/LastWorkingDir", chosenDir);
+    }
 
     loadWorkspaceProjectFrom(projectFile);
 }
@@ -5090,9 +5145,17 @@ void MainWindow::saveWorkspaceProjectAs() {
     QString path = QFileDialog::getSaveFileName(
         this,
         tr("Save Workspace Project As"),
-        getWorkspaceProjectsDir(),
+        getProjectWorkingDirectory(),
         tr("TStar Workspace Project (*.tstarproj)"));
     if (path.isEmpty()) return;
+
+    const QString chosenDir = QFileInfo(path).absolutePath();
+    if (!chosenDir.isEmpty() && QDir(chosenDir).exists()) {
+        QDir::setCurrent(chosenDir);
+        QSettings settings("TStar", "TStar");
+        settings.setValue("General/LastWorkingDir", chosenDir);
+    }
+
     saveWorkspaceProjectTo(path);
 }
 
@@ -5294,9 +5357,15 @@ void MainWindow::openNewProjectDialog() {
 void MainWindow::openExistingProject() {
     QString dir = QFileDialog::getExistingDirectory(this,
         tr("Select Project Directory"),
-        QDir::homePath());
+        getProjectWorkingDirectory());
     
     if (dir.isEmpty()) return;
+
+    if (QDir(dir).exists()) {
+        QDir::setCurrent(dir);
+        QSettings settings("TStar", "TStar");
+        settings.setValue("General/LastWorkingDir", dir);
+    }
     
     Stacking::StackingProject project;
     QString projectFile = Stacking::StackingProject::findProjectFile(dir);

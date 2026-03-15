@@ -5027,6 +5027,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Apertura dialogo preprocessing...</translation>
         </message>
         <message>
+            <source>Opening RawEditor Tool...</source>
+            <translation type="finished">Apertura Strumento RawEditor...</translation>
+        </message>
+        <message>
             <source>Opening Recombine Luminance...</source>
             <translation type="finished">Apertura Ricombinazione Luminanza...</translation>
         </message>
@@ -5189,6 +5193,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>RGB Required</source>
             <translation type="finished">Richiesto RGB</translation>
+        </message>
+        <message>
+            <source>RawEditor (Light and Color)</source>
+            <translation type="finished">RawEditor (Luce e Colore)</translation>
         </message>
         <message>
             <source>Recombine Luminance</source>
@@ -7718,6 +7726,217 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>© 2026 Riccardo Alberghi</source>
             <translation type="finished">© 2026 Riccardo Alberghi</translation>
+        </message>
+    </context>
+    <context>
+        <name>RawEditorDialog</name>
+        <message>
+            <source>Amount</source>
+            <translation type="finished">Quantità</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="finished">Applica</translation>
+        </message>
+        <message>
+            <source>Aqua</source>
+            <translation type="finished">Acqua</translation>
+        </message>
+        <message>
+            <source>Balance</source>
+            <translation type="finished">Bilanciamento</translation>
+        </message>
+        <message>
+            <source>Basic</source>
+            <translation type="finished">Base</translation>
+        </message>
+        <message>
+            <source>Blacks</source>
+            <translation type="finished">Neri</translation>
+        </message>
+        <message>
+            <source>Blending</source>
+            <translation type="finished">Fusione</translation>
+        </message>
+        <message>
+            <source>Blue</source>
+            <translation type="finished">Blu</translation>
+        </message>
+        <message>
+            <source>Blue-Yellow</source>
+            <translation type="finished">Blu-Giallo</translation>
+        </message>
+        <message>
+            <source>Brightness</source>
+            <translation type="finished">Luminosità</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
+            <source>Chromatic Aberration</source>
+            <translation type="finished">Aberrazione Cromatica</translation>
+        </message>
+        <message>
+            <source>Clarity</source>
+            <translation type="finished">Chiarezza</translation>
+        </message>
+        <message>
+            <source>Color</source>
+            <translation type="finished">Colore</translation>
+        </message>
+        <message>
+            <source>Color Grading</source>
+            <translation type="finished">Color Grading</translation>
+        </message>
+        <message>
+            <source>Compare (Show Original)</source>
+            <translation type="finished">Confronta (Mostra Originale)</translation>
+        </message>
+        <message>
+            <source>Contrast</source>
+            <translation type="finished">Contrasto</translation>
+        </message>
+        <message>
+            <source>Dehaze</source>
+            <translation type="finished">Dehaze (Rimuovi Foschia)</translation>
+        </message>
+        <message>
+            <source>Detail</source>
+            <translation type="finished">Dettaglio</translation>
+        </message>
+        <message>
+            <source>Exposure</source>
+            <translation type="finished">Esposizione</translation>
+        </message>
+        <message>
+            <source>Feather</source>
+            <translation type="finished">Sfumatura</translation>
+        </message>
+        <message>
+            <source>Fit</source>
+            <translation type="finished">Adatta</translation>
+        </message>
+        <message>
+            <source>Grain</source>
+            <translation type="finished">Grana</translation>
+        </message>
+        <message>
+            <source>Green</source>
+            <translation type="finished">Verde</translation>
+        </message>
+        <message>
+            <source>HSL</source>
+            <translation type="finished">HSL</translation>
+        </message>
+        <message>
+            <source>Highlights</source>
+            <translation type="finished">Luci</translation>
+        </message>
+        <message>
+            <source>Hue</source>
+            <translation type="finished">Tonalità</translation>
+        </message>
+        <message>
+            <source>Luminance</source>
+            <translation type="finished">Luminanza</translation>
+        </message>
+        <message>
+            <source>Magenta</source>
+            <translation type="finished">Magenta</translation>
+        </message>
+        <message>
+            <source>Midpoint</source>
+            <translation type="finished">Punto Medio</translation>
+        </message>
+        <message>
+            <source>Midtones</source>
+            <translation type="finished">Mezzitoni</translation>
+        </message>
+        <message>
+            <source>Orange</source>
+            <translation type="finished">Arancione</translation>
+        </message>
+        <message>
+            <source>Purple</source>
+            <translation type="finished">Viola</translation>
+        </message>
+        <message>
+            <source>RawEditor (Light and Color)</source>
+            <translation type="finished">RawEditor (Luce e Colore)</translation>
+        </message>
+        <message>
+            <source>Red</source>
+            <translation type="finished">Rosso</translation>
+        </message>
+        <message>
+            <source>Red-Cyan</source>
+            <translation type="finished">Rosso-Ciano</translation>
+        </message>
+        <message>
+            <source>Redo</source>
+            <translation type="finished">Ripeti</translation>
+        </message>
+        <message>
+            <source>Reset to Defaults</source>
+            <translation type="finished">Ripristina Predefiniti</translation>
+        </message>
+        <message>
+            <source>Roughness</source>
+            <translation type="finished">Ruvidità</translation>
+        </message>
+        <message>
+            <source>Roundness</source>
+            <translation type="finished">Rotondità</translation>
+        </message>
+        <message>
+            <source>Saturation</source>
+            <translation type="finished">Saturazione</translation>
+        </message>
+        <message>
+            <source>Shadows</source>
+            <translation type="finished">Ombre</translation>
+        </message>
+        <message>
+            <source>Sharpness</source>
+            <translation type="finished">Nitidezza</translation>
+        </message>
+        <message>
+            <source>Size</source>
+            <translation type="finished">Dimensione</translation>
+        </message>
+        <message>
+            <source>Structure</source>
+            <translation type="finished">Struttura</translation>
+        </message>
+        <message>
+            <source>Temperature</source>
+            <translation type="finished">Temperatura</translation>
+        </message>
+        <message>
+            <source>Tint</source>
+            <translation type="finished">Tinta</translation>
+        </message>
+        <message>
+            <source>Undo</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
+            <source>Vibrance</source>
+            <translation type="finished">Vividezza</translation>
+        </message>
+        <message>
+            <source>Vignette</source>
+            <translation type="finished">Vignettatura</translation>
+        </message>
+        <message>
+            <source>Whites</source>
+            <translation type="finished">Bianchi</translation>
+        </message>
+        <message>
+            <source>Yellow</source>
+            <translation type="finished">Giallo</translation>
         </message>
     </context>
     <context>
