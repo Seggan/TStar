@@ -10,8 +10,9 @@
 #include <QGroupBox>
 #include <QCheckBox>
 #include <QProgressDialog>
+#include <QCoreApplication>
 #include "network/ModelDownloader.h"
-
+#include "network/AstapDownloader.h"
 SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Settings"), 500, 400) {
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
@@ -60,6 +61,21 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
     rowSN->addWidget(btnSN);
     form->addRow(tr("StarNet Executable:"), rowSN);
 
+    // ASTAP
+    m_astapPath = new QLineEdit();
+    m_astapPath->setPlaceholderText(tr("Default system path"));
+    QPushButton* btnAstap = new QPushButton(tr("Browse..."));
+    connect(btnAstap, &QPushButton::clicked, this, &SettingsDialog::pickAstapPath);
+
+    QHBoxLayout* rowAstap = new QHBoxLayout();
+    rowAstap->addWidget(m_astapPath);
+    rowAstap->addWidget(btnAstap);
+    form->addRow(tr("ASTAP Executable:"), rowAstap);
+
+    m_astapExtraArgs = new QLineEdit();
+    m_astapExtraArgs->setPlaceholderText("-s 500 -log");
+    form->addRow(tr("ASTAP Extra Args:"), m_astapExtraArgs);
+
     
     // --- Layout Assembly ---
     mainLayout->addWidget(pathsGroup);
@@ -77,7 +93,21 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
 
     mainLayout->addWidget(modelsGroup);
 
+    // --- ASTAP Database Group ---
+    QGroupBox* astapGroup = new QGroupBox(tr("ASTAP Star Database"), this);
+    QVBoxLayout* astapLayout = new QVBoxLayout(astapGroup);
+
+    m_lblAstapStatus = new QLabel();
+    astapLayout->addWidget(m_lblAstapStatus);
+
+    m_btnDownloadAstap = new QPushButton(tr("Download ASTAP D50 Star Database"));
+    connect(m_btnDownloadAstap, &QPushButton::clicked, this, &SettingsDialog::downloadAstapCatalog);
+    astapLayout->addWidget(m_btnDownloadAstap);
+
+    mainLayout->addWidget(astapGroup);
+
     refreshModelsStatus();
+    refreshAstapStatus();
     
     // --- Buttons ---
     mainLayout->addStretch();
@@ -95,6 +125,8 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
     // --- Load Settings ---
     m_graxpertPath->setText(m_settings.value("paths/graxpert").toString());
     m_starnetPath->setText(m_settings.value("paths/starnet").toString());
+    m_astapPath->setText(m_settings.value("paths/astap").toString());
+    m_astapExtraArgs->setText(m_settings.value("paths/astap_extra").toString());
     
     QString savedLang = m_settings.value("general/language", "System").toString();
     int idx = m_langCombo->findData(savedLang);
@@ -122,6 +154,15 @@ void SettingsDialog::pickStarNetPath() {
     if (!path.isEmpty()) {
         m_starnetPath->setText(path);
         m_settings.setValue("paths/starnet", path);
+        m_settings.sync();
+    }
+}
+
+void SettingsDialog::pickAstapPath() {
+    QString path = QFileDialog::getOpenFileName(this, tr("Select ASTAP Executable"), "", tr("Executables (*.app *.exe);;All Files (*)"));
+    if (!path.isEmpty()) {
+        m_astapPath->setText(path);
+        m_settings.setValue("paths/astap", path);
         m_settings.sync();
     }
 }
@@ -184,18 +225,64 @@ void SettingsDialog::downloadModels() {
     downloader->startDownload();
 }
 
+void SettingsDialog::downloadAstapCatalog() {
+    m_btnDownloadAstap->setEnabled(false);
+
+    auto* downloader = new AstapDownloader(this);
+
+    auto* progressDlg = new QProgressDialog(tr("Downloading ASTAP D50 Catalog..."), tr("Cancel"), 0, 100, this);
+    progressDlg->setWindowModality(Qt::WindowModal);
+    progressDlg->setMinimumDuration(0);
+    progressDlg->setAutoClose(false);
+    progressDlg->setAutoReset(false);
+    progressDlg->show();
+
+    connect(progressDlg, &QProgressDialog::canceled, downloader, &AstapDownloader::cancel);
+
+    connect(downloader, &AstapDownloader::progress, this, [progressDlg](const QString& msg) {
+        progressDlg->setLabelText(msg);
+    });
+
+    connect(downloader, &AstapDownloader::progressValue, this, [progressDlg](int val) {
+        if (val < 0) {
+            progressDlg->setRange(0, 0); // Indeterminate
+        } else {
+            progressDlg->setRange(0, 100);
+            progressDlg->setValue(val);
+        }
+    });
+
+    connect(downloader, &AstapDownloader::finished, this, [this, downloader, progressDlg](bool ok, const QString& msg) {
+        progressDlg->close();
+        progressDlg->deleteLater();
+
+        if (ok) {
+            QMessageBox::information(this, tr("ASTAP Database Download"), msg);
+        } else {
+            QMessageBox::warning(this, tr("ASTAP Database Download"), msg);
+        }
+
+        refreshAstapStatus();
+        m_btnDownloadAstap->setEnabled(true);
+        downloader->deleteLater();
+    });
+
+    downloader->startDownload();
+}
+
 void SettingsDialog::refreshModelsStatus() {
     if (ModelDownloader::modelsInstalled()) {
-        m_lblModelsStatus->setText(tr("Cosmic Clarity models: installed") + " ✅");
+        m_lblModelsStatus->setText(tr("Cosmic Clarity models: installed"));
     } else {
-        m_lblModelsStatus->setText(tr("Cosmic Clarity models: not installed") + " ❌");
+        m_lblModelsStatus->setText(tr("Cosmic Clarity models: not installed"));
     }
 }
 
 void SettingsDialog::saveSettings() {
     m_settings.setValue("paths/graxpert", m_graxpertPath->text());
     m_settings.setValue("paths/starnet", m_starnetPath->text());
-    //m_settings.setValue("paths/cosmic_clarity_engine", m_cosmicClarityEnginePath->text());
+    m_settings.setValue("paths/astap", m_astapPath->text());
+    m_settings.setValue("paths/astap_extra", m_astapExtraArgs->text());
 
     QString oldLang = m_settings.value("general/language", "System").toString();
     QString newLang = m_langCombo->currentData().toString();
@@ -211,4 +298,60 @@ void SettingsDialog::saveSettings() {
     
     emit settingsChanged();
     accept();
+}
+
+void SettingsDialog::refreshAstapStatus() {
+    bool installed = false;
+    
+    auto checkDirRecursive = [](const QString& path) -> bool {
+        QDir dir(path);
+        if (!dir.exists()) return false;
+        
+        QStringList filters;
+        filters << "*.290" << "*.50" << "*.g17" << "*.g18" << "*.h17" << "*.h18" << "*.290c" << "*.50c" << "*.opt" << "d50_*" << "d05_*" << "h17_*" << "h18_*" << "w08_*";
+        
+        // 1. Check current dir
+        if (!dir.entryList(filters, QDir::Files).isEmpty()) return true;
+        
+        // 2. Check all subdirs (non-recursive, just one level)
+        QStringList subDirs = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QString& sub : subDirs) {
+            QDir d(dir.absoluteFilePath(sub));
+            if (!d.entryList(filters, QDir::Files).isEmpty()) return true;
+        }
+        
+        return false;
+    };
+
+    // 1. Check custom path first
+    QString customPath = m_astapPath ? m_astapPath->text() : "";
+    if (!customPath.isEmpty()) {
+        QFileInfo info(customPath);
+        QString dirToCheck = info.isDir() ? info.absoluteFilePath() : info.absolutePath();
+        if (checkDirRecursive(dirToCheck)) {
+            installed = true;
+        }
+    }
+
+    // 2. Default check paths
+    if (!installed) {
+        QStringList paths = {
+            "C:/Program Files/astap",
+            "C:/Program Files (x86)/astap",
+            QCoreApplication::applicationDirPath() + "/deps",
+            QCoreApplication::applicationDirPath()
+        };
+        for (const QString& p : paths) {
+            if (checkDirRecursive(p)) {
+                installed = true;
+                break;
+            }
+        }
+    }
+
+    if (installed) {
+        m_lblAstapStatus->setText(tr("ASTAP Star Database: installed"));
+    } else {
+        m_lblAstapStatus->setText(tr("ASTAP Star Database: not installed"));
+    }
 }

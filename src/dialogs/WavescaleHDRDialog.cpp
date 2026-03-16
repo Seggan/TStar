@@ -210,7 +210,7 @@ void WavescaleHDRWorker::run() {
 // ------ Dialog ------
  
 WavescaleHDRDialog::WavescaleHDRDialog(QWidget* parent, ImageViewer* targetViewer)
-    : DialogBase(parent, tr("Wavescale HDR"), 1100, 650), m_targetViewer(targetViewer)
+    : DialogBase(parent, tr("Wavescale HDR"), 1100, 550), m_targetViewer(targetViewer)
 {
     
     // Copy for preview
@@ -382,7 +382,7 @@ void WavescaleHDRDialog::createUI() {
     QGroupBox* maskGrp = new QGroupBox(tr("Mask Preview"), this);
     QVBoxLayout* maskLay = new QVBoxLayout(maskGrp);
     m_maskLabel = new QLabel(this);
-    m_maskLabel->setFixedSize(350, 250);       // Reduced height from 350 to 250
+    m_maskLabel->setFixedSize(350, 200);
     m_maskLabel->setScaledContents(false); 
     m_maskLabel->setAlignment(Qt::AlignCenter); 
     maskLay->addWidget(m_maskLabel, 0, Qt::AlignCenter); 

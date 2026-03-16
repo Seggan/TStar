@@ -306,6 +306,16 @@ jobs:
           fi
 
       # ===========================
+      # 7.5 Bundle ASTAP CLI
+      # ===========================
+      - name: Bundle ASTAP
+        run: |
+          mkdir -p build/TStar.app/Contents/MacOS
+          curl -L -o astap_cli.zip "https://downloads.sourceforge.net/project/astap-program/macOS%20installer/astap_command-line_version_macOS_M1.zip"
+          unzip -o astap_cli.zip -d build/TStar.app/Contents/MacOS/
+          chmod +x build/TStar.app/Contents/MacOS/astap
+
+      # ===========================
       # 8. Package Distribution
       # ===========================
       - name: Package App Bundle
@@ -541,6 +551,16 @@ jobs:
             echo "❌ Build output not found!"
             exit 1
           fi
+
+      # ===========================
+      # 7.5 Bundle ASTAP CLI (Intel)
+      # ===========================
+      - name: Bundle ASTAP (Intel)
+        run: |
+          mkdir -p build/TStar.app/Contents/MacOS
+          curl -L -o astap_cli.zip "https://downloads.sourceforge.net/project/astap-program/macOS%20installer/astap_command-line_version_macOS.zip"
+          unzip -o astap_cli.zip -d build/TStar.app/Contents/MacOS/
+          chmod +x build/TStar.app/Contents/MacOS/astap
 
       # ===========================
       # 8. Package Distribution

@@ -3,6 +3,8 @@
 #include <QIcon>
 #include <QSettings>
 #include <QShowEvent>
+#include <QScreen>
+#include <QGuiApplication>
 
 DialogBase::DialogBase(QWidget* parent,
                        const QString& title,
@@ -45,9 +47,27 @@ void DialogBase::initialize(const QString& title,
 
 void DialogBase::showEvent(QShowEvent* event) {
     QDialog::showEvent(event);
-    // adjustPosition centers this dialog on the top-level parent window,
-    // correctly handling MDI-embedded widgets and screen boundaries.
-    adjustPosition(parentWidget() ? parentWidget()->window() : nullptr);
+    
+    // Center on parent window or screen
+    QWidget* p = parentWidget();
+    if (p) {
+        p = p->window();
+        QRect parentRect = p->frameGeometry();
+        QRect dlgRect = frameGeometry();
+        
+        // Compute center position
+        int x = parentRect.x() + (parentRect.width() - dlgRect.width()) / 2;
+        int y = parentRect.y() + (parentRect.height() - dlgRect.height()) / 2;
+        move(x, y);
+    } else {
+        if (QScreen* screen = QGuiApplication::primaryScreen()) {
+            QRect screenRect = screen->availableGeometry();
+            QRect dlgRect = frameGeometry();
+            int x = screenRect.x() + (screenRect.width() - dlgRect.width()) / 2;
+            int y = screenRect.y() + (screenRect.height() - dlgRect.height()) / 2;
+            move(x, y);
+        }
+    }
 }
 
 void DialogBase::setWindowProperties(const QString& title, int width, int height) {

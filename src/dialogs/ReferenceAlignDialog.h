@@ -32,6 +32,9 @@ private slots:
     void onOpacityChanged(int value);
     void updatePreview();
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
     void rebuildBuffer();
     QImage bufferToQImageScaled(const ImageBuffer& buf, bool autoStretch = true);
@@ -54,6 +57,8 @@ private:
     QDoubleSpinBox* m_spinRotation;
     QCheckBox* m_chkOverlayStretch;
     QSlider* m_sliderOpacity;
+
+    QSize m_lastPreviewSize;
 };
 
 #endif // REFERENCEALIGNDIALOG_H

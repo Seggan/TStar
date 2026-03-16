@@ -3195,7 +3195,7 @@ void MainWindow::openGHSDialog() {
     setupToolSubwindow(sub, m_ghsDlg, tr("Generalized Hyperbolic Stretch"));
     sub->resize(450, 650); // GHS specific size override
     centerToolWindow(sub); // Re-center after resize
-    sub->move(sub->x(), sub->y() - 50); // Adjust vertical centering
+    
 
      
     // Lifecycle: Delete on close to ensure clean reset on reopen.
@@ -3285,7 +3285,10 @@ void MainWindow::openPCCDialog() {
     log(tr("Opening Photometric Color Calibration..."), Log_Info, true);
     CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, dlg, tr("Photometric Color Calibration"));
     // Let layout settle, then shrink to fit content
-    QTimer::singleShot(50, sub, [sub](){ sub->adjustSize(); });
+    QTimer::singleShot(50, sub, [this, sub](){ 
+        sub->adjustSize(); 
+        centerToolWindow(sub);
+    });
     
     connect(dlg, &QDialog::accepted, [this, dlg, sub, viewer](){
          PCCResult res = dlg->result();
@@ -3356,6 +3359,7 @@ void MainWindow::openCurvesDialog() {
 
     CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_curvesDlg, tr("Curves Transformation"));
     sub->resize(650, 500);
+    centerToolWindow(sub);
     
     // Connect finished signal to clear preview and close subwindow
     connect(m_curvesDlg, &QDialog::finished, [this, sub](int){
@@ -3576,22 +3580,6 @@ CustomMdiSubWindow* MainWindow::setupToolSubwindow(CustomMdiSubWindow* sub, QWid
     
     targetSub->resize(subSize);
 
-    // Center on main window geometry (more intuitive when image is maximized)
-    const QRect mainGeom = this->geometry();
-    const QPoint center = mainGeom.center();
-    
-    int x = center.x() - subSize.width() / 2;
-    int y = center.y() - subSize.height() / 2;
-    
-    // Ensure it stays on screen
-    const QRect screen = this->screen()->availableGeometry();
-    if (x < screen.left()) x = screen.left();
-    if (y < screen.top()) y = screen.top();
-    if (x + subSize.width() > screen.right()) x = screen.right() - subSize.width();
-    if (y + subSize.height() > screen.bottom()) y = screen.bottom() - subSize.height();
-    
-    targetSub->move(x, y);
-    
     if (QDialog* qdlg = qobject_cast<QDialog*>(dlg)) {
         connect(qdlg, &QDialog::finished, [targetSub](int){ targetSub->close(); });
     }
@@ -3611,23 +3599,11 @@ CustomMdiSubWindow* MainWindow::setupToolSubwindow(CustomMdiSubWindow* sub, QWid
 }
 
 void MainWindow::centerToolWindow(CustomMdiSubWindow* sub) {
-    if (!sub) return;
+    if (!sub || !m_mdiArea) return;
     
-    QSize subSize = sub->size();
-    const QRect mainGeom = this->geometry();
-    const QPoint center = mainGeom.center();
-    
-    int x = center.x() - subSize.width() / 2;
-    int y = center.y() - subSize.height() / 2;
-    
-    // Ensure it stays on screen
-    const QRect screen = this->screen()->availableGeometry();
-    if (x < screen.left()) x = screen.left();
-    if (y < screen.top()) y = screen.top();
-    if (x + subSize.width() > screen.right()) x = screen.right() - subSize.width();
-    if (y + subSize.height() > screen.bottom()) y = screen.bottom() - subSize.height();
-    
-    sub->move(x, y);
+    QRect viewportRect = m_mdiArea->viewport()->rect();
+    // Use alignedRect for perfect centering within the MDI area's viewport coordinates
+    sub->setGeometry(QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter, sub->size(), viewportRect));
 }
 
 
@@ -3731,7 +3707,7 @@ void MainWindow::openHistogramStretchDialog() {
     setupToolSubwindow(sub, dlg, tr("Histogram Stretch"));
     sub->resize(520, 600);
     centerToolWindow(sub); // Re-center after resize
-    sub->move(sub->x(), sub->y() - 50); // Adjust vertical centering
+    
 }
 
 
@@ -4187,9 +4163,7 @@ void MainWindow::openContinuumSubtractionDialog() {
     
     connect(m_continuumDlg, &QDialog::destroyed, this, [this]() { m_continuumDlg = nullptr; });
     
-    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_continuumDlg, tr("Continuum Subtraction"));
-    centerToolWindow(sub);
-    sub->move(sub->x(), sub->y() - 50);
+    setupToolSubwindow(nullptr, m_continuumDlg, tr("Continuum Subtraction"));
 }
 
 void MainWindow::openAlignChannelsDialog() {
@@ -4356,7 +4330,6 @@ void MainWindow::openCorrectionBrushDialog() {
     setupToolSubwindow(sub, dlg, tr("Correction Brush"));
     sub->resize(950, 700);
     centerToolWindow(sub);
-    sub->move(sub->x(), sub->y() - 50); // Adjust vertical centering
     
     connect(dlg, &QDialog::accepted, this, [this](){
         log(tr("Correction brush applied."), Log_Success, true);
@@ -4395,7 +4368,6 @@ void MainWindow::openClaheDialog() {
     setupToolSubwindow(sub, dlg, tr("CLAHE"));
     sub->resize(850, 650);
     centerToolWindow(sub);
-    sub->move(sub->x(), sub->y() - 50); // Adjust vertical centering
     
     connect(dlg, &QDialog::accepted, this, [this](){
         log(tr("CLAHE applied."), Log_Success, true);
@@ -4454,7 +4426,6 @@ void MainWindow::openSelectiveColorDialog() {
     setupToolSubwindow(sub, dlg, tr("Selective Color Correction"));
     sub->resize(950, 700);
     centerToolWindow(sub);
-    sub->move(sub->x(), sub->y() - 50); // Adjust vertical centering
     
     connect(dlg, &QDialog::accepted, this, [this](){
         log(tr("Selective Color Correction applied."), Log_Success, true);
@@ -5442,15 +5413,8 @@ void MainWindow::openMultiscaleDecompDialog() {
         m_multiscaleDecompDlg = nullptr;
     });
 
-    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_multiscaleDecompDlg,
+    setupToolSubwindow(nullptr, m_multiscaleDecompDlg,
                                                   tr("Multiscale Decomposition"));
-    centerToolWindow(sub);
-    if (sub) {
-        QPoint p = sub->pos();
-        const QRect scr = this->screen()->availableGeometry();
-        p.setY(qMax(scr.top(), p.y() - 50));
-        sub->move(p);
-    }
 }
 
 // ============================================================================
@@ -5475,15 +5439,8 @@ void MainWindow::openNarrowbandNormalizationDialog() {
         m_nbNormDlg = nullptr;
     });
 
-    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_nbNormDlg,
+    setupToolSubwindow(nullptr, m_nbNormDlg,
                                                   tr("Narrowband Normalization"));
-    centerToolWindow(sub);
-    if (sub) {
-        QPoint p = sub->pos();
-        const QRect scr = this->screen()->availableGeometry();
-        p.setY(qMax(scr.top(), p.y() - 50));
-        sub->move(p);
-    }
 }
 
 // ============================================================================
@@ -5507,15 +5464,8 @@ void MainWindow::openNBtoRGBStarsDialog() {
         m_nbToRGBStarsDlg = nullptr;
     });
 
-    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_nbToRGBStarsDlg,
+    setupToolSubwindow(nullptr, m_nbToRGBStarsDlg,
                                                   tr("NB → RGB Stars"));
-    centerToolWindow(sub);
-    if (sub) {
-        QPoint p = sub->pos();
-        const QRect scr = this->screen()->availableGeometry();
-        p.setY(qMax(scr.top(), p.y() - 50));
-        sub->move(p);
-    }
 }
 
 // ============================================================================
@@ -5537,13 +5487,6 @@ void MainWindow::openBlinkComparatorDialog() {
         m_blinkComparatorDlg = nullptr;
     });
 
-    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, m_blinkComparatorDlg,
+    setupToolSubwindow(nullptr, m_blinkComparatorDlg,
                                                   tr("Blink Comparator"));
-    centerToolWindow(sub);
-    if (sub) {
-        QPoint p = sub->pos();
-        const QRect scr = this->screen()->availableGeometry();
-        p.setY(qMax(scr.top(), p.y() - 50));
-        sub->move(p);
-    }
 }

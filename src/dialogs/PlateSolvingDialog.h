@@ -6,8 +6,10 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QTextEdit>
+#include <QCloseEvent>
 #include "astrometry/SimbadSearcher.h"
 #include "astrometry/NativePlateSolver.h"
+#include "astrometry/AstapSolver.h"
 
 // For passing the image buffer
 #include "../ImageBuffer.h"
@@ -31,8 +33,12 @@ public:
 private slots:
     void onSearchSimbad();
     void onSolve();
+    void onCancel();
     void onSolverFinished(const NativeSolveResult& res);
     void onSolverLog(const QString& text);
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     QLineEdit* m_objectName;
@@ -46,7 +52,9 @@ private:
     void updateScaleFromMetadata(); // Auto-populate from metadata
     void calculatePixelScale();     // Calculate from focal length and pixel size
     QTextEdit* m_log;
+    class QComboBox* m_engineCombo;
     QPushButton* m_solveBtn;
+    QPushButton* m_cancelBtn;
     
     ImageBuffer m_image;
     QPointer<class ImageViewer> m_viewer; 
@@ -54,9 +62,15 @@ private:
     
     SimbadSearcher* m_simbad;
     NativePlateSolver* m_solver;
+    AstapSolver* m_astapSolver;
+    
     
     bool m_solved = false;
     NativeSolveResult m_result;
+
+    // Fallback logic
+    bool m_isFallbackLoop = false;
+    double m_lastRA = 0, m_lastDec = 0, m_lastRadius = 0, m_lastScale = 0;
 };
 
 #endif // PLATESOLVINGDIALOG_H

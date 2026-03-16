@@ -522,6 +522,88 @@
         </message>
     </context>
     <context>
+        <name>AstapDownloader</name>
+        <message>
+            <source>Connecting to SourceForge…</source>
+            <translation type="finished">Connexion à SourceForge…</translation>
+        </message>
+        <message>
+            <source>Download cancelled.</source>
+            <translation type="finished">Téléchargement annulé.</translation>
+        </message>
+        <message>
+            <source>Download complete.</source>
+            <translation type="finished">Téléchargement terminé.</translation>
+        </message>
+        <message>
+            <source>Download failed or timed out.</source>
+            <translation type="finished">Téléchargement échoué ou expiré.</translation>
+        </message>
+        <message>
+            <source>Download succeeded but automatically launching the installer failed.</source>
+            <translation type="finished">Téléchargement réussi mais l'installation automatique a échoué.</translation>
+        </message>
+        <message>
+            <source>Downloading… %1 MB</source>
+            <translation type="finished">Téléchargement… %1 Mo</translation>
+        </message>
+        <message>
+            <source>Downloading… %1%</source>
+            <translation type="finished">Téléchargement… %1%</translation>
+        </message>
+        <message>
+            <source>Downloading… 0%</source>
+            <translation type="finished">Téléchargement… 0%</translation>
+        </message>
+        <message>
+            <source>Failed to download ASTAP D50 Database.</source>
+            <translation type="finished">Échec du téléchargement de la base de données ASTAP D50.</translation>
+        </message>
+        <message>
+            <source>Failed to launch the installer automatically.</source>
+            <translation type="finished">Échec du lancement automatique de l'installateur.</translation>
+        </message>
+        <message>
+            <source>Installer successfully launched. Please follow its instructions.</source>
+            <translation type="finished">Installeur lancé avec succès. Veuillez suivre ses instructions.</translation>
+        </message>
+        <message>
+            <source>Launching installer...</source>
+            <translation type="finished">Lancement de l'installateur...</translation>
+        </message>
+    </context>
+    <context>
+        <name>AstapSolver</name>
+        <message>
+            <source>ASTAP executable not found. Please set the path in Settings.</source>
+            <translation type="finished">Exécutable ASTAP non trovato. Veuillez définir le chemin dans les Paramètres.</translation>
+        </message>
+        <message>
+            <source>ASTAP failed to solve the image.</source>
+            <translation type="finished">ASTAP n'a pas réussi à résoudre l'image.</translation>
+        </message>
+        <message>
+            <source>Failed to parse ASTAP WCS file.</source>
+            <translation type="finished">Échec de l'analyse du fichier WCS d'ASTAP.</translation>
+        </message>
+        <message>
+            <source>Failed to parse ASTAP output files.</source>
+            <translation type="finished">Échec de l'analyse des fichiers de sortie d'ASTAP.</translation>
+        </message>
+        <message>
+            <source>Failed to save temporary image.</source>
+            <translation type="finished">Échec de l'enregistrement de l'image temporaire.</translation>
+        </message>
+        <message>
+            <source>Saving temporary image for ASTAP...</source>
+            <translation type="finished">Enregistrement de l'image temporaire pour ASTAP...</translation>
+        </message>
+        <message>
+            <source>Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg</source>
+            <translation type="finished">Démarrage d'ASTAP Solver. Centre : %1, %2 Rayon : %3 deg</translation>
+        </message>
+    </context>
+    <context>
         <name>AstroSpikeDialog</name>
         <message>
             <source>%1 stars (of %2 total)</source>
@@ -7087,6 +7169,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">&lt;b&gt;Résolu !&lt;/b&gt;</translation>
         </message>
         <message>
+            <source>ASTAP</source>
+            <translation type="finished">ASTAP</translation>
+        </message>
+        <message>
             <source>Auto-calculated</source>
             <translation type="finished">Calculé automatiquement</translation>
         </message>
@@ -7125,6 +7211,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Focal Length (mm):</source>
             <translation type="finished">Longueur Focale (mm) :</translation>
+        </message>
+        <message>
+            <source>Internal Native Solver</source>
+            <translation type="finished">Solveur Natif Interne</translation>
         </message>
         <message>
             <source>Object Name (e.g. M31)</source>
@@ -7185,6 +7275,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Solve</source>
             <translation type="finished">Résoudre</translation>
+        </message>
+        <message>
+            <source>Solver Engine:</source>
+            <translation type="finished">Moteur du Solveur :</translation>
         </message>
         <message>
             <source>Solving Failed: %1</source>
@@ -8818,6 +8912,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Autostretch 24-bit (Dégradés plus lisses)</translation>
         </message>
         <message>
+            <source>ASTAP Database Download</source>
+            <translation type="finished">Téléchargement de la Base de Données ASTAP</translation>
+        </message>
+        <message>
+            <source>ASTAP Executable:</source>
+            <translation type="finished">Exécutable ASTAP :</translation>
+        </message>
+        <message>
             <source>Browse...</source>
             <translation type="finished">Parcourir...</translation>
         </message>
@@ -8842,16 +8944,32 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Modèles Cosmic Clarity : non installés</translation>
         </message>
         <message>
+            <source>Default system path</source>
+            <translation type="finished">Chemin système par défaut</translation>
+        </message>
+        <message>
             <source>Display</source>
             <translation type="finished">Affichage</translation>
+        </message>
+        <message>
+            <source>Download ASTAP D50 Star Database</source>
+            <translation type="finished">Télécharger la Base de Données d'Étoiles ASTAP D50</translation>
         </message>
         <message>
             <source>Download latest Cosmic Clarity models</source>
             <translation type="finished">Télécharger les derniers modèles Cosmic Clarity</translation>
         </message>
         <message>
+            <source>Downloading ASTAP D50 Catalog...</source>
+            <translation type="finished">Téléchargement du Catalogue ASTAP D50...</translation>
+        </message>
+        <message>
             <source>Downloading Cosmic Clarity models...</source>
             <translation type="finished">Téléchargement des Modèles Cosmic Clarity...</translation>
+        </message>
+        <message>
+            <source>Executables (*.app *.exe);;All Files (*)</source>
+            <translation type="finished">Exécutables (*.app *.exe);;Tous les fichiers (*)</translation>
         </message>
         <message>
             <source>Executables (*.exe);;All Files (*)</source>
@@ -8896,6 +9014,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Restart Required</source>
             <translation type="finished">Redémarrage Requis</translation>
+        </message>
+        <message>
+            <source>Select ASTAP Executable</source>
+            <translation type="finished">Sélectionner l'Exécutable ASTAP</translation>
         </message>
         <message>
             <source>Select GraXpert Executable</source>

@@ -13,7 +13,7 @@
 #include <QIcon>
 
 PerfectPaletteDialog::PerfectPaletteDialog(QWidget* parent)
-    : DialogBase(parent, tr("Perfect Palette Picker"), 1000, 700), m_selectedPalette("SHO")
+    : DialogBase(parent, tr("Perfect Palette Picker"), 1000, 650), m_selectedPalette("SHO")
 {
     m_mainWin = getCallbacks();
     createUI();

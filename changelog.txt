@@ -3,7 +3,8 @@ TStar Changelog
 
 Version 1.8.0
 -------------
-- New feature: RawEditor (Lightroom style light and color editor)
+- Implemented RawEditor (Lightroom style proprietary light and color editor)
+- Implemented ASTAP professional plate solver and catalog downloader
 - Minor bugfixes
 
 Version 1.7.10

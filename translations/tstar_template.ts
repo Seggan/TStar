@@ -522,6 +522,88 @@
         </message>
     </context>
     <context>
+        <name>AstapDownloader</name>
+        <message>
+            <source>Connecting to SourceForge…</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Download cancelled.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Download complete.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Download failed or timed out.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Download succeeded but automatically launching the installer failed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Downloading… %1 MB</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Downloading… %1%</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Downloading… 0%</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed to download ASTAP D50 Database.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed to launch the installer automatically.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Installer successfully launched. Please follow its instructions.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Launching installer...</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>AstapSolver</name>
+        <message>
+            <source>ASTAP executable not found. Please set the path in Settings.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP failed to solve the image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed to parse ASTAP WCS file.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed to parse ASTAP output files.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed to save temporary image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Saving temporary image for ASTAP...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
         <name>AstroSpikeDialog</name>
         <message>
             <source>%1 stars (of %2 total)</source>
@@ -7084,6 +7166,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>ASTAP</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Auto-calculated</source>
             <translation type="unfinished" />
         </message>
@@ -7121,6 +7207,10 @@
         </message>
         <message>
             <source>Focal Length (mm):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Internal Native Solver</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7181,6 +7271,10 @@
         </message>
         <message>
             <source>Solve</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Solver Engine:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8815,6 +8909,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>ASTAP Database Download</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP Executable:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Browse...</source>
             <translation type="unfinished" />
         </message>
@@ -8839,7 +8941,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Default system path</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Display</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Download ASTAP D50 Star Database</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8847,7 +8957,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Downloading ASTAP D50 Catalog...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Downloading Cosmic Clarity models...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Executables (*.app *.exe);;All Files (*)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8892,6 +9010,10 @@
         </message>
         <message>
             <source>Restart Required</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Select ASTAP Executable</source>
             <translation type="unfinished" />
         </message>
         <message>

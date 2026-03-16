@@ -8,8 +8,11 @@
 #include "MainWindowCallbacks.h"
 
 
-PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, tr("Photometric Color Calibration"), 300, 120), m_viewer(viewer) {
+PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, tr("Photometric Color Calibration"), 0, 0), m_viewer(viewer) {
     
+    setMinimumWidth(400);
+    resize(400, 150);
+
     QVBoxLayout* lay = new QVBoxLayout(this);
     lay->setContentsMargins(10, 10, 10, 10);
     lay->setSpacing(6);
@@ -17,6 +20,7 @@ PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, 
     // Status label
     m_status = new QLabel(tr("Ready. Image must be plate solved."), this);
     m_status->setWordWrap(false);
+    m_status->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     lay->addWidget(m_status);
     
     // Checkbox
@@ -26,6 +30,7 @@ PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, 
 
     // Button
     m_btnRun = new QPushButton(tr("Run PCC"), this);
+    m_btnRun->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     lay->addWidget(m_btnRun);
     
     if (m_viewer && m_viewer->getBuffer().isValid()) {

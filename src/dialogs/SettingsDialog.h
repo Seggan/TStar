@@ -19,8 +19,9 @@ public:
 public slots:
     void pickGraXpertPath();
     void pickStarNetPath();
-    // void pickCosmicClarityEnginePath(); // Removed
+    void pickAstapPath();
     void downloadModels();
+    void downloadAstapCatalog();
     void saveSettings();
 
 signals:
@@ -28,16 +29,20 @@ signals:
 
 private:
     void refreshModelsStatus();
+    void refreshAstapStatus();
 
     QSettings m_settings;
     QLineEdit* m_graxpertPath;
     QLineEdit* m_starnetPath;
-    // QLineEdit* m_cosmicClarityEnginePath; // Removed
+    QLineEdit* m_astapPath;
     QComboBox* m_langCombo;
     class QCheckBox* m_checkUpdates;
     class QCheckBox* m_24bitStfCheck;
+    QLineEdit* m_astapExtraArgs;
     QPushButton* m_btnDownloadModels;
     QLabel* m_lblModelsStatus;
+    QPushButton* m_btnDownloadAstap;
+    QLabel* m_lblAstapStatus;
 };
 
 #endif // SETTINGSDIALOG_H

@@ -582,6 +582,8 @@ set(TSTAR_SOURCES
     src/network/UpdateChecker.h
     src/network/ModelDownloader.cpp
     src/network/ModelDownloader.h
+    src/network/AstapDownloader.cpp
+    src/network/AstapDownloader.h
     
     # Dialogs
     src/dialogs/UpdateDialog.cpp
@@ -717,6 +719,8 @@ set(TSTAR_SOURCES
     src/astrometry/TriangleMatcher.h
     src/astrometry/NativePlateSolver.cpp
     src/astrometry/NativePlateSolver.h
+    src/astrometry/AstapSolver.cpp
+    src/astrometry/AstapSolver.h
     src/astrometry/WcsSolver.h
     src/astrometry/WCSUtils.cpp
     src/astrometry/WCSUtils.h

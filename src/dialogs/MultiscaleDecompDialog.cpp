@@ -15,7 +15,7 @@
 // ============================================================================
 
 MultiscaleDecompDialog::MultiscaleDecompDialog(QWidget* parent)
-    : DialogBase(parent, tr("Multiscale Decomposition"), 1150, 700)
+    : DialogBase(parent, tr("Multiscale Decomposition"), 1150, 650)
 {
     m_mainWindow = dynamic_cast<MainWindowCallbacks*>(parent);
     m_cfgs.resize(m_layers);

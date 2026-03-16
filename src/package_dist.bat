@@ -252,6 +252,19 @@ if exist "scripts" (
 
 
 echo.
+echo [STEP 11.5] Copying ASTAP (optional bundling)...
+if exist "C:\Program Files\astap\astap.exe" (
+    call :EnsureDir "%DIST_DIR%\deps"
+    copy "C:\Program Files\astap\astap.exe" "%DIST_DIR%\deps\" >nul 2>&1
+    if exist "%DIST_DIR%\deps\astap.exe" (
+        echo   - astap.exe: OK
+    ) else (
+        echo   [WARNING] astap.exe: copy failed
+    )
+) else (
+    echo   - [WARNING] ASTAP not found at C:\Program Files\astap\astap.exe, skipping
+)
+
 echo.
 echo [STEP 12] Creating README...
 (

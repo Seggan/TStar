@@ -1,22 +1,27 @@
 #include "PlateSolvingDialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QDoubleValidator>
 #include <QMessageBox>
 #include "MainWindowCallbacks.h"
 #include "ImageViewer.h"
+#include <QComboBox>
 
 
-PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr("Plate Solving"), 420, 320) {
+PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr("Plate Solving"), 400, 380) {
     
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setContentsMargins(8, 8, 8, 8);
     mainLayout->setSpacing(6);
     
     // Object Search
     QGroupBox* grpSearch = new QGroupBox(tr("Target Coordinates"), this);
     QHBoxLayout* searchLayout = new QHBoxLayout(grpSearch);
+    searchLayout->setContentsMargins(8, 8, 8, 8);
+    searchLayout->setSpacing(6);
+    
     m_objectName = new QLineEdit(this);
     m_objectName->setPlaceholderText(tr("Object Name (e.g. M31)"));
     QPushButton* btnSearch = new QPushButton(tr("Search Simbad"), this);
@@ -26,6 +31,8 @@ PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr(
     
     // Coordinates
     QHBoxLayout* coordLayout = new QHBoxLayout();
+    coordLayout->setContentsMargins(0, 0, 0, 0);
+    coordLayout->setSpacing(6);
     m_raHint = new QLineEdit(this);
     m_raHint->setPlaceholderText(tr("RA (deg)"));
     m_decHint = new QLineEdit(this);
@@ -36,9 +43,22 @@ PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr(
     coordLayout->addWidget(m_decHint);
     mainLayout->addLayout(coordLayout);
     
+    // Engine Settings
+    QHBoxLayout* engineLayout = new QHBoxLayout();
+    engineLayout->setContentsMargins(0, 0, 0, 0);
+    engineLayout->setSpacing(6);
+    m_engineCombo = new QComboBox(this);
+    m_engineCombo->addItem(tr("ASTAP"), "astap");
+    m_engineCombo->addItem(tr("Internal Native Solver"), "native");
+    engineLayout->addWidget(new QLabel(tr("Solver Engine:")));
+    engineLayout->addWidget(m_engineCombo);
+    mainLayout->addLayout(engineLayout);
+    
     // Solver Settings - FOV
     QHBoxLayout* fovBox = new QHBoxLayout();
-    m_fov = new QLineEdit("1.0", this); // Default 1 deg radius
+    fovBox->setContentsMargins(0, 0, 0, 0);
+    fovBox->setSpacing(6);
+    m_fov = new QLineEdit("15.0", this); // Default 15 deg radius for hint
     fovBox->addWidget(new QLabel(tr("Search Radius (deg):")));
     fovBox->addWidget(m_fov);
     mainLayout->addLayout(fovBox);
@@ -46,6 +66,9 @@ PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr(
     // Optical Settings
     QGroupBox* grpOptics = new QGroupBox(tr("Optical Settings"), this);
     QGridLayout* opticsLayout = new QGridLayout(grpOptics);
+    opticsLayout->setContentsMargins(8, 8, 8, 8);
+    opticsLayout->setHorizontalSpacing(8);
+    opticsLayout->setVerticalSpacing(6);
     
     m_focalLength = new QLineEdit(this);
     m_focalLength->setPlaceholderText(tr("Focal Length (mm)"));
@@ -71,29 +94,35 @@ PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr(
     // Log
     m_log = new QTextEdit(this);
     m_log->setReadOnly(true);
-    m_log->setMaximumHeight(120); // Prevent log from taking over the window
+    m_log->setMaximumHeight(180);
     mainLayout->addWidget(m_log);
     
     // Actions
     QHBoxLayout* btnLay = new QHBoxLayout();
     btnLay->setContentsMargins(0, 0, 0, 0);
+    btnLay->setSpacing(6);
     m_solveBtn = new QPushButton(tr("Solve"), this);
-    
+    m_cancelBtn = new QPushButton(tr("Cancel"), this);
+    m_cancelBtn->setEnabled(false);
+
     QPushButton* closeBtn = new QPushButton(tr("Close"), this);
     connect(closeBtn, &QPushButton::clicked, this, &PlateSolvingDialog::reject);
-    
+
     btnLay->addWidget(closeBtn);
     btnLay->addStretch();
     btnLay->addWidget(m_solveBtn);
+    btnLay->addWidget(m_cancelBtn);
     mainLayout->addLayout(btnLay);
     
     // Objects
     m_simbad = new SimbadSearcher(this);
     m_solver = new NativePlateSolver(this);
+    m_astapSolver = new AstapSolver(this);
     
     // Connects
     connect(btnSearch, &QPushButton::clicked, this, &PlateSolvingDialog::onSearchSimbad);
     connect(m_solveBtn, &QPushButton::clicked, this, &PlateSolvingDialog::onSolve);
+    connect(m_cancelBtn, &QPushButton::clicked, this, &PlateSolvingDialog::onCancel);
     
     connect(m_simbad, &SimbadSearcher::objectFound, this, [this](const QString&, double ra, double dec){
         m_raHint->setText(QString::number(ra));
@@ -106,6 +135,9 @@ PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr(
     
     connect(m_solver, &NativePlateSolver::logMessage, this, &PlateSolvingDialog::onSolverLog);
     connect(m_solver, &NativePlateSolver::finished, this, &PlateSolvingDialog::onSolverFinished);
+    
+    connect(m_astapSolver, &AstapSolver::logMessage, this, &PlateSolvingDialog::onSolverLog);
+    connect(m_astapSolver, &AstapSolver::finished, this, &PlateSolvingDialog::onSolverFinished);
 }
 
 void PlateSolvingDialog::setImageBuffer(const ImageBuffer& img) {
@@ -174,6 +206,7 @@ void PlateSolvingDialog::onSolve() {
     m_solveBtn->setEnabled(false);
     m_log->clear();
     m_log->append(tr("Starting Solver..."));
+    m_log->append(tr("Parameters: RA=%1, Dec=%2, Radius=%3, PixelScale=%4").arg(ra).arg(dec).arg(r).arg(scale, 0, 'f', 3));
     
     if (MainWindowCallbacks* mw = getCallbacks()) {
         mw->startLongProcess();
@@ -182,7 +215,44 @@ void PlateSolvingDialog::onSolve() {
     
     // Capture target for consistency check
     m_jobTarget = m_viewer;
-    m_solver->solve(m_image, ra, dec, r, scale);
+    
+    // Show cancel button while solving
+    m_cancelBtn->setVisible(true);
+    m_cancelBtn->setEnabled(true);
+
+    m_isFallbackLoop = false;
+    m_lastRA = ra;
+    m_lastDec = dec;
+    m_lastRadius = r;
+    m_lastScale = scale;
+
+    QString engine = m_engineCombo->currentData().toString();
+    if (engine == "astap") {
+        m_astapSolver->solve(m_image, ra, dec, r, scale);
+    } else {
+        m_solver->solve(m_image, ra, dec, r, scale);
+    }
+}
+
+void PlateSolvingDialog::onCancel() {
+    m_log->append(tr("Cancel requested."));
+    QString engine = m_engineCombo->currentData().toString();
+    if (engine == "astap") {
+        m_astapSolver->cancelSolve();
+    } else {
+        m_log->append(tr("Native solver cancel not supported."));
+    }
+    m_cancelBtn->setEnabled(false);
+    m_solveBtn->setEnabled(true);
+}
+
+void PlateSolvingDialog::closeEvent(QCloseEvent* event) {
+    if (m_cancelBtn && m_cancelBtn->isVisible()) {
+        m_log->append(tr("Solve in progress — cancel before closing."));
+        event->ignore();
+        return;
+    }
+    DialogBase::closeEvent(event);
 }
 
 void PlateSolvingDialog::onSolverLog(const QString& text) {
@@ -191,6 +261,7 @@ void PlateSolvingDialog::onSolverLog(const QString& text) {
 
 void PlateSolvingDialog::onSolverFinished(const NativeSolveResult& res) {
     m_solveBtn->setEnabled(true);
+    m_cancelBtn->setEnabled(false);
     
     MainWindowCallbacks* mw = getCallbacks();
     if (mw) mw->endLongProcess();
@@ -233,6 +304,24 @@ void PlateSolvingDialog::onSolverFinished(const NativeSolveResult& res) {
         QMessageBox::information(this, tr("Success"), tr("Plate solving successful.\nSolution applied."));
     } else {
         m_log->append(tr("<b>Failed:</b> %1").arg(res.errorMsg));
+        
+        // --- Solver Fallback ---
+        if (!m_isFallbackLoop) {
+            m_isFallbackLoop = true;
+            QString currentEngine = m_engineCombo->currentData().toString();
+            QString nextEngine = (currentEngine == "astap") ? "native" : "astap";
+            QString nextLabel = (nextEngine == "astap") ? tr("ASTAP") : tr("Internal Solver");
+            
+            m_log->append(tr("<font color='orange'>Automatic fallback: trying %1...</font>").arg(nextLabel));
+            
+            if (nextEngine == "astap") {
+                m_astapSolver->solve(m_image, m_lastRA, m_lastDec, m_lastRadius, m_lastScale);
+            } else {
+                m_solver->solve(m_image, m_lastRA, m_lastDec, m_lastRadius, m_lastScale);
+            }
+            return; // Don't cleanup or disable buttons yet
+        }
+
         if (mw) mw->logMessage(tr("Solving Failed: %1").arg(res.errorMsg), 3, true);
     }
 }

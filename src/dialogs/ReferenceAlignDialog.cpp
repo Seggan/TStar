@@ -11,6 +11,8 @@
 #include <QPainter>
 #include <QIcon>
 #include <QApplication>
+#include <QResizeEvent>
+#include <QSize>
 #include <opencv2/opencv.hpp>
 #include <cmath>
 
@@ -54,11 +56,11 @@ ReferenceAlignDialog::ReferenceAlignDialog(QWidget* parent, const ImageBuffer& r
     
     QHBoxLayout* rotLayout = new QHBoxLayout();
     m_sliderRotation = new QSlider(Qt::Horizontal, this);
-    m_sliderRotation->setRange(-1800, 1800); // -180.0 to 180.0
+    m_sliderRotation->setRange(-2700, 2700); // -270.0 to 270.0
     m_sliderRotation->setValue(0);
     
     m_spinRotation = new QDoubleSpinBox(this);
-    m_spinRotation->setRange(-180.0, 180.0);
+    m_spinRotation->setRange(-270.0, 270.0);
     m_spinRotation->setSingleStep(0.1);
     m_spinRotation->setSuffix("°");
     m_spinRotation->setValue(0.0);
@@ -142,6 +144,14 @@ ImageBuffer ReferenceAlignDialog::getAlignedBuffer() const {
     return m_currentBuffer;
 }
 
+void ReferenceAlignDialog::resizeEvent(QResizeEvent* event) {
+    DialogBase::resizeEvent(event);
+    if (m_previewLabel->size() != m_lastPreviewSize) {
+        m_lastPreviewSize = m_previewLabel->size();
+        updatePreview();
+    }
+}
+
 void ReferenceAlignDialog::onFlipHorizontal() {
     m_flipH = !m_flipH;
     rebuildBuffer();
@@ -153,8 +163,7 @@ void ReferenceAlignDialog::onFlipVertical() {
 }
 
 void ReferenceAlignDialog::onRotateCW() {
-    m_rotationAngle -= 90.0;
-    while (m_rotationAngle <= -180.0) m_rotationAngle += 360.0;
+    onRotationChanged(m_rotationAngle - 90.0);
     
     m_spinRotation->blockSignals(true);
     m_spinRotation->setValue(m_rotationAngle);
@@ -163,13 +172,10 @@ void ReferenceAlignDialog::onRotateCW() {
     m_sliderRotation->blockSignals(true);
     m_sliderRotation->setValue(std::round(m_rotationAngle * 10.0));
     m_sliderRotation->blockSignals(false);
-    
-    rebuildBuffer();
 }
 
 void ReferenceAlignDialog::onRotateCCW() {
-    m_rotationAngle += 90.0;
-    while (m_rotationAngle > 180.0) m_rotationAngle -= 360.0;
+    onRotationChanged(m_rotationAngle + 90.0);
     
     m_spinRotation->blockSignals(true);
     m_spinRotation->setValue(m_rotationAngle);
@@ -178,12 +184,12 @@ void ReferenceAlignDialog::onRotateCCW() {
     m_sliderRotation->blockSignals(true);
     m_sliderRotation->setValue(std::round(m_rotationAngle * 10.0));
     m_sliderRotation->blockSignals(false);
-
-    rebuildBuffer();
 }
 
 void ReferenceAlignDialog::onRotationChanged(double value) {
     m_rotationAngle = value;
+    while (m_rotationAngle > 270.0)  m_rotationAngle -= 360.0;
+    while (m_rotationAngle < -270.0) m_rotationAngle += 360.0;
     rebuildBuffer();
 }
 
@@ -279,8 +285,14 @@ QImage ReferenceAlignDialog::bufferToQImageScaled(const ImageBuffer& buf, bool a
     bool isLinked = (buf.channels() == 3); 
     
     // getDisplayImage natively handles 24-bit STF and high-quality downscaling
-    QImage img = buf.getDisplayImage(mode, isLinked, nullptr, previewW, previewH);
+    // Use KeepAspectRatio to ensure we don't distort the astronomical field
+    QImage img = buf.getDisplayImage(mode, isLinked, nullptr, previewW, previewH, false, false, false, 0.25f, ImageBuffer::ChannelRGB);
     
+    // Ensure the image fits the space while preserving aspect ratio
+    if (img.width() > previewW || img.height() > previewH) {
+        img = img.scaled(previewW, previewH, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+
     // Ensure format is RGB888 for QPainter blending later
     if (img.format() != QImage::Format_RGB888) {
         return img.convertToFormat(QImage::Format_RGB888);
@@ -290,34 +302,49 @@ QImage ReferenceAlignDialog::bufferToQImageScaled(const ImageBuffer& buf, bool a
 }
 
 void ReferenceAlignDialog::updatePreview() {
+    int pw = m_previewLabel->width();
+    int ph = m_previewLabel->height();
+    if (pw <= 0 || ph <= 0) return;
+
     QImage refImg = bufferToQImageScaled(m_currentBuffer, true);
-    if (!refImg.isNull()) {
-        if (m_showOverlay && m_targetBuffer.isValid()) {
-            QImage targetImg = bufferToQImageScaled(m_targetBuffer, m_overlayAutoStretch);
-            if (targetImg.size() != refImg.size()) {
-                targetImg = targetImg.scaled(refImg.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-            }
-            
-            QImage blended(refImg.size(), QImage::Format_RGB888);
-            blended.fill(Qt::black);
-            QPainter p(&blended);
-            
-            // Draw Target (original image) as the base
-            p.drawImage(0, 0, targetImg);
-            
-            // Draw Reference (catalog) on top, but control its opacity INVERSELY as requested
-            // If the slider is 100%, we want to see only the Reference (opacity 1.0).
-            // If the slider is 0%, we want to see only the Target (opacity 0.0 for ref).
-            // Wait, you said "diminuendo l'opacità di quella sopra in maniera inversa".
-            // Let's use the slider linearly: slider 0 = 0% Reference, slider 100 = 100% Reference.
-            // When slider is 50%, it's 50/50.
-            p.setOpacity(m_overlayOpacity / 100.0);
-            p.drawImage(0, 0, refImg);
-            
-            p.end();
-            m_previewLabel->setPixmap(QPixmap::fromImage(blended));
-        } else {
-            m_previewLabel->setPixmap(QPixmap::fromImage(refImg));
+    if (refImg.isNull()) return;
+
+    QImage finalPreview;
+
+    if (m_showOverlay && m_targetBuffer.isValid()) {
+        QImage targetImg = bufferToQImageScaled(m_targetBuffer, m_overlayAutoStretch);
+        
+        // Ensure both images have the same scale for a perfect overlay.
+        // Since both were generated from bufferToQImageScaled with the same constraints, 
+        // they should already be very close, but aspect ratios of buffers might differ slightly 
+        // if cropping wasn't exact. Let's force them to match.
+        if (targetImg.size() != refImg.size()) {
+            targetImg = targetImg.scaled(refImg.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         }
+        
+        finalPreview = QImage(refImg.size(), QImage::Format_RGB888);
+        finalPreview.fill(Qt::black);
+        QPainter p(&finalPreview);
+        
+        // Base: Target (Original)
+        p.drawImage(0, 0, targetImg);
+        
+        // Overlay: Reference (Catalog)
+        p.setOpacity(m_overlayOpacity / 100.0);
+        p.drawImage(0, 0, refImg);
+        p.end();
+    } else {
+        finalPreview = refImg;
     }
+
+    // Centering in the label
+    QPixmap pix(pw, ph);
+    pix.fill(palette().color(QPalette::Window)); // Use theme background color
+    QPainter p(&pix);
+    int x = (pw - finalPreview.width()) / 2;
+    int y = (ph - finalPreview.height()) / 2;
+    p.drawImage(x, y, finalPreview);
+    p.end();
+
+    m_previewLabel->setPixmap(pix);
 }
