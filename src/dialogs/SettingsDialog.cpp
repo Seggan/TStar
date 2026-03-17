@@ -17,6 +17,13 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     
+    // --- Top Checkbox for Updates (before any groups) ---
+    m_checkUpdates = new QCheckBox(tr("Check for updates on startup"));
+    mainLayout->addWidget(m_checkUpdates);
+    
+    // Add separator/spacing
+    mainLayout->addSpacing(5);
+    
     // --- General Group ---
     QGroupBox* generalGroup = new QGroupBox(tr("General"), this);
     QFormLayout* generalForm = new QFormLayout(generalGroup);
@@ -31,8 +38,19 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
     
     generalForm->addRow(tr("Language:"), m_langCombo);
     
-    m_checkUpdates = new QCheckBox(tr("Check for updates on startup"));
-    generalForm->addRow("", m_checkUpdates);
+    // Workspace Color Profile
+    m_workspaceProfileCombo = new QComboBox();
+    m_workspaceProfileCombo->addItem(tr("sRGB IEC61966-2.1"), "sRGB");
+    m_workspaceProfileCombo->addItem(tr("Adobe RGB (1998)"), "AdobeRGB");
+    m_workspaceProfileCombo->addItem(tr("ProPhoto RGB"), "ProPhotoRGB");
+    m_workspaceProfileCombo->addItem(tr("Linear RGB"), "LinearRGB");
+    generalForm->addRow(tr("Workspace Color Profile:"), m_workspaceProfileCombo);
+    
+    m_autoConversionCombo = new QComboBox();
+    m_autoConversionCombo->addItem(tr("Ask"), "Ask");
+    m_autoConversionCombo->addItem(tr("Never"), "Never");
+    m_autoConversionCombo->addItem(tr("Always"), "Always");
+    generalForm->addRow(tr("Auto-Convert Color Profiles:"), m_autoConversionCombo);
 
     mainLayout->addWidget(generalGroup);
     
@@ -131,6 +149,16 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
     QString savedLang = m_settings.value("general/language", "System").toString();
     int idx = m_langCombo->findData(savedLang);
     if (idx != -1) m_langCombo->setCurrentIndex(idx);
+    
+    // Load workspace color profile preference
+    QString savedProfile = m_settings.value("color/workspace_profile", "sRGB").toString();
+    idx = m_workspaceProfileCombo->findData(savedProfile);
+    if (idx != -1) m_workspaceProfileCombo->setCurrentIndex(idx);
+    
+    // Load auto-conversion mode preference
+    QString savedMode = m_settings.value("color/auto_conversion_mode", "Ask").toString();
+    idx = m_autoConversionCombo->findData(savedMode);
+    if (idx != -1) m_autoConversionCombo->setCurrentIndex(idx);
 
     m_checkUpdates->setChecked(m_settings.value("general/check_updates", true).toBool());
 
@@ -289,6 +317,15 @@ void SettingsDialog::saveSettings() {
     m_settings.setValue("general/language", newLang);
     m_settings.setValue("general/check_updates", m_checkUpdates->isChecked());
     m_settings.setValue("display/24bit_stf", m_24bitStfCheck->isChecked());
+    
+    // Save workspace color profile preference
+    QString newProfile = m_workspaceProfileCombo->currentData().toString();
+    m_settings.setValue("color/workspace_profile", newProfile);
+    
+    // Save auto-conversion mode preference
+    QString newMode = m_autoConversionCombo->currentData().toString();
+    m_settings.setValue("color/auto_conversion_mode", newMode);
+    
     m_settings.sync(); // Ensure all settings are written to disk
     
     if (oldLang != newLang) {

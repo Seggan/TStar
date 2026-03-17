@@ -1,6 +1,8 @@
 #include "ImageBuffer.h"
 #include "core/SwapManager.h"
 #include "core/SimdOps.h"
+#include "io/IccProfileExtractor.h"
+#include "core/ColorProfileManager.h"
 
 
 #include "io/SimpleTiffWriter.h"
@@ -385,6 +387,18 @@ bool ImageBuffer::loadStandard(const QString& filePath) {
         }
     }
     
+    // Extract ICC profile if present
+    QByteArray iccData;
+    if (IccProfileExtractor::extractFromFile(filePath, iccData)) {
+        Metadata& meta = metadata();
+        meta.iccData = iccData;
+        core::ColorProfile profile(iccData);
+        if (profile.isValid()) {
+            meta.iccProfileName = profile.name();
+            meta.iccProfileType = static_cast<int>(profile.type());
+        }
+    }
+    
     return true;
 }
 
@@ -464,6 +478,18 @@ bool ImageBuffer::loadTiff32(const QString& filePath, QString* errorMsg, QString
     }
     
     setData(w, h, ch, data);
+    
+    // Extract ICC profile if present
+    QByteArray iccData;
+    if (IccProfileExtractor::extractFromFile(filePath, iccData)) {
+        Metadata& meta = metadata();
+        meta.iccData = iccData;
+        core::ColorProfile profile(iccData);
+        if (profile.isValid()) {
+            meta.iccProfileName = profile.name();
+            meta.iccProfileType = static_cast<int>(profile.type());
+        }
+    }
     
     if (debugInfo) {
         *debugInfo = QString("Loaded via OpenCV: %1x%2, %3ch, depth=%4").arg(w).arg(h).arg(ch).arg(img.depth());
@@ -4050,6 +4076,10 @@ QDataStream &operator<<(QDataStream &out, const ImageBuffer::Metadata &meta) {
     for (const auto& c : meta.rawHeaders) out << c;
     
     out << meta.xisfProperties;
+    out << meta.iccData;
+    out << meta.iccProfileName;
+    out << meta.iccProfileType;
+    out << meta.colorProfileHandled;
     return out;
 }
 
@@ -4073,6 +4103,28 @@ QDataStream &operator>>(QDataStream &in, ImageBuffer::Metadata &meta) {
     for (quint32 i = 0; i < cardSize; ++i) in >> meta.rawHeaders[i];
     
     in >> meta.xisfProperties;
+    in >> meta.iccData;
+    
+    // NEW: Handle backward compatibility for new fields
+    if (in.status() == QDataStream::Ok && in.device()->bytesAvailable()) {
+        in >> meta.iccProfileName;
+        if (in.device()->bytesAvailable()) {
+            in >> meta.iccProfileType;
+        } else {
+            meta.iccProfileType = -1;
+        }
+        
+        if (in.device()->bytesAvailable()) {
+            in >> meta.colorProfileHandled;
+        } else {
+            meta.colorProfileHandled = false;
+        }
+    } else {
+        meta.iccProfileName.clear();
+        meta.iccProfileType = -1;
+        meta.colorProfileHandled = false;
+    }
+    
     return in;
 }
 

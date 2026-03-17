@@ -40,6 +40,7 @@ class StarRecompositionDialog;
 class PerfectPaletteDialog;
 class PlateSolvingDialog;
 class PCCDialog;
+class SPCCDialog;
 class CropRotateDialog; // Forward declaration
 class StarAnalysisDialog;
 class HeaderViewerDialog;
@@ -55,6 +56,8 @@ class AnnotationToolDialog;
 class MultiscaleDecompDialog;
 class NarrowbandNormalizationDialog;
 class NBtoRGBStarsDialog;
+class TGVDenoiseDialog;
+class DeconvolutionDialog;
 struct Annotation;
 class BlinkComparatorDialog;
 
@@ -128,6 +131,7 @@ private slots:
     void applyGeometry(const QString& name, std::function<void(ImageBuffer&)> func);
     void openPlateSolvingDialog();
     void openPCCDialog();
+    void openSPCCDialog();
     void openPCCDistributionDialog();
     void openBackgroundNeutralizationDialog();
     void openPixelMathDialog();
@@ -145,6 +149,8 @@ private slots:
     void openAlignChannelsDialog();
     void openImageAnnotatorDialog();
     void openMultiscaleDecompDialog();
+    void openTGVDenoiseDialog();
+    void openDeconvolutionDialog();
     void openNarrowbandNormalizationDialog();
     void openNBtoRGBStarsDialog();
     void openBlinkComparatorDialog();
@@ -158,6 +164,8 @@ private slots:
     void openSelectiveColorDialog();
     void openTemperatureTintDialog();
     void openMagentaCorrectionDialog();
+    void openColorProfileDialog();
+    void handleColorProfileMismatch(const QString& imageName, const QString& imageProfile, const QString& workspaceProfile);
     
     // Stacking Suite
     void openStackingDialog();
@@ -302,6 +310,7 @@ private:
     QPointer<class PerfectPaletteDialog> m_ppDialog;
     QPointer<class PlateSolvingDialog> m_plateSolveDlg;
     QPointer<class PCCDialog> m_pccDlg;
+    QPointer<class SPCCDialog> m_spccDlg;
     QPointer<class CropRotateDialog> m_cropDlg;
     QPointer<class StarAnalysisDialog> m_starAnalysisDlg;
     QPointer<class HeaderViewerDialog> m_headerDlg;
@@ -312,10 +321,13 @@ private:
     QPointer<class AlignChannelsDialog> m_alignChannelsDlg;
     QPointer<class AnnotationToolDialog> m_annotatorDlg;
     QPointer<class MultiscaleDecompDialog> m_multiscaleDecompDlg;
+    QPointer<class TGVDenoiseDialog> m_tgvDenoiseDlg;
+    QPointer<class DeconvolutionDialog> m_deconvolutionDlg;
     QPointer<class NarrowbandNormalizationDialog> m_nbNormDlg;
     QPointer<class NBtoRGBStarsDialog> m_nbToRGBStarsDlg;
     QPointer<class BlinkComparatorDialog> m_blinkComparatorDlg;
     QPointer<class SettingsDialog> m_settingsDlg;
+    QPointer<class ColorProfileDialog> m_colorProfileDlg;
     
 public:
     // Persisted annotations across dialog destruction

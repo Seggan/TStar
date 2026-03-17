@@ -36,6 +36,8 @@ private:
     QLineEdit* m_starnetPath;
     QLineEdit* m_astapPath;
     QComboBox* m_langCombo;
+    QComboBox* m_workspaceProfileCombo;
+    QComboBox* m_autoConversionCombo;
     class QCheckBox* m_checkUpdates;
     class QCheckBox* m_24bitStfCheck;
     QLineEdit* m_astapExtraArgs;

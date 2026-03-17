@@ -180,6 +180,21 @@ void SidebarWidget::onTabClicked(int id) {
     }
 }
 
+void SidebarWidget::addBottomAction(const QIcon& icon, const QString& tooltip, std::function<void()> callback) {
+    QPushButton* btn = new QPushButton(this);
+    btn->setIcon(icon);
+    btn->setIconSize(QSize(20, 20));
+    btn->setFixedSize(28, 28);
+    btn->setToolTip(tooltip);
+    btn->setFlat(true);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setStyleSheet("QPushButton { background-color: transparent; border: none; padding: 4px; } "
+                       "QPushButton:hover { background-color: #3d3d3d; border-radius: 4px; }");
+    
+    m_tabLayout->addWidget(btn);
+    connect(btn, &QPushButton::clicked, callback);
+}
+
 void SidebarWidget::setExpanded(bool expanded) {
     if (m_expanded == expanded) return;
     m_expanded = expanded;

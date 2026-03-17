@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QVariantAnimation>
 #include <QButtonGroup>
+#include <functional>
 #include <QMap>
 #include <QMouseEvent>
 
@@ -43,9 +44,12 @@ public:
     // Programmatically open a panel
     void openPanel(const QString& name);
     
-    // Add text to the Console panel (assumed to be named "Console")
+    // Add text to the Console panel
     void logToConsole(const QString& htmlMsg);
     void updateLastLogLine(const QString& htmlMsg);
+    
+    // Bottom actions
+    void addBottomAction(const QIcon& icon, const QString& tooltip, std::function<void()> callback);
 
     // Public control for collapse/expand
     void collapse() { setExpanded(false); }

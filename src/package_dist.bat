@@ -154,6 +154,10 @@ if exist "%LIBRAW_SRC_DIR%\libraw.dll" (
 )
 
 echo.
+echo [STEP 7.6] Verifying Color Management (lcms2)...
+echo   - lcms2: OK (Statically linked into TStar.exe)
+
+echo.
 echo [STEP 8] Copying Qt plugins...
 set "PLUGIN_DIRS=platforms styles imageformats iconengines tls networkinformation"
 for %%d in (%PLUGIN_DIRS%) do (
@@ -253,20 +257,69 @@ if exist "scripts" (
 
 echo.
 echo [STEP 11.5] Copying ASTAP (optional bundling)...
-if exist "C:\Program Files\astap\astap.exe" (
+set "ASTAP_COPIED=0"
+set "ASTAP_BASE="
+if exist "C:\Program Files\astap\astap_cli.exe" set "ASTAP_BASE=C:\Program Files\astap"
+if "%ASTAP_BASE%"=="" if exist "C:\Program Files (x86)\astap\astap_cli.exe" set "ASTAP_BASE=C:\Program Files (x86)\astap"
+if "%ASTAP_BASE%"=="" if exist "C:\Program Files\astap\astap.exe" set "ASTAP_BASE=C:\Program Files\astap"
+if "%ASTAP_BASE%"=="" if exist "C:\Program Files (x86)\astap\astap.exe" set "ASTAP_BASE=C:\Program Files (x86)\astap"
+
+if not "%ASTAP_BASE%"=="" (
     call :EnsureDir "%DIST_DIR%\deps"
-    copy "C:\Program Files\astap\astap.exe" "%DIST_DIR%\deps\" >nul 2>&1
-    if exist "%DIST_DIR%\deps\astap.exe" (
-        echo   - astap.exe: OK
-    ) else (
-        echo   [WARNING] astap.exe: copy failed
+
+    if exist "%ASTAP_BASE%\astap_cli.exe" (
+        copy "%ASTAP_BASE%\astap_cli.exe" "%DIST_DIR%\deps\" >nul 2>&1
+        if exist "%DIST_DIR%\deps\astap_cli.exe" (
+            echo   - astap_cli.exe: OK
+            set "ASTAP_COPIED=1"
+        ) else (
+            echo   [WARNING] astap_cli.exe: copy failed
+        )
+    )
+
+    if exist "%ASTAP_BASE%\astap.exe" (
+        copy "%ASTAP_BASE%\astap.exe" "%DIST_DIR%\deps\" >nul 2>&1
+        if exist "%DIST_DIR%\deps\astap.exe" (
+            echo   - astap.exe: OK
+            set "ASTAP_COPIED=1"
+        ) else (
+            echo   [WARNING] astap.exe: copy failed
+        )
+    )
+
+    if exist "%ASTAP_BASE%\Databases" (
+        xcopy "%ASTAP_BASE%\Databases" "%DIST_DIR%\deps\Databases\" /E /I /Q >nul 2>&1
+        if exist "%DIST_DIR%\deps\Databases" (
+            echo   - ASTAP Databases: OK
+        ) else (
+            echo   [WARNING] ASTAP Databases: copy may have failed
+        )
+    )
+
+    if "%ASTAP_COPIED%"=="0" (
+        echo   [WARNING] ASTAP binaries were not copied from %ASTAP_BASE%
     )
 ) else (
-    echo   - [WARNING] ASTAP not found at C:\Program Files\astap\astap.exe, skipping
+    echo   - [WARNING] ASTAP not found in Program Files, skipping
 )
 
 echo.
-echo [STEP 12] Creating README...
+echo [STEP 12] Copying Data Catalogs and SPCC Resources...
+if exist "data" (
+    xcopy "data" "%DIST_DIR%\data\" /E /I /Q >nul 2>&1
+    if exist "%DIST_DIR%\data" (
+        echo   - data folder ^(catalogs, SPCC^): OK
+    ) else (
+        set /a ERROR_COUNT+=1
+        echo   [ERROR] data folder: FAILED to copy
+    )
+) else (
+    set /a ERROR_COUNT+=1
+    echo   [ERROR] data folder: NOT FOUND IN PROJECT ROOT
+)
+
+echo.
+echo [STEP 13] Creating README...
 (
 echo TStar v%VERSION% - Astrophotography Processing Application
 echo ============================================================

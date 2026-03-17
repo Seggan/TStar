@@ -150,6 +150,7 @@ copy_dylib "libwebpdemux" "libwebp" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
 
 copy_dylib "libfreetype" "freetype" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
 copy_dylib "libharfbuzz" "harfbuzz" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
+copy_dylib "liblcms2.2" "little-cms2" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
 
 copy_dylib "liblapack" "lapack" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
 copy_dylib "libjasper" "jasper" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
@@ -413,6 +414,52 @@ if [ -d "scripts" ]; then
     echo "  - TStar scripts (.tss): OK"
 else
     log_warning "TStar scripts folder (scripts) not found."
+fi
+
+# 7.3 Data catalogs and SPCC resources
+echo ""
+echo "[STEP 7.3] Copying Data Catalogs and SPCC Resources..."
+
+if [ -d "data" ]; then
+    ensure_dir "$RESOURCES_DIR/data"
+    cp -R data/* "$RESOURCES_DIR/data/"
+    echo "  - data folder (catalogs, SPCC): OK"
+else
+    log_warning "Data folder (data) not found."
+    ERROR_COUNT=$((ERROR_COUNT + 1))
+fi
+
+# --- Copy ASTAP CLI (optional bundling) ---
+echo ""
+echo "[STEP 7.5] Copying ASTAP CLI (optional)..."
+
+ASTAP_DST_DIR="$RESOURCES_DIR/deps"
+ensure_dir "$ASTAP_DST_DIR"
+
+ASTAP_SRC=""
+if [ -x "/Applications/ASTAP.app/Contents/MacOS/astap" ]; then
+    ASTAP_SRC="/Applications/ASTAP.app/Contents/MacOS/astap"
+elif [ -x "/usr/local/bin/astap" ]; then
+    ASTAP_SRC="/usr/local/bin/astap"
+elif [ -x "/opt/homebrew/bin/astap" ]; then
+    ASTAP_SRC="/opt/homebrew/bin/astap"
+fi
+
+if [ -n "$ASTAP_SRC" ]; then
+    cp "$ASTAP_SRC" "$ASTAP_DST_DIR/astap"
+    chmod +x "$ASTAP_DST_DIR/astap" 2>/dev/null || true
+    echo "  - astap: OK ($(basename "$ASTAP_SRC"))"
+
+    if [ -d "/Applications/ASTAP.app/Contents/Resources/Databases" ]; then
+        cp -R "/Applications/ASTAP.app/Contents/Resources/Databases" "$ASTAP_DST_DIR/" 2>/dev/null || true
+        if [ -d "$ASTAP_DST_DIR/Databases" ]; then
+            echo "  - ASTAP Databases: OK"
+        else
+            echo "  [WARNING] ASTAP Databases: copy may have failed"
+        fi
+    fi
+else
+    echo "  - [WARNING] ASTAP not found on this Mac, skipping"
 fi
 
 

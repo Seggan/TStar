@@ -77,7 +77,17 @@ private:
         double resolutionH = 72.0;
         double resolutionV = 72.0;
         QString resolutionUnit = "inch";
+        
         bool hasICCProfile = false;
+        long long iccLocation = 0;
+        long long iccSize = 0;
+        CompressionUtils::Codec iccCompression = CompressionUtils::Codec_None;
+        long long iccUncompressedSize = 0;
+        int iccShuffleItemSize = 0;
+        QString iccInlineEncoding;
+        QString iccEmbeddedData;
+        LocationType iccLocationType = Attachment;
+
         bool hasThumbnail = false;
     };
     
@@ -112,7 +122,7 @@ private:
     static int getSampleSize(const QString& format);
     
     // Internal: load image from parsed header info
-    static bool loadImage(QFile& file, const XISFHeaderInfo& info, ImageBuffer& buffer, QString* errorMsg);
+    static bool loadImage(QFile& file, XISFHeaderInfo& info, ImageBuffer& buffer, QString* errorMsg);
 };
 
 #endif // XISFREADER_H

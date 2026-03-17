@@ -45,8 +45,10 @@ QString AstapSolver::getAstapDatabasePath() {
 #elif defined(Q_OS_MAC)
     // macOS: Database path might be in ../Resources/Databases or similar
     QString potential[] = {
-        astapDir + "/../Resources/Databases",
         astapDir + "/Databases",
+        astapDir + "/../Databases",
+        astapDir + "/../Resources/deps/Databases",
+        astapDir + "/../Resources/Databases",
         "/Library/ASTAP/Databases"
     };
     for (const auto& p : potential) {
@@ -105,12 +107,24 @@ QString AstapSolver::getAstapExecutable() {
         if (QFile::exists(p)) return p;
     }
 #elif defined(Q_OS_MAC)
-    QString bundled = QCoreApplication::applicationDirPath() + "/astap";
-    if (QFile::exists(bundled)) return bundled;
+    // Bundle locations in TStar.app
+    const QString appDir = QCoreApplication::applicationDirPath();
+    QString bundledCandidates[] = {
+        appDir + "/../Resources/deps/astap",
+        appDir + "/../Resources/deps/astap_cli",
+        appDir + "/../Resources/astap",
+        appDir + "/astap"
+    };
+    for (const auto& p : bundledCandidates) {
+        if (QFile::exists(p)) return p;
+    }
+
     // System path
     if (QFile::exists("/Applications/ASTAP.app/Contents/MacOS/astap")) {
         return "/Applications/ASTAP.app/Contents/MacOS/astap";
     }
+    if (QFile::exists("/usr/local/bin/astap")) return "/usr/local/bin/astap";
+    if (QFile::exists("/opt/homebrew/bin/astap")) return "/opt/homebrew/bin/astap";
 #else
     if (QFile::exists("/opt/astap/astap")) return "/opt/astap/astap";
 #endif

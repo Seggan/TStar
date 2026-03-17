@@ -1,4 +1,6 @@
 #include "FitsLoader.h"
+#include "IccProfileExtractor.h"
+#include "core/ColorProfileManager.h"
 #include <fitsio.h>
 #include <QDebug>
 #include <vector>
@@ -191,6 +193,11 @@ bool FitsLoader::load(const QString& filePath, ImageBuffer& buffer, QString* err
                 status_meta = 0; 
             }
         }
+    }
+    
+    // Extract ICC profile if present (only if filePath is provided)
+    if (!filePath.isEmpty()) {
+        IccProfileExtractor::extractFromFile(filePath, meta.iccData);
     }
     
     buffer.setMetadata(meta);
@@ -460,7 +467,7 @@ bool FitsLoader::loadRegion(const QString& filePath, ImageBuffer& buffer, int x,
     }
 
     // Call loadHDU with region
-    bool res = loadHDU(fptr, 0, buffer, errorMsg, x, y, w, h);
+    bool res = loadHDU(fptr, 0, buffer, errorMsg, filePath, x, y, w, h);
 
     status = 0;
     fits_close_file(fptr, &status);
@@ -501,14 +508,14 @@ bool FitsLoader::loadExtension(const QString& filePath, int hduIndex,
         return false;
     }
     
-    bool result = loadHDU(fptr, hduIndex, buffer, errorMsg);
+    bool result = loadHDU(fptr, hduIndex, buffer, errorMsg, filePath);
     
     status = 0;
     fits_close_file(fptr, &status);
     return result;
 }
 
-bool FitsLoader::loadHDU(void* fitsptr, [[maybe_unused]] int hduIndex, ImageBuffer& buffer, QString* errorMsg, int rx, int ry, int rw, int rh) {
+bool FitsLoader::loadHDU(void* fitsptr, [[maybe_unused]] int hduIndex, ImageBuffer& buffer, QString* errorMsg, const QString& filePath, int rx, int ry, int rw, int rh) {
     fitsfile* fptr = static_cast<fitsfile*>(fitsptr);
     int status = 0;
     
@@ -650,6 +657,15 @@ bool FitsLoader::loadHDU(void* fitsptr, [[maybe_unused]] int hduIndex, ImageBuff
         meta.objectName = meta.objectName.isEmpty() ? QString::fromUtf8(extname) : meta.objectName;
     }
     
+    // Extract ICC profile if present
+    if (IccProfileExtractor::extractFromFile(filePath, meta.iccData)) {
+        core::ColorProfile profile(meta.iccData);
+        if (profile.isValid()) {
+            meta.iccProfileName = profile.name();
+            meta.iccProfileType = static_cast<int>(profile.type());
+        }
+    }
+    
     buffer.setMetadata(meta);
     buffer.setData(width, height, nChannels, allPixels);
     return true;
@@ -683,6 +699,16 @@ bool FitsLoader::loadMetadata(const QString& filePath, ImageBuffer& buffer, QStr
 
     int nChannels = (naxis >= 3) ? naxes[2] : 1;
     buffer = ImageBuffer(naxes[0], naxes[1], nChannels);
+    
+    // Extract ICC profile if present
+    if (IccProfileExtractor::extractFromFile(filePath, meta.iccData)) {
+        core::ColorProfile profile(meta.iccData);
+        if (profile.isValid()) {
+            meta.iccProfileName = profile.name();
+            meta.iccProfileType = static_cast<int>(profile.type());
+        }
+    }
+    
     buffer.setMetadata(meta);
     
     return true;

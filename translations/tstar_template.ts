@@ -552,10 +552,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Downloading… 0%</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Failed to download ASTAP D50 Database.</source>
             <translation type="unfinished" />
         </message>
@@ -575,11 +571,43 @@
     <context>
         <name>AstapSolver</name>
         <message>
+            <source>ASTAP attempt: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>ASTAP executable not found. Please set the path in Settings.</source>
             <translation type="unfinished" />
         </message>
         <message>
+            <source>ASTAP exit code: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>ASTAP failed to solve the image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP process did not exit normally.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP solve cancelled.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP timed out after %1 seconds. Terminating process...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP timed out.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP was unable to solve the image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Calculated FOV (Height): %1 degrees (dims=%2x%3, scale=%4 arcsec/px)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -595,11 +623,43 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Failed to start ASTAP process.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Invalid image buffer for ASTAP solve.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Large FOV detected: reducing from %1° to %2° for search stability</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>QProcess start error: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Saving temporary image for ASTAP...</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>blind solve</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>blind solve (without scale/FOV)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>hinted solve (with scale/FOV)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>hinted solve (without scale/FOV)</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -1121,6 +1181,120 @@
         </message>
         <message>
             <source>Reset</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>ColorProfileDialog</name>
+        <message>
+            <source> (Workspace Default)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Action</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Assign Profile (Keep pixel values, change interpretation)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Browse...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color Profile Management</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Convert to Profile (Change pixel values to match visual intent)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Current Image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Custom ICC Profile...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Destination Profile</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Embedded Profile:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Error</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ICC File:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ICC Profiles (*.icc *.icm);;All Files (*.*)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No active image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Profile:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Select ICC Profile</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>The selected profile is invalid.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Unknown</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>ColorProfileManager</name>
+        <message>
+            <source>Color profile mismatch detected for image:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Converting color profile...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Embedded ICC Profile</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Invalid profiles provided for conversion.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Successfully converted buffer from</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Successfully converted buffer from %1 to %2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Unknown Profile</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Workspace profile updated to:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>to</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -1964,6 +2138,241 @@
         </message>
         <message>
             <source>Only single-channel mosaic images can be debayered.</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>DeconvolutionDialog</name>
+        <message>
+            <source>0 = original in masked area, 1 = deconvolved.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Airy</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Airy Aperture:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Airy Focal Len:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Airy Obstruction:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Airy Pixel Size:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Airy Wavelength:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Algorithm</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Angle:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Applying deconvolution...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Auto</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blend in mask:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Border Handling</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Computing preview...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Convergence tol:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Custom image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Deconvolution</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Deconvolution [%1] applied: FWHM=%2px, iter=%3</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Dilation radius:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Disk</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Done - %1 iterations, d=%2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Enable star mask</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Estimated FWHM: %1 px</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Estimating FWHM from stars...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>FWHM:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed: </source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed:\n</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Full Width at Half Maximum of the PSF in pixels.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Gaussian</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Iteration Control</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Iterations:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>K (noise power):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Kernel size:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Measure FWHM from stars in the image.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Method:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Minor/major axis ratio. 1.0 = circular PSF.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Mirror padding:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Moffat</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Moffat beta:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF kernel preview (logarithmic scale)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF preview:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF type:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Point Spread Function (PSF)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Preview</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Preview - %1 iterations</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>RL + Total Variation (RLTV)  [recommended]</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reset to original.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Richardson-Lucy (RL)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Roundness:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Star Protection Mask</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>TV Regularisation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Threshold:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Wiener / MMSE</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Wiener Parameters</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>lambda_TV weight:</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -4295,6 +4704,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Auto-converted image '%1' to workspace profile.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>B</source>
             <translation type="unfinished" />
         </message>
@@ -4427,7 +4840,27 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Color Profile Management</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color Profile Mismatch</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Color Saturation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color profile conversion failed: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color profile conversion finished successfully.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color profile conversion started...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4448,6 +4881,10 @@
         </message>
         <message>
             <source>Convert RAW to FITS...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Converted image '%1' to workspace profile.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4508,6 +4945,10 @@
         </message>
         <message>
             <source>Debayer</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Deconvolution</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -5055,6 +5496,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Opening Deconvolution...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Opening Extract Luminance...</source>
             <translation type="unfinished" />
         </message>
@@ -5127,6 +5572,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Opening SPCC...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Opening Script Browser...</source>
             <translation type="unfinished" />
         </message>
@@ -5152,6 +5601,10 @@
         </message>
         <message>
             <source>Opening Statistical Stretch...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Opening TGV Denoise...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -5483,6 +5936,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Spectrophotometric Color Calibration</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Spectrophotometric Color Calibration (SPCC)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Square Root</source>
             <translation type="unfinished" />
         </message>
@@ -5519,6 +5980,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>TGV Denoise</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>TIFF Files (*.tiff *.tif);;</source>
             <translation type="unfinished" />
         </message>
@@ -5544,6 +6009,10 @@
         </message>
         <message>
             <source>The following project files referencing this workspace were found: %1 Delete these files?</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>The image '%1' has a color profile (%2) that differs from the workspace profile (%3). Would you like to convert it to the workspace profile?</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7166,6 +7635,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>&lt;font color='orange'&gt;Automatic fallback: trying %1...&lt;/font&gt;</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>ASTAP</source>
             <translation type="unfinished" />
         </message>
@@ -7183,6 +7656,14 @@
         </message>
         <message>
             <source>Calculated pixel scale: %1 arcsec/px</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancel requested.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7214,11 +7695,23 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Internal Solver</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Native solver cancel not supported.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Object Name (e.g. M31)</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Optical Settings</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Parameters: RA=%1, Dec=%2, Radius=%3, PixelScale=%4</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7271,6 +7764,10 @@
         </message>
         <message>
             <source>Solve</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Solve in progress — cancel before closing.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8493,6 +8990,165 @@
         </message>
     </context>
     <context>
+        <name>SPCCDialog</name>
+        <message>
+            <source>Aperture radius:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>B_in</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>B_out</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Calibration Options</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Calibration Results</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Calibration complete.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Calibration failed:\n</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Camera / Sensor:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed: </source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Filter:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>G_in</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>G_out</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Limit to mag &lt;</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Magnitude limit:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Max stars:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Minimum SNR:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Minimum signal-to-noise ratio for a star to be used.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Normalise to solar (G2V) white point</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Optional optical filter in the optical path (L, UV/IR cut, etc.)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>R/G/B scales: —</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>RMS residual: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>R_in</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>R_out</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reset to original.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Residual: —</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Run SPCC</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Running SPCC…</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>SPCC</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Scales  R=×%1   G=×%2   B=×%3</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Sensor &amp; Filter Profile</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Spectrophotometric Color Calibration (SPCC)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Star Detection &amp; Cross-Match</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stars used: %1 / %2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stars used: —</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Subtract background before calibration</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Use full 3×3 colour matrix (vs. diagonal)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>White balance:</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
         <name>SaturationDialog</name>
         <message>
             <source>All Colors</source>
@@ -8917,6 +9573,38 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>ASTAP Extra Args:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP Star Database</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP Star Database: installed</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ASTAP Star Database: not installed</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Adobe RGB (1998)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Always</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Ask</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Auto-Convert Color Profiles:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Browse...</source>
             <translation type="unfinished" />
         </message>
@@ -8989,7 +9677,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Linear RGB</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Models downloaded and installed successfully.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Never</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9006,6 +9702,10 @@
         </message>
         <message>
             <source>Preparing…</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ProPhoto RGB</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9034,6 +9734,14 @@
         </message>
         <message>
             <source>System Default</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Workspace Color Profile:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>sRGB IEC61966-2.1</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -10472,6 +11180,113 @@
         </message>
         <message>
             <source>© 2026 SetiAstro</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>TGVDenoiseDialog</name>
+        <message>
+            <source>Advanced TGV Parameters</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Applying TGV Denoise…</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Auto-estimate noise level</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Computing preview…</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Convergence tol:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Done — %1 iterations, gap=%2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed: </source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>High</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Low</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Max iterations:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Noise Reduction Strength</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Preview</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Preview failed: </source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Preview — %1 iterations, gap=%2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Process each channel independently</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Processing failed:\n</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reset to original.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>TGV Denoise</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>TGV Denoise applied: α₀=%1, α₁=%2, λ=%3, %4 iter</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>α₀  (order 0 weight):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>α₁  (order 1 weight):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>λ  (data fidelity):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>σ̂ = —</source>
             <translation type="unfinished" />
         </message>
     </context>

@@ -1,5 +1,7 @@
 #include "RawLoader.h"
 #include "../ImageBuffer.h"
+#include "IccProfileExtractor.h"
+#include "core/ColorProfileManager.h"
 
 #include <QFileInfo>
 #include <QDateTime>
@@ -291,6 +293,15 @@ bool load(const QString& filePath, ImageBuffer& buf, QString* errorMsg)
     meta.rawHeaders.push_back({"NAXIS1",  QString::number(visW), "Image width"});
     meta.rawHeaders.push_back({"NAXIS2",  QString::number(visH), "Image height"});
     meta.rawHeaders.push_back({"BITPIX",  "16", "Original ADC bit depth"});
+
+    // Extract ICC profile if present
+    if (IccProfileExtractor::extractFromFile(filePath, meta.iccData)) {
+        core::ColorProfile profile(meta.iccData);
+        if (profile.isValid()) {
+            meta.iccProfileName = profile.name();
+            meta.iccProfileType = static_cast<int>(profile.type());
+        }
+    }
 
     libraw_recycle(lr);
     libraw_close(lr);

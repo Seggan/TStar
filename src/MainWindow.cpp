@@ -67,6 +67,7 @@
 #include "dialogs/PerfectPaletteDialog.h"
 #include "dialogs/PlateSolvingDialog.h"
 #include "dialogs/PCCDialog.h"
+#include "dialogs/SPCCDialog.h"
 #include "dialogs/BackgroundNeutralizationDialog.h"
 #include "dialogs/PixelMathDialog.h"
 
@@ -97,6 +98,8 @@
 #include <QTextEdit>
 #include <QDateTime>
 #include <QSplitter>
+#include "core/ColorProfileManager.h"
+#include "dialogs/ColorProfileDialog.h"
 #include "dialogs/AstroSpikeDialog.h"
 #include "dialogs/DebayerDialog.h"
 #include "dialogs/ContinuumSubtractionDialog.h"
@@ -116,6 +119,8 @@
 #include "dialogs/TemperatureTintDialog.h"
 #include "dialogs/MagentaCorrectionDialog.h"
 #include "dialogs/MultiscaleDecompDialog.h"
+#include "dialogs/TGVDenoiseDialog.h"
+#include "dialogs/DeconvolutionDialog.h"
 #include "dialogs/NarrowbandNormalizationDialog.h"
 #include "dialogs/NBtoRGBStarsDialog.h"
 #include <QResizeEvent>
@@ -449,6 +454,39 @@ MainWindow::MainWindow(QWidget *parent)
     if (m_mdiArea->viewport()) {
         m_mdiArea->viewport()->installEventFilter(this);
     }
+
+    connect(&core::ColorProfileManager::instance(), &core::ColorProfileManager::profileMismatchDetected,
+            this, &MainWindow::handleColorProfileMismatch);
+    
+    // Connect color profile conversion signals for UI feedback
+    connect(&core::ColorProfileManager::instance(), &core::ColorProfileManager::conversionStarted, this, [this](quint64 /*id*/) {
+        if (m_sidebar) {
+            m_sidebar->openPanel("Console");
+            if (m_tempConsoleTimer) m_tempConsoleTimer->stop(); // Don't close while working
+        }
+        log(tr("Color profile conversion started..."), Log_Info);
+    });
+
+    connect(&core::ColorProfileManager::instance(), &core::ColorProfileManager::conversionFinished, this, [this](quint64 /*id*/) {
+        if (m_lastActiveImageViewer) {
+            m_lastActiveImageViewer->refreshDisplay(true);
+        }
+        log(tr("Color profile conversion finished successfully."), Log_Success);
+        
+        // Refresh the dialog if it's open to show the NEW profile
+        if (m_colorProfileDlg && m_colorProfileDlg->isVisible()) {
+            QMetaObject::invokeMethod(m_colorProfileDlg, "loadCurrentInfo", Qt::AutoConnection);
+        }
+
+        if (m_tempConsoleTimer) m_tempConsoleTimer->start(3000); // Close after 3s
+    });
+
+    connect(&core::ColorProfileManager::instance(), &core::ColorProfileManager::conversionFailed, this, [this](quint64 /*id*/, const QString& error) {
+        log(tr("Color profile conversion failed: %1").arg(error), Log_Error);
+        if (m_tempConsoleTimer) m_tempConsoleTimer->start(5000); // Close after 5s on error
+    });
+
+    setupSidebarTools();
     
     connect(m_mdiArea, &QMdiArea::subWindowActivated, [this](QMdiSubWindow *window) {
         qDebug() << "[MainWindow] subWindowActivated: " << (window ? "Valid Window" : "NULL");
@@ -552,14 +590,45 @@ MainWindow::MainWindow(QWidget *parent)
                     if (m_ppDialog) m_ppDialog->setViewer(v);
                     if (m_plateSolveDlg) m_plateSolveDlg->setViewer(v);
                     if (m_pccDlg) m_pccDlg->setViewer(v);
+                    if (m_spccDlg) m_spccDlg->setViewer(v);
                     if (m_cropDlg) m_cropDlg->setViewer(v);
 
                     if (m_pccDlg) m_pccDlg->setViewer(v);
                     if (m_cropDlg) m_cropDlg->setViewer(v);
                     if (m_astroSpikeDlg) m_astroSpikeDlg->setViewer(v);
                     if (m_annotatorDlg) m_annotatorDlg->setViewer(v);
+                    if (m_tgvDenoiseDlg) m_tgvDenoiseDlg->setViewer(v);
+                    if (m_deconvolutionDlg) m_deconvolutionDlg->setViewer(v);
 
                     if (m_headerPanel) m_headerPanel->setMetadata(v->getBuffer().metadata());
+                    
+                    // --- Color Profile Check ---
+                    // Only check/warn if the image profile hasn't already been handled this session
+                    bool alreadyHandled = v->getBuffer().metadata().colorProfileHandled;
+                    if (!alreadyHandled) {
+                        core::ColorProfile imageProfile(v->getBuffer().metadata().iccData);
+                        
+                        if (core::ColorProfileManager::instance().isMismatch(imageProfile)) {
+                            core::AutoConversionMode mode = core::ColorProfileManager::instance().autoConversionMode();
+                            
+                            if (mode == core::AutoConversionMode::Always) {
+                                // Auto-convert without asking
+                                core::ColorProfileManager::instance().convertToWorkspace(v->getBuffer(), imageProfile);
+                                
+                                // Mark as handled and refresh
+                                ImageBuffer::Metadata meta = v->getBuffer().metadata();
+                                meta.colorProfileHandled = true;
+                                v->getBuffer().setMetadata(meta);
+                                v->refreshDisplay();
+                                
+                                log(tr("Auto-converted image '%1' to workspace profile.").arg(v->windowTitle()), Log_Success);
+                            } else if (mode == core::AutoConversionMode::Ask) {
+                                // Show the dialog
+                                core::ColorProfileManager::instance().checkMismatchAndWarn(imageProfile, v->windowTitle());
+                            }
+                            // If mode == Never, do nothing
+                        }
+                    }
                     
                     // Sync Display Mode UI to the new viewer's state
                     if (m_stretchCombo) {
@@ -1083,6 +1152,9 @@ MainWindow::MainWindow(QWidget *parent)
     addMenuAction(colorMenu, tr("Photometric Color Calibration"), "", [this](){
         openPCCDialog();
     });
+    addMenuAction(colorMenu, tr("Spectrophotometric Color Calibration (SPCC)"), "", [this](){
+        openSPCCDialog();
+    });
     addMenuAction(colorMenu, tr("Background Neutralization"), "", [this](){
         openBackgroundNeutralizationDialog();
     });
@@ -1190,6 +1262,12 @@ MainWindow::MainWindow(QWidget *parent)
     });
     addMenuAction(utilMenu, tr("Wavescale HDR"), "", [this](){
         openWavescaleHDRDialog();
+    });
+    addMenuAction(utilMenu, tr("TGV Denoise"), "", [this](){
+        openTGVDenoiseDialog();
+    });
+    addMenuAction(utilMenu, tr("Deconvolution"), "", [this](){
+        openDeconvolutionDialog();
     });
     addMenuAction(utilMenu, tr("FITS Header Editor"), "", [this](){
          openHeaderEditorDialog();
@@ -3304,6 +3382,76 @@ void MainWindow::openPCCDialog() {
     });
 }
 
+void MainWindow::openSPCCDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
+        return;
+    }
+
+    if (m_spccDlg) {
+        m_spccDlg->raise();
+        m_spccDlg->activateWindow();
+        m_spccDlg->setViewer(viewer);
+        return;
+    }
+
+    auto dlg = new SPCCDialog(viewer, this, nullptr);
+    m_spccDlg = dlg;
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+
+    log(tr("Opening SPCC..."), Log_Info, true);
+    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, dlg, tr("Spectrophotometric Color Calibration"));
+    QTimer::singleShot(50, sub, [this, sub](){
+        sub->adjustSize();
+        centerToolWindow(sub);
+    });
+}
+
+void MainWindow::openTGVDenoiseDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
+        return;
+    }
+
+    if (m_tgvDenoiseDlg) {
+        m_tgvDenoiseDlg->raise();
+        m_tgvDenoiseDlg->activateWindow();
+        m_tgvDenoiseDlg->setViewer(viewer);
+        return;
+    }
+
+    auto dlg = new TGVDenoiseDialog(viewer, this, nullptr);
+    m_tgvDenoiseDlg = dlg;
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+
+    log(tr("Opening TGV Denoise..."), Log_Info, true);
+    setupToolSubwindow(nullptr, dlg, tr("TGV Denoise"));
+}
+
+void MainWindow::openDeconvolutionDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
+        return;
+    }
+
+    if (m_deconvolutionDlg) {
+        m_deconvolutionDlg->raise();
+        m_deconvolutionDlg->activateWindow();
+        m_deconvolutionDlg->setViewer(viewer);
+        return;
+    }
+
+    auto dlg = new DeconvolutionDialog(viewer, this, nullptr);
+    m_deconvolutionDlg = dlg;
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+
+    log(tr("Opening Deconvolution..."), Log_Info, true);
+    setupToolSubwindow(nullptr, dlg, tr("Deconvolution"));
+}
+
 void MainWindow::openCurvesDialog() {
     ImageViewer* viewer = currentViewer();
     if (!viewer) {
@@ -3820,8 +3968,62 @@ void MainWindow::openPCCDistributionDialog() {
 
     log(tr("Opened PCC Distribution Tool"), Log_Action, true);
 }
-// setupSidebarTools removed - logic moved to Process menu
-void MainWindow::setupSidebarTools() {}
+
+void MainWindow::setupSidebarTools() {
+    if (m_sidebar) {
+        m_sidebar->addBottomAction(QIcon(":/images/color_management.svg"), tr("Color Profile Management"), [this](){
+            openColorProfileDialog();
+        });
+    }
+}
+
+void MainWindow::openColorProfileDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
+        return;
+    }
+    
+    if (!m_colorProfileDlg) {
+        m_colorProfileDlg = new ColorProfileDialog(&viewer->getBuffer(), viewer, this);
+        connect(m_colorProfileDlg, &QDialog::accepted, this, [this](){
+            if (currentViewer()) currentViewer()->refreshDisplay();
+        });
+    } else {
+        m_colorProfileDlg->setBuffer(&viewer->getBuffer(), viewer);
+    }
+    
+    m_colorProfileDlg->show();
+    m_colorProfileDlg->raise();
+    m_colorProfileDlg->activateWindow();
+}
+
+void MainWindow::handleColorProfileMismatch(const QString& imageName, const QString& imageProfile, const QString& workspaceProfile) {
+    QMessageBox::StandardButton reply = QMessageBox::question(this, tr("Color Profile Mismatch"),
+        tr("The image '%1' has a color profile (%2) that differs from the workspace profile (%3). Would you like to convert it to the workspace profile?").arg(imageName, imageProfile, workspaceProfile),
+        QMessageBox::Yes | QMessageBox::No);
+        
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) return;
+    
+    ImageBuffer::Metadata meta = viewer->getBuffer().metadata();
+    
+    if (reply == QMessageBox::Yes) {
+        core::ColorProfile sourceProfile(viewer->getBuffer().metadata().iccData);
+        core::ColorProfileManager::instance().convertToWorkspace(viewer->getBuffer(), sourceProfile);
+        
+        // Update metadata with the new profile ICC data from convertToWorkspace
+        meta = viewer->getBuffer().metadata();
+        meta.colorProfileHandled = true;
+        viewer->getBuffer().setMetadata(meta);
+        
+        viewer->refreshDisplay();
+        log(tr("Converted image '%1' to workspace profile.").arg(imageName), Log_Success);
+    } else {
+        meta.colorProfileHandled = true;
+        viewer->getBuffer().setMetadata(meta);
+    }
+}
 
 void MainWindow::runCosmicClarity(const CosmicClarityParams& params) {
      ImageViewer* v = currentViewer();

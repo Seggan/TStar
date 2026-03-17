@@ -271,6 +271,12 @@ public:
         std::vector<HeaderCard> rawHeaders;
         
         QVariantMap xisfProperties;
+        QByteArray iccData;
+        
+        // Color Profile Management
+        QString iccProfileName;             // Human-readable name (e.g., "sRGB")
+        int iccProfileType = -1;            // StandardProfile enum value (-1 for custom/none)
+        bool colorProfileHandled = false;  // Flag to prevent repeated profile mismatch warnings
 
         // Serialization
         friend QDataStream &operator<<(QDataStream &out, const Metadata &meta);

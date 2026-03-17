@@ -552,10 +552,6 @@
             <translation type="finished">Téléchargement… %1%</translation>
         </message>
         <message>
-            <source>Downloading… 0%</source>
-            <translation type="finished">Téléchargement… 0%</translation>
-        </message>
-        <message>
             <source>Failed to download ASTAP D50 Database.</source>
             <translation type="finished">Échec du téléchargement de la base de données ASTAP D50.</translation>
         </message>
@@ -575,12 +571,44 @@
     <context>
         <name>AstapSolver</name>
         <message>
+            <source>ASTAP attempt: %1</source>
+            <translation type="finished">Tentative ASTAP : %1</translation>
+        </message>
+        <message>
             <source>ASTAP executable not found. Please set the path in Settings.</source>
             <translation type="finished">Exécutable ASTAP non trovato. Veuillez définir le chemin dans les Paramètres.</translation>
         </message>
         <message>
+            <source>ASTAP exit code: %1</source>
+            <translation type="finished">Code de sortie ASTAP : %1</translation>
+        </message>
+        <message>
             <source>ASTAP failed to solve the image.</source>
             <translation type="finished">ASTAP n'a pas réussi à résoudre l'image.</translation>
+        </message>
+        <message>
+            <source>ASTAP process did not exit normally.</source>
+            <translation type="finished">Le processus ASTAP ne s'est pas terminé normalement.</translation>
+        </message>
+        <message>
+            <source>ASTAP solve cancelled.</source>
+            <translation type="finished">Résolution ASTAP annulée.</translation>
+        </message>
+        <message>
+            <source>ASTAP timed out after %1 seconds. Terminating process...</source>
+            <translation type="finished">ASTAP a expiré après %1 secondes. Fin du processus...</translation>
+        </message>
+        <message>
+            <source>ASTAP timed out.</source>
+            <translation type="finished">ASTAP a expiré.</translation>
+        </message>
+        <message>
+            <source>ASTAP was unable to solve the image.</source>
+            <translation type="finished">ASTAP n'a pas pu résoudre l'image.</translation>
+        </message>
+        <message>
+            <source>Calculated FOV (Height): %1 degrees (dims=%2x%3, scale=%4 arcsec/px)</source>
+            <translation type="finished">FOV calculé (Hauteur) : %1 degrés (dim=%2x%3, échelle=%4 arcsec/px)</translation>
         </message>
         <message>
             <source>Failed to parse ASTAP WCS file.</source>
@@ -595,12 +623,44 @@
             <translation type="finished">Échec de l'enregistrement de l'image temporaire.</translation>
         </message>
         <message>
+            <source>Failed to start ASTAP process.</source>
+            <translation type="finished">Échec du démarrage du processus ASTAP.</translation>
+        </message>
+        <message>
+            <source>Invalid image buffer for ASTAP solve.</source>
+            <translation type="finished">Tampon d'image invalide pour la résolution ASTAP.</translation>
+        </message>
+        <message>
+            <source>Large FOV detected: reducing from %1° to %2° for search stability</source>
+            <translation type="finished">Large FOV détecté : réduction de %1° à %2° pour la stabilité de la recherche</translation>
+        </message>
+        <message>
+            <source>QProcess start error: %1</source>
+            <translation type="finished">Erreur de démarrage QProcess : %1</translation>
+        </message>
+        <message>
             <source>Saving temporary image for ASTAP...</source>
             <translation type="finished">Enregistrement de l'image temporaire pour ASTAP...</translation>
         </message>
         <message>
             <source>Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg</source>
             <translation type="finished">Démarrage d'ASTAP Solver. Centre : %1, %2 Rayon : %3 deg</translation>
+        </message>
+        <message>
+            <source>blind solve</source>
+            <translation type="finished">résolution aveugle</translation>
+        </message>
+        <message>
+            <source>blind solve (without scale/FOV)</source>
+            <translation type="finished">résolution aveugle (sans échelle/FOV)</translation>
+        </message>
+        <message>
+            <source>hinted solve (with scale/FOV)</source>
+            <translation type="finished">résolution assistée (avec échelle/FOV)</translation>
+        </message>
+        <message>
+            <source>hinted solve (without scale/FOV)</source>
+            <translation type="finished">résolution assistée (sans échelle/FOV)</translation>
         </message>
     </context>
     <context>
@@ -1122,6 +1182,120 @@
         <message>
             <source>Reset</source>
             <translation type="finished">Réinitialiser</translation>
+        </message>
+    </context>
+    <context>
+        <name>ColorProfileDialog</name>
+        <message>
+            <source> (Workspace Default)</source>
+            <translation type="finished"> (Par défaut de l'espace)</translation>
+        </message>
+        <message>
+            <source>Action</source>
+            <translation type="finished">Action</translation>
+        </message>
+        <message>
+            <source>Assign Profile (Keep pixel values, change interpretation)</source>
+            <translation type="finished">Attribuer un profil (Conserver les valeurs des pixels, changer l'interprétation)</translation>
+        </message>
+        <message>
+            <source>Browse...</source>
+            <translation type="finished">Parcourir...</translation>
+        </message>
+        <message>
+            <source>Color Profile Management</source>
+            <translation type="finished">Gestion du Profil Colorimétrique</translation>
+        </message>
+        <message>
+            <source>Convert to Profile (Change pixel values to match visual intent)</source>
+            <translation type="finished">Convertir en profil (Modifier les valeurs des pixels pour conserver l'intention visuelle)</translation>
+        </message>
+        <message>
+            <source>Current Image</source>
+            <translation type="finished">Image Actuelle</translation>
+        </message>
+        <message>
+            <source>Custom ICC Profile...</source>
+            <translation type="finished">Profil ICC Personnalisé...</translation>
+        </message>
+        <message>
+            <source>Destination Profile</source>
+            <translation type="finished">Profil de Destination</translation>
+        </message>
+        <message>
+            <source>Embedded Profile:</source>
+            <translation type="finished">Profil Intégré :</translation>
+        </message>
+        <message>
+            <source>Error</source>
+            <translation type="finished">Erreur</translation>
+        </message>
+        <message>
+            <source>ICC File:</source>
+            <translation type="finished">Fichier ICC :</translation>
+        </message>
+        <message>
+            <source>ICC Profiles (*.icc *.icm);;All Files (*.*)</source>
+            <translation type="finished">Profils ICC (*.icc *.icm);;Tous les fichiers (*.*)</translation>
+        </message>
+        <message>
+            <source>No active image.</source>
+            <translation type="finished">Aucune image active.</translation>
+        </message>
+        <message>
+            <source>Profile:</source>
+            <translation type="finished">Profil :</translation>
+        </message>
+        <message>
+            <source>Select ICC Profile</source>
+            <translation type="finished">Sélectionner un Profil ICC</translation>
+        </message>
+        <message>
+            <source>The selected profile is invalid.</source>
+            <translation type="finished">Le profil sélectionné n'est pas valide.</translation>
+        </message>
+        <message>
+            <source>Unknown</source>
+            <translation type="finished">Inconnu</translation>
+        </message>
+    </context>
+    <context>
+        <name>ColorProfileManager</name>
+        <message>
+            <source>Color profile mismatch detected for image:</source>
+            <translation type="finished">Incohérence de profil colorimétrique détectée pour l'image :</translation>
+        </message>
+        <message>
+            <source>Converting color profile...</source>
+            <translation type="finished">Conversion du profil de couleur...</translation>
+        </message>
+        <message>
+            <source>Embedded ICC Profile</source>
+            <translation type="finished">Profil ICC Intégré</translation>
+        </message>
+        <message>
+            <source>Invalid profiles provided for conversion.</source>
+            <translation type="finished">Profils non valides fournis pour la conversion.</translation>
+        </message>
+        <message>
+            <source>Successfully converted buffer from</source>
+            <translation type="finished">Tampon converti avec succès de</translation>
+        </message>
+        <message>
+            <source>Successfully converted buffer from %1 to %2</source>
+            <translation type="finished">Buffer converti avec succès de %1 à %2</translation>
+        </message>
+        <message>
+            <source>Unknown Profile</source>
+            <translation type="finished">Profil Inconnu</translation>
+        </message>
+        <message>
+            <source>Workspace profile updated to:</source>
+            <translation type="finished">Profil de l'espace de travail mis à jour vers :</translation>
+        </message>
+        <message>
+            <source>to</source>
+            <translation type="finished">à</translation>
         </message>
     </context>
     <context>
@@ -1965,6 +2139,241 @@
         <message>
             <source>Only single-channel mosaic images can be debayered.</source>
             <translation type="finished">Seules les images mono-canal peuvent être débayerisées.</translation>
+        </message>
+    </context>
+    <context>
+        <name>DeconvolutionDialog</name>
+        <message>
+            <source>0 = original in masked area, 1 = deconvolved.</source>
+            <translation type="finished">0 = original dans la zone masquée, 1 = déconvolué.</translation>
+        </message>
+        <message>
+            <source>Airy</source>
+            <translation type="finished">Airy</translation>
+        </message>
+        <message>
+            <source>Airy Aperture:</source>
+            <translation type="finished">Ouverture Airy :</translation>
+        </message>
+        <message>
+            <source>Airy Focal Len:</source>
+            <translation type="finished">Longueur Focale Airy :</translation>
+        </message>
+        <message>
+            <source>Airy Obstruction:</source>
+            <translation type="finished">Obstruction Airy :</translation>
+        </message>
+        <message>
+            <source>Airy Pixel Size:</source>
+            <translation type="finished">Taille de Pixel Airy :</translation>
+        </message>
+        <message>
+            <source>Airy Wavelength:</source>
+            <translation type="finished">Longueur d'onde Airy :</translation>
+        </message>
+        <message>
+            <source>Algorithm</source>
+            <translation type="finished">Algorithme</translation>
+        </message>
+        <message>
+            <source>Angle:</source>
+            <translation type="finished">Angle:</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="finished">Appliquer</translation>
+        </message>
+        <message>
+            <source>Applying deconvolution...</source>
+            <translation type="finished">Application de la déconvolution...</translation>
+        </message>
+        <message>
+            <source>Auto</source>
+            <translation type="finished">Auto</translation>
+        </message>
+        <message>
+            <source>Blend in mask:</source>
+            <translation type="finished">Mélanger dans le masque :</translation>
+        </message>
+        <message>
+            <source>Border Handling</source>
+            <translation type="finished">Gestion des bordures</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="finished">Fermer</translation>
+        </message>
+        <message>
+            <source>Computing preview...</source>
+            <translation type="finished">Calcul de l'aperçu...</translation>
+        </message>
+        <message>
+            <source>Convergence tol:</source>
+            <translation type="finished">Tol. de convergence :</translation>
+        </message>
+        <message>
+            <source>Custom image</source>
+            <translation type="finished">Image personnalisée</translation>
+        </message>
+        <message>
+            <source>Deconvolution</source>
+            <translation type="finished">Déconvolution</translation>
+        </message>
+        <message>
+            <source>Deconvolution [%1] applied: FWHM=%2px, iter=%3</source>
+            <translation type="finished">Déconvolution [%1] appliquée : FWHM=%2px, iter=%3</translation>
+        </message>
+        <message>
+            <source>Dilation radius:</source>
+            <translation type="finished">Rayon de dilatation :</translation>
+        </message>
+        <message>
+            <source>Disk</source>
+            <translation type="finished">Disque</translation>
+        </message>
+        <message>
+            <source>Done - %1 iterations, d=%2</source>
+            <translation type="finished">Terminé - %1 itérations, d=%2</translation>
+        </message>
+        <message>
+            <source>Enable star mask</source>
+            <translation type="finished">Activer le masque d'étoiles</translation>
+        </message>
+        <message>
+            <source>Estimated FWHM: %1 px</source>
+            <translation type="finished">FWHM estimé : %1 px</translation>
+        </message>
+        <message>
+            <source>Estimating FWHM from stars...</source>
+            <translation type="finished">Estimation du FWHM par les étoiles...</translation>
+        </message>
+        <message>
+            <source>FWHM:</source>
+            <translation type="finished">FWHM:</translation>
+        </message>
+        <message>
+            <source>Failed: </source>
+            <translation type="finished">Échec :</translation>
+        </message>
+        <message>
+            <source>Failed:\n</source>
+            <translation type="finished">Échec :</translation>
+        </message>
+        <message>
+            <source>Full Width at Half Maximum of the PSF in pixels.</source>
+            <translation type="finished">Largeur à mi-hauteur (FWHM) de la PSF en pixels.</translation>
+        </message>
+        <message>
+            <source>Gaussian</source>
+            <translation type="finished">Gaussien</translation>
+        </message>
+        <message>
+            <source>Iteration Control</source>
+            <translation type="finished">Contrôle d'itération</translation>
+        </message>
+        <message>
+            <source>Iterations:</source>
+            <translation type="finished">Itérations :</translation>
+        </message>
+        <message>
+            <source>K (noise power):</source>
+            <translation type="finished">K (puissance du bruit) :</translation>
+        </message>
+        <message>
+            <source>Kernel size:</source>
+            <translation type="finished">Taille du noyau :</translation>
+        </message>
+        <message>
+            <source>Measure FWHM from stars in the image.</source>
+            <translation type="finished">Mesurer le FWHM à partir des étoiles de l'image.</translation>
+        </message>
+        <message>
+            <source>Method:</source>
+            <translation type="finished">Méthode :</translation>
+        </message>
+        <message>
+            <source>Minor/major axis ratio. 1.0 = circular PSF.</source>
+            <translation type="finished">Rapport axe mineur/majeur. 1.0 = PSF circulaire.</translation>
+        </message>
+        <message>
+            <source>Mirror padding:</source>
+            <translation type="finished">Remplissage miroir :</translation>
+        </message>
+        <message>
+            <source>Moffat</source>
+            <translation type="finished">Moffat</translation>
+        </message>
+        <message>
+            <source>Moffat beta:</source>
+            <translation type="finished">Moffat bêta :</translation>
+        </message>
+        <message>
+            <source>PSF kernel preview (logarithmic scale)</source>
+            <translation type="finished">Aperçu du noyau PSF (échelle logarithmique)</translation>
+        </message>
+        <message>
+            <source>PSF preview:</source>
+            <translation type="finished">Aperçu PSF :</translation>
+        </message>
+        <message>
+            <source>PSF type:</source>
+            <translation type="finished">Type de PSF :</translation>
+        </message>
+        <message>
+            <source>Point Spread Function (PSF)</source>
+            <translation type="finished">Fonction d'étalement du point (PSF)</translation>
+        </message>
+        <message>
+            <source>Preview</source>
+            <translation type="finished">Aperçu</translation>
+        </message>
+        <message>
+            <source>Preview - %1 iterations</source>
+            <translation type="finished">Aperçu - %1 itérations</translation>
+        </message>
+        <message>
+            <source>RL + Total Variation (RLTV)  [recommended]</source>
+            <translation type="finished">RL + Variation Totale (RLTV) [recommandé]</translation>
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation type="finished">Réinitialiser</translation>
+        </message>
+        <message>
+            <source>Reset to original.</source>
+            <translation type="finished">Réinitialiser à l'original.</translation>
+        </message>
+        <message>
+            <source>Richardson-Lucy (RL)</source>
+            <translation type="finished">Richardson-Lucy (RL)</translation>
+        </message>
+        <message>
+            <source>Roundness:</source>
+            <translation type="finished">Arrondi:</translation>
+        </message>
+        <message>
+            <source>Star Protection Mask</source>
+            <translation type="finished">Masque de protection des étoiles</translation>
+        </message>
+        <message>
+            <source>TV Regularisation</source>
+            <translation type="finished">Régularisation TV</translation>
+        </message>
+        <message>
+            <source>Threshold:</source>
+            <translation type="finished">Seuil:</translation>
+        </message>
+        <message>
+            <source>Wiener / MMSE</source>
+            <translation type="finished">Wiener / MMSE</translation>
+        </message>
+        <message>
+            <source>Wiener Parameters</source>
+            <translation type="finished">Paramètres Wiener</translation>
+        </message>
+        <message>
+            <source>lambda_TV weight:</source>
+            <translation type="finished">Poids lambda_TV :</translation>
         </message>
     </context>
     <context>
@@ -4297,6 +4706,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Auto-Stretch</translation>
         </message>
         <message>
+            <source>Auto-converted image '%1' to workspace profile.</source>
+            <translation type="finished">Image '%1' convertie automaticamente vers le profil de l'espace.</translation>
+        </message>
+        <message>
             <source>B</source>
             <translation type="finished">B</translation>
         </message>
@@ -4429,8 +4842,28 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Gestion des Couleurs</translation>
         </message>
         <message>
+            <source>Color Profile Management</source>
+            <translation type="finished">Gestion du Profil Colorimétrique</translation>
+        </message>
+        <message>
+            <source>Color Profile Mismatch</source>
+            <translation type="finished">Incohérence de profil colorimétrique</translation>
+        </message>
+        <message>
             <source>Color Saturation</source>
             <translation type="finished">Saturation Couleur</translation>
+        </message>
+        <message>
+            <source>Color profile conversion failed: %1</source>
+            <translation type="finished">Échec de conversion du profil de couleur : %1</translation>
+        </message>
+        <message>
+            <source>Color profile conversion finished successfully.</source>
+            <translation type="finished">Conversion du profil de couleur terminée avec succès.</translation>
+        </message>
+        <message>
+            <source>Color profile conversion started...</source>
+            <translation type="finished">Conversion du profil de couleur commencée...</translation>
         </message>
         <message>
             <source>Combine Channels</source>
@@ -4451,6 +4884,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Convert RAW to FITS...</source>
             <translation type="finished">Convertir RAW en FITS...</translation>
+        </message>
+        <message>
+            <source>Converted image '%1' to workspace profile.</source>
+            <translation type="finished">Image '%1' convertie vers le profil de l'espace de travail.</translation>
         </message>
         <message>
             <source>Correction Brush</source>
@@ -4511,6 +4948,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Debayer</source>
             <translation type="finished">Debayer</translation>
+        </message>
+        <message>
+            <source>Deconvolution</source>
+            <translation type="finished">Déconvolution</translation>
         </message>
         <message>
             <source>Delete Workspace Project</source>
@@ -5057,6 +5498,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Ouverture Debayer...</translation>
         </message>
         <message>
+            <source>Opening Deconvolution...</source>
+            <translation type="finished">Ouverture Déconvolution...</translation>
+        </message>
+        <message>
             <source>Opening Extract Luminance...</source>
             <translation type="finished">Ouverture de l'Extraction de Luminance...</translation>
         </message>
@@ -5129,6 +5574,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Ouverture Outil SCNR...</translation>
         </message>
         <message>
+            <source>Opening SPCC...</source>
+            <translation type="finished">Ouverture SPCC...</translation>
+        </message>
+        <message>
             <source>Opening Script Browser...</source>
             <translation type="finished">Ouverture navigateur de scripts...</translation>
         </message>
@@ -5155,6 +5604,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Opening Statistical Stretch...</source>
             <translation type="finished">Ouverture Statistical Stretch...</translation>
+        </message>
+        <message>
+            <source>Opening TGV Denoise...</source>
+            <translation type="finished">Ouverture TGV Denoise...</translation>
         </message>
         <message>
             <source>Opening Temperature / Tint tool...</source>
@@ -5486,6 +5939,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Certaines images source sont manquantes. Voulez-vous sélectionner un dossier pour la reconnexion automatique ?</translation>
         </message>
         <message>
+            <source>Spectrophotometric Color Calibration</source>
+            <translation type="finished">Étalonnage des couleurs spectrophotométrique</translation>
+        </message>
+        <message>
+            <source>Spectrophotometric Color Calibration (SPCC)</source>
+            <translation type="finished">Étalonnage des couleurs spectrophotométrique (SPCC)</translation>
+        </message>
+        <message>
             <source>Square Root</source>
             <translation type="finished">Racine Carrée</translation>
         </message>
@@ -5522,6 +5983,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Outils d'Étirement</translation>
         </message>
         <message>
+            <source>TGV Denoise</source>
+            <translation type="finished">TGV Denoise</translation>
+        </message>
+        <message>
             <source>TIFF Files (*.tiff *.tif);;</source>
             <translation type="finished">Fichiers TIFF (*.tiff *.tif) ;;</translation>
         </message>
@@ -5548,6 +6013,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>The following project files referencing this workspace were found: %1 Delete these files?</source>
             <translation type="finished">Les fichiers de projet suivants référencés par ce workspace ont été trouvés : %1 Supprimer ces fichiers ?</translation>
+        </message>
+        <message>
+            <source>The image '%1' has a color profile (%2) that differs from the workspace profile (%3). Would you like to convert it to the workspace profile?</source>
+            <translation type="finished">L'image '%1' a un profil colorimétrique (%2) différent du profil de l'espace de travail (%3). Voulez-vous la convertir au profil de l'espace de travail ?</translation>
         </message>
         <message>
             <source>The workspace contains no images. Save an empty project anyway?</source>
@@ -7169,6 +7638,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">&lt;b&gt;Résolu !&lt;/b&gt;</translation>
         </message>
         <message>
+            <source>&lt;font color='orange'&gt;Automatic fallback: trying %1...&lt;/font&gt;</source>
+            <translation type="finished">&lt;font color='orange'&gt;Repli automatique : tentative de %1...&lt;/font&gt;</translation>
+        </message>
+        <message>
             <source>ASTAP</source>
             <translation type="finished">ASTAP</translation>
         </message>
@@ -7187,6 +7660,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Calculated pixel scale: %1 arcsec/px</source>
             <translation type="finished">Échelle de pixels calculée : %1 arcsec/px</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Cancel requested.</source>
+            <translation type="finished">Annulation demandée.</translation>
         </message>
         <message>
             <source>Close</source>
@@ -7217,12 +7698,24 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Solveur Natif Interne</translation>
         </message>
         <message>
+            <source>Internal Solver</source>
+            <translation type="finished">Risolveur interne</translation>
+        </message>
+        <message>
+            <source>Native solver cancel not supported.</source>
+            <translation type="finished">L'annulation du résolveur natif n'est pas supportée.</translation>
+        </message>
+        <message>
             <source>Object Name (e.g. M31)</source>
             <translation type="finished">Nom de l'Objet (ex. M31)</translation>
         </message>
         <message>
             <source>Optical Settings</source>
             <translation type="finished">Paramètres Optiques</translation>
+        </message>
+        <message>
+            <source>Parameters: RA=%1, Dec=%2, Radius=%3, PixelScale=%4</source>
+            <translation type="finished">Paramètres : RA=%1, Déc=%2, Rayon=%3, ÉchellePixel=%4</translation>
         </message>
         <message>
             <source>Pixel Scale (″/px):</source>
@@ -7275,6 +7768,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Solve</source>
             <translation type="finished">Résoudre</translation>
+        </message>
+        <message>
+            <source>Solve in progress — cancel before closing.</source>
+            <translation type="finished">Résolution en cours — annuler avant de fermer.</translation>
         </message>
         <message>
             <source>Solver Engine:</source>
@@ -8496,6 +8993,165 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         </message>
     </context>
     <context>
+        <name>SPCCDialog</name>
+        <message>
+            <source>Aperture radius:</source>
+            <translation type="finished">Rayon d'ouverture :</translation>
+        </message>
+        <message>
+            <source>B_in</source>
+            <translation type="finished">B_in</translation>
+        </message>
+        <message>
+            <source>B_out</source>
+            <translation type="finished">B_out</translation>
+        </message>
+        <message>
+            <source>Calibration Options</source>
+            <translation type="finished">Options de calibration</translation>
+        </message>
+        <message>
+            <source>Calibration Results</source>
+            <translation type="finished">Résultats de calibration</translation>
+        </message>
+        <message>
+            <source>Calibration complete.</source>
+            <translation type="finished">Calibration terminée.</translation>
+        </message>
+        <message>
+            <source>Calibration failed:\n</source>
+            <translation type="finished">Échec de l'étalonnage :\n</translation>
+        </message>
+        <message>
+            <source>Camera / Sensor:</source>
+            <translation type="finished">Caméra / Capteur :</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="finished">Fermer</translation>
+        </message>
+        <message>
+            <source>Failed: </source>
+            <translation type="finished">Échec :</translation>
+        </message>
+        <message>
+            <source>Filter:</source>
+            <translation type="finished">Filtre :</translation>
+        </message>
+        <message>
+            <source>G_in</source>
+            <translation type="finished">G_in</translation>
+        </message>
+        <message>
+            <source>G_out</source>
+            <translation type="finished">G_out</translation>
+        </message>
+        <message>
+            <source>Limit to mag &lt;</source>
+            <translation type="finished">Limiter à mag &lt;</translation>
+        </message>
+        <message>
+            <source>Magnitude limit:</source>
+            <translation type="finished">Limite de magnitude :</translation>
+        </message>
+        <message>
+            <source>Max stars:</source>
+            <translation type="finished">Étoiles max :</translation>
+        </message>
+        <message>
+            <source>Minimum SNR:</source>
+            <translation type="finished">SNR minimum :</translation>
+        </message>
+        <message>
+            <source>Minimum signal-to-noise ratio for a star to be used.</source>
+            <translation type="finished">Rapport signal/bruit minimum pour qu'une étoile soit utilisée.</translation>
+        </message>
+        <message>
+            <source>Normalise to solar (G2V) white point</source>
+            <translation type="finished">Normaliser au point blanc solaire (G2V)</translation>
+        </message>
+        <message>
+            <source>Optional optical filter in the optical path (L, UV/IR cut, etc.)</source>
+            <translation type="finished">Filtre optique optionnel dans le chemin optique (L, UV/IR cut, etc.)</translation>
+        </message>
+        <message>
+            <source>R/G/B scales: —</source>
+            <translation type="finished">Échelles R/G/B : —</translation>
+        </message>
+        <message>
+            <source>RMS residual: %1</source>
+            <translation type="finished">Résidu RMS : %1</translation>
+        </message>
+        <message>
+            <source>R_in</source>
+            <translation type="finished">R_in</translation>
+        </message>
+        <message>
+            <source>R_out</source>
+            <translation type="finished">R_out</translation>
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation type="finished">Réinitialiser</translation>
+        </message>
+        <message>
+            <source>Reset to original.</source>
+            <translation type="finished">Réinitialiser à l'original.</translation>
+        </message>
+        <message>
+            <source>Residual: —</source>
+            <translation type="finished">Résidu : —</translation>
+        </message>
+        <message>
+            <source>Run SPCC</source>
+            <translation type="finished">Exécuter SPCC</translation>
+        </message>
+        <message>
+            <source>Running SPCC…</source>
+            <translation type="finished">Exécution SPCC…</translation>
+        </message>
+        <message>
+            <source>SPCC</source>
+            <translation type="finished">SPCC</translation>
+        </message>
+        <message>
+            <source>Scales  R=×%1   G=×%2   B=×%3</source>
+            <translation type="finished">Échelles R=×%1 V=×%2 B=×%3</translation>
+        </message>
+        <message>
+            <source>Sensor &amp; Filter Profile</source>
+            <translation type="finished">Profil du capteur et du filtre</translation>
+        </message>
+        <message>
+            <source>Spectrophotometric Color Calibration (SPCC)</source>
+            <translation type="finished">Étalonnage des couleurs spectrophotométrique (SPCC)</translation>
+        </message>
+        <message>
+            <source>Star Detection &amp; Cross-Match</source>
+            <translation type="finished">Détection d'étoiles et cross-match</translation>
+        </message>
+        <message>
+            <source>Stars used: %1 / %2</source>
+            <translation type="finished">Étoiles utilisées : %1 / %2</translation>
+        </message>
+        <message>
+            <source>Stars used: —</source>
+            <translation type="finished">Estrellas usadas: —</translation>
+        </message>
+        <message>
+            <source>Subtract background before calibration</source>
+            <translation type="finished">Soustraire le fond avant calibration</translation>
+        </message>
+        <message>
+            <source>Use full 3×3 colour matrix (vs. diagonal)</source>
+            <translation type="finished">Utiliser matrice de couleurs 3×3 complète (vs diagonale)</translation>
+        </message>
+        <message>
+            <source>White balance:</source>
+            <translation type="finished">Balance des blancs :</translation>
+        </message>
+    </context>
+    <context>
         <name>SaturationDialog</name>
         <message>
             <source>All Colors</source>
@@ -8920,6 +9576,38 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Exécutable ASTAP :</translation>
         </message>
         <message>
+            <source>ASTAP Extra Args:</source>
+            <translation type="finished">Arguments ASTAP supplémentaires :</translation>
+        </message>
+        <message>
+            <source>ASTAP Star Database</source>
+            <translation type="finished">Base de données d'étoiles ASTAP</translation>
+        </message>
+        <message>
+            <source>ASTAP Star Database: installed</source>
+            <translation type="finished">Base de données d'étoiles ASTAP : installée</translation>
+        </message>
+        <message>
+            <source>ASTAP Star Database: not installed</source>
+            <translation type="finished">Base de données d'étoiles ASTAP : non installée</translation>
+        </message>
+        <message>
+            <source>Adobe RGB (1998)</source>
+            <translation type="finished">Adobe RGB (1998)</translation>
+        </message>
+        <message>
+            <source>Always</source>
+            <translation type="finished">Toujours</translation>
+        </message>
+        <message>
+            <source>Ask</source>
+            <translation type="finished">Demander</translation>
+        </message>
+        <message>
+            <source>Auto-Convert Color Profiles:</source>
+            <translation type="finished">Convertir Automatiquement Profils de Couleur :</translation>
+        </message>
+        <message>
             <source>Browse...</source>
             <translation type="finished">Parcourir...</translation>
         </message>
@@ -8992,8 +9680,16 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Langue :</translation>
         </message>
         <message>
+            <source>Linear RGB</source>
+            <translation type="finished">RVB Linéaire</translation>
+        </message>
+        <message>
             <source>Models downloaded and installed successfully.</source>
             <translation type="finished">Modèles téléchargés et installés avec succès.</translation>
+        </message>
+        <message>
+            <source>Never</source>
+            <translation type="finished">Jamais</translation>
         </message>
         <message>
             <source>OK</source>
@@ -9010,6 +9706,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Preparing…</source>
             <translation type="finished">Préparation…</translation>
+        </message>
+        <message>
+            <source>ProPhoto RGB</source>
+            <translation type="finished">ProPhoto RGB</translation>
         </message>
         <message>
             <source>Restart Required</source>
@@ -9038,6 +9738,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>System Default</source>
             <translation type="finished">Réglage par Défaut du Système</translation>
+        </message>
+        <message>
+            <source>Workspace Color Profile:</source>
+            <translation type="finished">Profil de Couleur de l'Espace :</translation>
+        </message>
+        <message>
+            <source>sRGB IEC61966-2.1</source>
+            <translation type="finished">sRGB IEC61966-2.1</translation>
         </message>
     </context>
     <context>
@@ -10476,6 +11184,113 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>© 2026 SetiAstro</source>
             <translation type="finished">© 2026 SetiAstro</translation>
+        </message>
+    </context>
+    <context>
+        <name>TGVDenoiseDialog</name>
+        <message>
+            <source>Advanced TGV Parameters</source>
+            <translation type="finished">Paramètres TGV avancés</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="finished">Appliquer</translation>
+        </message>
+        <message>
+            <source>Applying TGV Denoise…</source>
+            <translation type="finished">Application de TGV Denoise…</translation>
+        </message>
+        <message>
+            <source>Auto-estimate noise level</source>
+            <translation type="finished">Estimation auto du niveau de bruit</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="finished">Fermer</translation>
+        </message>
+        <message>
+            <source>Computing preview…</source>
+            <translation type="finished">Calcul de l'aperçu…</translation>
+        </message>
+        <message>
+            <source>Convergence tol:</source>
+            <translation type="finished">Tol. de convergence :</translation>
+        </message>
+        <message>
+            <source>Done — %1 iterations, gap=%2</source>
+            <translation type="finished">Terminé — %1 itérations, écart=%2</translation>
+        </message>
+        <message>
+            <source>Failed: </source>
+            <translation type="finished">Échec :</translation>
+        </message>
+        <message>
+            <source>High</source>
+            <translation type="finished">Haut</translation>
+        </message>
+        <message>
+            <source>Low</source>
+            <translation type="finished">Bas</translation>
+        </message>
+        <message>
+            <source>Max iterations:</source>
+            <translation type="finished">Itérations max :</translation>
+        </message>
+        <message>
+            <source>Noise Reduction Strength</source>
+            <translation type="finished">Force de réduction du bruit</translation>
+        </message>
+        <message>
+            <source>Preview</source>
+            <translation type="finished">Aperçu</translation>
+        </message>
+        <message>
+            <source>Preview failed: </source>
+            <translation type="finished">Échec de l'aperçu :</translation>
+        </message>
+        <message>
+            <source>Preview — %1 iterations, gap=%2</source>
+            <translation type="finished">Aperçu — %1 itérations, écart=%2</translation>
+        </message>
+        <message>
+            <source>Process each channel independently</source>
+            <translation type="finished">Traiter chaque canal indépendamment</translation>
+        </message>
+        <message>
+            <source>Processing failed:\n</source>
+            <translation type="finished">Échec du traitement :\n</translation>
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation type="finished">Réinitialiser</translation>
+        </message>
+        <message>
+            <source>Reset to original.</source>
+            <translation type="finished">Réinitialiser à l'original.</translation>
+        </message>
+        <message>
+            <source>TGV Denoise</source>
+            <translation type="finished">TGV Denoise</translation>
+        </message>
+        <message>
+            <source>TGV Denoise applied: α₀=%1, α₁=%2, λ=%3, %4 iter</source>
+            <translation type="finished">TGV Denoise appliqué : α₀=%1, α₁=%2, λ=%3, %4 itér</translation>
+        </message>
+        <message>
+            <source>α₀  (order 0 weight):</source>
+            <translation type="finished">α₀ (poids d'ordre 0) :</translation>
+        </message>
+        <message>
+            <source>α₁  (order 1 weight):</source>
+            <translation type="finished">α₁ (poids d'ordre 1) :</translation>
+        </message>
+        <message>
+            <source>λ  (data fidelity):</source>
+            <translation type="finished">λ (fidélité des données) :</translation>
+        </message>
+        <message>
+            <source>σ̂ = —</source>
+            <translation type="finished">σ̂ = —</translation>
         </message>
     </context>
     <context>

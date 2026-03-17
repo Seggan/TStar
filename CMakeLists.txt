@@ -458,6 +458,8 @@ set(TSTAR_SOURCES
     src/core/SwapManager.h
     src/core/SimdOps.cpp
     src/core/SimdOps.h
+    src/core/ColorProfileManager.cpp
+    src/core/ColorProfileManager.h
     ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.cpp
     
     # IO
@@ -467,6 +469,8 @@ set(TSTAR_SOURCES
     src/io/FitsLoaderC.h
     src/io/FitsLoaderCWrapper.cpp
     src/io/FitsLoaderCWrapper.h
+    src/io/IccProfileExtractor.h
+    src/io/IccProfileExtractor.cpp
     src/io/SimpleTiffWriter.cpp
     src/io/SimpleTiffReader.cpp
     src/io/SimpleTiffReader.h
@@ -532,6 +536,12 @@ set(TSTAR_SOURCES
     src/algos/StatisticalStretch.h
     src/algos/RawEditorProcessor.cpp
     src/algos/RawEditorProcessor.h
+    src/algos/SPCC.cpp
+    src/algos/SPCC.h
+    src/algos/TGVDenoise.cpp
+    src/algos/TGVDenoise.h
+    src/algos/Deconvolution.cpp
+    src/algos/Deconvolution.h
     
     # Background
     src/background/BackgroundExtraction.cpp
@@ -592,6 +602,8 @@ set(TSTAR_SOURCES
     src/dialogs/DialogBase.h
     src/dialogs/StretchDialog.cpp
     src/dialogs/StretchDialog.h
+    src/dialogs/ColorProfileDialog.cpp
+    src/dialogs/ColorProfileDialog.h
     src/dialogs/CropRotateDialog.cpp
     src/dialogs/CropRotateDialog.h
     src/dialogs/AboutDialog.cpp
@@ -638,6 +650,12 @@ set(TSTAR_SOURCES
     src/dialogs/PCCDialog.h
     src/dialogs/PCCDistributionDialog.cpp
     src/dialogs/PCCDistributionDialog.h
+    src/dialogs/SPCCDialog.cpp
+    src/dialogs/SPCCDialog.h
+    src/dialogs/TGVDenoiseDialog.cpp
+    src/dialogs/TGVDenoiseDialog.h
+    src/dialogs/DeconvolutionDialog.cpp
+    src/dialogs/DeconvolutionDialog.h
     src/dialogs/CurvesDialog.cpp
     src/dialogs/CurvesDialog.h
     src/dialogs/HeaderViewerDialog.cpp
@@ -770,6 +788,70 @@ set(TSTAR_SOURCES
     src/dialogs/ScriptDialog.h
 )
 
+# lcms2 (LittleCMS2)
+if(APPLE)
+    # Search for lcms2 in Homebrew paths
+    find_library(LCMS2_LIBRARY NAMES lcms2 
+        PATHS 
+        /opt/homebrew/lib 
+        /usr/local/lib 
+        /usr/local/opt/little-cms2/lib
+    )
+    if(LCMS2_LIBRARY)
+        message(STATUS "Found lcms2: ${LCMS2_LIBRARY}")
+        list(APPEND TSTAR_LIBS ${LCMS2_LIBRARY})
+        # Find include directory
+        find_path(LCMS2_INCLUDE_DIR NAMES lcms2.h 
+            PATHS 
+            /opt/homebrew/include 
+            /usr/local/include 
+            /usr/local/opt/little-cms2/include
+        )
+    else()
+        message(WARNING "lcms2 NOT found, falling back to local sources (NOT RECOMMENDED ON MACOS)")
+        file(GLOB LCMS2_SOURCES "deps/lcms2/src/*.c")
+        list(APPEND TSTAR_SOURCES ${LCMS2_SOURCES})
+    endif()
+else()
+    # Windows/Other: build from sources
+    # NOTE: Using explicit file list instead of GLOB to avoid CMake cache issues
+    # that force full rebuilds when dependencies change
+    set(LCMS2_SOURCES
+        deps/lcms2/src/cmsalpha.c
+        deps/lcms2/src/cmscam02.c
+        deps/lcms2/src/cmscgats.c
+        deps/lcms2/src/cmscnvrt.c
+        deps/lcms2/src/cmserr.c
+        deps/lcms2/src/cmsgamma.c
+        deps/lcms2/src/cmsgmt.c
+        deps/lcms2/src/cmshalf.c
+        deps/lcms2/src/cmsintrp.c
+        deps/lcms2/src/cmsio0.c
+        deps/lcms2/src/cmsio1.c
+        deps/lcms2/src/cmslut.c
+        deps/lcms2/src/cmsmd5.c
+        deps/lcms2/src/cmsmtrx.c
+        deps/lcms2/src/cmsnamed.c
+        deps/lcms2/src/cmsopt.c
+        deps/lcms2/src/cmspack.c
+        deps/lcms2/src/cmspcs.c
+        deps/lcms2/src/cmsplugin.c
+        deps/lcms2/src/cmsps2.c
+        deps/lcms2/src/cmssamp.c
+        deps/lcms2/src/cmssm.c
+        deps/lcms2/src/cmstypes.c
+        deps/lcms2/src/cmsvirt.c
+        deps/lcms2/src/cmswtpnt.c
+        deps/lcms2/src/cmsxform.c
+    )
+    list(APPEND TSTAR_SOURCES ${LCMS2_SOURCES})
+    
+    # Suppress pedantic warnings for lcms2 sources (third-party)
+    if(NOT MSVC)
+        set_source_files_properties(${LCMS2_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-pedantic")
+    endif()
+endif()
+
 # =============================================================================
 # Create Executable
 # =============================================================================
@@ -837,6 +919,9 @@ target_include_directories(TStar PRIVATE
     src/stacking
     src/preprocessing
     src/scripting
+    deps/lcms2/include
+    deps/lcms2/src
+    ${LCMS2_INCLUDE_DIR}
     ${GSL_INCLUDE_DIRS}
     ${CFITSIO_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}

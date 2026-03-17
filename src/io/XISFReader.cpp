@@ -1,6 +1,8 @@
 #include "XISFReader.h"
 #include "CompressionUtils.h"
 #include "FitsHeaderUtils.h"
+#include "IccProfileExtractor.h"
+#include "core/ColorProfileManager.h"
 #include <QFile>
 #include <QDataStream>
 #include <QXmlStreamReader>
@@ -105,6 +107,15 @@ bool XISFReader::read(const QString& filePath, ImageBuffer& buffer, QString* err
     }
     
     // 10. Set buffer data and metadata
+    // Extract ICC profile if present
+    if (IccProfileExtractor::extractFromFile(filePath, info.meta.iccData)) {
+        core::ColorProfile profile(info.meta.iccData);
+        if (profile.isValid()) {
+            info.meta.iccProfileName = profile.name();
+            info.meta.iccProfileType = static_cast<int>(profile.type());
+        }
+    }
+    
     buffer.setMetadata(info.meta);
     buffer.setData(info.width, info.height, info.channels, finalData);
     
@@ -312,6 +323,37 @@ bool XISFReader::parseHeader(const QByteArray& headerXml, XISFHeaderInfo& info, 
                         }
                         else if (childName == "ICCProfile") {
                             info.hasICCProfile = true;
+                            
+                            // Parse location
+                            QString loc = xml.attributes().value("location").toString();
+                            QStringList locParts = loc.split(':');
+                            if (locParts.size() >= 1) {
+                                QString locType = locParts[0].toLower();
+                                if (locType == "attachment" && locParts.size() >= 3) {
+                                    info.iccLocationType = XISFHeaderInfo::Attachment;
+                                    info.iccLocation = locParts[1].toLongLong();
+                                    info.iccSize = locParts[2].toLongLong();
+                                } else if (locType == "inline" && locParts.size() >= 2) {
+                                    info.iccLocationType = XISFHeaderInfo::Inline;
+                                    info.iccInlineEncoding = locParts[1];
+                                } else if (locType == "embedded") {
+                                    info.iccLocationType = XISFHeaderInfo::Embedded;
+                                }
+                            }
+                            
+                            // Parse compression
+                            QString compression = xml.attributes().value("compression").toString();
+                            if (!compression.isEmpty()) {
+                                CompressionUtils::parseCompressionAttr(
+                                    compression, info.iccCompression, 
+                                    info.iccUncompressedSize, info.iccShuffleItemSize);
+                            }
+                            
+                            // Get embedded data if needed
+                            if (info.iccLocationType == XISFHeaderInfo::Embedded || 
+                                info.iccLocationType == XISFHeaderInfo::Inline) {
+                                info.iccEmbeddedData = xml.readElementText();
+                            }
                         }
                         else if (childName == "Thumbnail") {
                             info.hasThumbnail = true;
@@ -811,9 +853,39 @@ bool XISFReader::parseAllImages(const QByteArray& headerXml, QList<XISFHeaderInf
                         else if (name == "CD2_1") info.meta.cd2_1 = val.toDouble();
                         else if (name == "CD2_2") info.meta.cd2_2 = val.toDouble();
                     }
-                    else if (childName == "Property") {
-                        XISFProperty prop = parseProperty(xml);
-                        info.properties[prop.id] = prop;
+                    else if (childName == "ICCProfile") {
+                        info.hasICCProfile = true;
+                        
+                        // Parse location
+                        QString loc = xml.attributes().value("location").toString();
+                        QStringList locParts = loc.split(':');
+                        if (locParts.size() >= 1) {
+                            QString locType = locParts[0].toLower();
+                            if (locType == "attachment" && locParts.size() >= 3) {
+                                info.iccLocationType = XISFHeaderInfo::Attachment;
+                                info.iccLocation = locParts[1].toLongLong();
+                                info.iccSize = locParts[2].toLongLong();
+                            } else if (locType == "inline" && locParts.size() >= 2) {
+                                info.iccLocationType = XISFHeaderInfo::Inline;
+                                info.iccInlineEncoding = locParts[1];
+                            } else if (locType == "embedded") {
+                                info.iccLocationType = XISFHeaderInfo::Embedded;
+                            }
+                        }
+                        
+                        // Parse compression
+                        QString compression = xml.attributes().value("compression").toString();
+                        if (!compression.isEmpty()) {
+                            CompressionUtils::parseCompressionAttr(
+                                compression, info.iccCompression, 
+                                info.iccUncompressedSize, info.iccShuffleItemSize);
+                        }
+                        
+                        // Get embedded data if needed
+                        if (info.iccLocationType == XISFHeaderInfo::Embedded || 
+                            info.iccLocationType == XISFHeaderInfo::Inline) {
+                            info.iccEmbeddedData = xml.readElementText();
+                        }
                     }
                 }
             }
@@ -832,7 +904,7 @@ bool XISFReader::parseAllImages(const QByteArray& headerXml, QList<XISFHeaderInf
     return true;
 }
 
-bool XISFReader::loadImage(QFile& file, const XISFHeaderInfo& info, ImageBuffer& buffer, QString* errorMsg) {
+bool XISFReader::loadImage(QFile& file, XISFHeaderInfo& info, ImageBuffer& buffer, QString* errorMsg) {
     // Read Data Block
     QByteArray rawData = readDataBlock(file, info, errorMsg);
     if (rawData.isEmpty() && info.dataSize > 0) {
@@ -872,6 +944,42 @@ bool XISFReader::loadImage(QFile& file, const XISFHeaderInfo& info, ImageBuffer&
     }
     
     // Set buffer data and metadata
+    // Extract ICC profile if present in XISF header
+    if (info.hasICCProfile) {
+        QByteArray iccData;
+        if (info.iccLocationType == XISFHeaderInfo::Attachment) {
+            iccData = readAttachedDataBlock(file, info.iccLocation, info.iccSize, errorMsg);
+        } else if (info.iccLocationType == XISFHeaderInfo::Inline) {
+            iccData = decodeInlineData(info.iccEmbeddedData, info.iccInlineEncoding, errorMsg);
+        } else if (info.iccLocationType == XISFHeaderInfo::Embedded) {
+            iccData = decodeInlineData(info.iccEmbeddedData, "base64", errorMsg);
+        }
+        
+        if (!iccData.isEmpty()) {
+            // Handle ICC Compression
+            if (info.iccCompression != CompressionUtils::Codec_None) {
+                QByteArray decompressed = CompressionUtils::decompress(
+                    iccData, info.iccCompression, info.iccUncompressedSize, errorMsg);
+                if (!decompressed.isEmpty()) {
+                    if (info.iccShuffleItemSize > 0) {
+                        iccData = CompressionUtils::unshuffle(decompressed, info.iccShuffleItemSize);
+                    } else {
+                        iccData = decompressed;
+                    }
+                } else {
+                    iccData.clear();
+                }
+            }
+            
+            if (!iccData.isEmpty()) {
+                info.meta.iccData = iccData;
+            }
+        }
+    } else if (!info.meta.filePath.isEmpty()) {
+        // Fallback to generic extractor for external files (if path is known)
+        IccProfileExtractor::extractFromFile(info.meta.filePath, info.meta.iccData);
+    }
+    
     buffer.setMetadata(info.meta);
     buffer.setData(info.width, info.height, info.channels, finalData);
     

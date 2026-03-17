@@ -48,7 +48,7 @@ private:
     static void readCommonMetadata(void* fptr, ImageBuffer::Metadata& meta);
     
     static bool loadHDU(void* fptr, int hduIndex, ImageBuffer& buffer, QString* errorMsg,
-                       int x = 0, int y = 0, int w = 0, int h = 0);
+                       const QString& filePath = "", int x = 0, int y = 0, int w = 0, int h = 0);
 };
 
 #endif // FITSLOADER_H
