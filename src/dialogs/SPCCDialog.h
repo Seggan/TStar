@@ -1,10 +1,23 @@
 #pragma once
-/*
- * SPCCDialog.h  —  Spectrophotometric Color Calibration dialog (Qt6)
- */
 
 #ifndef SPCCDIALOG_H
 #define SPCCDIALOG_H
+
+/*
+ * SPCCDialog.h  —  Spectrophotometric Color Calibration dialog
+ *
+ * Workflow exposed to the user:
+ *   Step 1  — "Fetch Stars": plate-solve the active image, query SIMBAD for
+ *             in-field stars, build StarRecord list with Pickles SED matches.
+ *             Optionally run the Gaia XP fallback for stars lacking a match.
+ *   Step 2  — "Run Calibration": launch SPCC::calibrateWithStarList() on a
+ *             background thread; display results and apply to the viewer.
+ *   Reset   — restore the original unmodified buffer.
+ *
+ * Equipment combos (white reference, R/G/B filters, sensor QE, LP filters)
+ * are populated dynamically from tstar_data.fits via SPCC::loadTStarFits().
+ * Selections are persisted across sessions with QSettings.
+ */
 
 #include <QDialog>
 #include <QComboBox>
@@ -17,14 +30,21 @@
 #include <QProgressBar>
 #include <QTableWidget>
 #include <QFutureWatcher>
+#include <QSettings>
+
 #include "ImageBuffer.h"
 #include "SPCC.h"
-#include "photometry/CatalogClient.h"
+#include "../photometry/CatalogClient.h"
 
+
+// Forward declarations
 class ImageViewer;
 class MainWindow;
 class QProgressDialog;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SPCCDialog
+// ─────────────────────────────────────────────────────────────────────────────
 class SPCCDialog : public QDialog {
     Q_OBJECT
 
@@ -32,76 +52,136 @@ public:
     explicit SPCCDialog(ImageViewer* viewer, MainWindow* mw, QWidget* parent = nullptr);
     ~SPCCDialog() override;
 
+    /// Called when the active document changes externally.
     void setViewer(ImageViewer* viewer);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
 
 private slots:
-    void onRun();
-    void onReset();
-    void onFinished();
+    // ── Step 1: star fetching ─────────────────────────────────────────────────
+    void onFetchStars();
+    void onFetchStarsFinished();
     void onCatalogReady(const std::vector<CatalogStar>& stars);
-    void onCatalogError(const QString& msg);
-    void onCameraChanged(const QString& name);
+    void onCatalogError(const QString& err);
+
+    // ── Step 2: calibration ───────────────────────────────────────────────────
+    void onRun();
+    void onCalibrationFinished();
+
+    // ── Controls ──────────────────────────────────────────────────────────────
+    void onReset();
+    void onOpenSaspViewer();
+
+    // ── Settings persistence ──────────────────────────────────────────────────
+    void saveWhiteRefSetting(int);
+    void saveRFilterSetting(int);
+    void saveGFilterSetting(int);
+    void saveBFilterSetting(int);
+    void saveSensorSetting(int);
+    void saveLpFilter1Setting(int);
+    void saveLpFilter2Setting(int);
+    void saveGradMethodSetting(const QString&);
+    void saveSepThreshSetting(double);
+    void saveGaiaFallbackSetting(bool);
+    void saveFullMatrixSetting(bool);
 
 private:
+    // ── UI construction ───────────────────────────────────────────────────────
     void buildUI();
     void connectSignals();
-    SPCCParams collectParams() const;
-    void populateProfiles();
-    void showResults(const SPCCResult& res);
+    void populateCombosFromFits();
+    void restoreSettings();
+    void showResults(const SPCCResult& r);
     void setControlsEnabled(bool en);
-    void updateColourPreview(double r, double g, double b);
+
+    // ── Star fetch helpers ────────────────────────────────────────────────────
+    /// Build a StarRecord list from the current SIMBAD query results.
+    /// Matches each SIMBAD star to the nearest SEP detection (within 3 px).
+    void matchSimbadToSEP(const std::vector<StarRecord>& simbadStars,
+                          std::vector<StarRecord>& matched);
+
+    /// For stars without a Pickles match, try to assign sp_clean from
+    /// Gaia BP-RP colour and re-run picklesMatchForSimbad().
+    void applyGaiaFallbackToStarList(std::vector<StarRecord>& starList,
+                                      const SPCCDataStore& store);
+
+    // ── Calibration launch ────────────────────────────────────────────────────
     void startCalibration();
+    SPCCParams collectParams() const;
 
-    // ── Object Type ────────────────────────────────────────────────────────
-    QComboBox*      m_objectTypeCombo  = nullptr;
-    
-    // ── Camera / filter ────────────────────────────────────────────────────
-    QComboBox*      m_cameraCombo      = nullptr;
-    QComboBox*      m_filterCombo      = nullptr;
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+    void cleanup();
 
-    // ── Detection ─────────────────────────────────────────────────────────
-    QDoubleSpinBox* m_minSNRSpin       = nullptr;
-    QSpinBox*       m_maxStarsSpin     = nullptr;
-    QDoubleSpinBox* m_apertureSpin     = nullptr;
-    QDoubleSpinBox* m_magLimitSpin     = nullptr;
-    QCheckBox*      m_limitMagCheck    = nullptr;
+    // ─────────────────────────────────────────────────────────────────────────
+    // UI elements — Equipment group
+    // ─────────────────────────────────────────────────────────────────────────
+    QComboBox*      m_whiteRefCombo    = nullptr;   ///< SED / white reference
+    QComboBox*      m_rFilterCombo     = nullptr;
+    QComboBox*      m_gFilterCombo     = nullptr;
+    QComboBox*      m_bFilterCombo     = nullptr;
+    QComboBox*      m_sensorCombo      = nullptr;
+    QComboBox*      m_lpFilter1Combo   = nullptr;
+    QComboBox*      m_lpFilter2Combo   = nullptr;
 
-    // ── Options ────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // UI elements — Options group
+    // ─────────────────────────────────────────────────────────────────────────
+    QDoubleSpinBox* m_sepThreshSpin    = nullptr;   ///< SEP detection sigma
+    QComboBox*      m_bgMethodCombo    = nullptr;   ///< Background subtraction method
+    QComboBox*      m_gradMethodCombo  = nullptr;   ///< Gradient surface method
+    QCheckBox*      m_gaiaFallbackCheck= nullptr;
     QCheckBox*      m_fullMatrixCheck  = nullptr;
-    QCheckBox*      m_solarRefCheck    = nullptr;
-    QCheckBox*      m_neutralBgCheck   = nullptr;
+    QCheckBox*      m_runGradientCheck = nullptr;   ///< Enable gradient extraction
 
-    // ── Results ────────────────────────────────────────────────────────────
-    QLabel*         m_starsLabel       = nullptr;
-    QLabel*         m_residualLabel    = nullptr;
-    QLabel*         m_scalesLabel      = nullptr;
-    QLabel*         m_colourSwatch     = nullptr;   // visual white-balance indicator
-    QTableWidget*   m_matrixTable      = nullptr;   // 3×3 correction matrix display
+    // ─────────────────────────────────────────────────────────────────────────
+    // UI elements — Results group
+    // ─────────────────────────────────────────────────────────────────────────
+    QLabel*         m_starsLabel       = nullptr;   ///< "Matched stars: N"
+    QLabel*         m_residualLabel    = nullptr;   ///< "RMS error: X.XXXX"
+    QLabel*         m_scalesLabel      = nullptr;   ///< "Scale factors: R, G, B"
+    QLabel*         m_modelLabel       = nullptr;   ///< "Model: affine"
+    QTableWidget*   m_matrixTable      = nullptr;   ///< 3x3 correction matrix
 
-    // ── Progress ───────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // UI elements — Status / progress
+    // ─────────────────────────────────────────────────────────────────────────
     QProgressBar*   m_progressBar      = nullptr;
     QLabel*         m_statusLabel      = nullptr;
 
-    // ── Buttons ────────────────────────────────────────────────────────────
-    QPushButton*    m_runBtn           = nullptr;
+    // ─────────────────────────────────────────────────────────────────────────
+    // UI elements — Buttons
+    // ─────────────────────────────────────────────────────────────────────────
+    QPushButton*    m_fetchStarsBtn    = nullptr;   ///< Step 1
+    QPushButton*    m_runBtn           = nullptr;   ///< Step 2
     QPushButton*    m_resetBtn         = nullptr;
+    QPushButton*    m_saspViewerBtn    = nullptr;
     QPushButton*    m_closeBtn         = nullptr;
 
-    // ── State ──────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // State
+    // ─────────────────────────────────────────────────────────────────────────
     ImageViewer*    m_viewer           = nullptr;
     MainWindow*     m_mainWindow       = nullptr;
-    ImageBuffer     m_originalBuffer;
+    ImageBuffer     m_originalBuffer;               ///< Snapshot for Reset
 
-    CatalogClient*  m_catalog          = nullptr;
-    std::vector<CatalogStar> m_catalogStars;
-    bool            m_useOnlineCatalog = false;
+    // In-memory spectral database (loaded once from tstar_data.fits)
+    SPCCDataStore   m_store;
+    bool            m_storeLoaded      = false;
 
-    QFutureWatcher<SPCCResult>* m_watcher = nullptr;
+    // Star list built by onFetchStars(), consumed by startCalibration()
+    std::vector<StarRecord> m_starList;
+
+    // Background workers
+    QFutureWatcher<std::vector<StarRecord>>* m_fetchWatcher = nullptr;
+    QFutureWatcher<SPCCResult>*              m_calibWatcher = nullptr;
+    CatalogClient*                           m_catalog = nullptr;
+
+    // Data path (resolved at construction from MainWindow or application dir)
     QString         m_dataPath;
-    QProgressDialog* m_busyDialog = nullptr;
+
+    // QSettings group key
+    static constexpr const char* kSettingsGroup = "SPCC";
 };
 
 #endif // SPCCDIALOG_H

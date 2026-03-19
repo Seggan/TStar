@@ -14,6 +14,10 @@
 #include <QCoreApplication>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QGridLayout>
+#include <QApplication>
+#include "../astrometry/AnnotationEngine.h"
+#include "../astrometry/WCSUtils.h"
 #include <QDebug>
 #include <QShortcut>
 #include <QKeySequence>
@@ -139,6 +143,46 @@ AnnotationToolDialog::AnnotationToolDialog(QWidget* parent)
     m_statusLabel = new QLabel(tr("Ready"));
     mainLayout->addWidget(m_statusLabel);
 
+    // --- Auto Annotations ---
+    m_catGroup = new QGroupBox(tr("Catalogs && Grid"));
+    auto* catLayout = new QGridLayout(m_catGroup);
+    
+    m_chkMessier = new QCheckBox(tr("Messier"));
+    m_chkNGC = new QCheckBox(tr("NGC"));
+    m_chkIC = new QCheckBox(tr("IC"));
+    m_chkLdN = new QCheckBox(tr("LdN"));
+    m_chkSh2 = new QCheckBox(tr("Sh2"));
+    m_chkStars = new QCheckBox(tr("Stars"));
+    m_chkConstellations = new QCheckBox(tr("Constellations"));
+    m_chkWcsGrid = new QCheckBox(tr("WCS Grid (RA/Dec)"));
+    
+    m_chkMessier->setChecked(true);
+    m_chkNGC->setChecked(true);
+    m_chkIC->setChecked(true);
+    m_chkLdN->setChecked(true);
+    m_chkSh2->setChecked(true);
+    m_chkStars->setChecked(true);
+    m_chkConstellations->setChecked(false);
+    m_chkWcsGrid->setChecked(true);
+    
+    // Add checkboxes to grid
+    catLayout->addWidget(m_chkMessier, 0, 0);
+    catLayout->addWidget(m_chkNGC, 0, 1);
+    catLayout->addWidget(m_chkIC, 0, 2);
+    catLayout->addWidget(m_chkLdN, 1, 0);
+    catLayout->addWidget(m_chkSh2, 1, 1);
+    catLayout->addWidget(m_chkStars, 1, 2);
+    catLayout->addWidget(m_chkConstellations, 2, 0, 1, 2);
+    catLayout->addWidget(m_chkWcsGrid, 2, 2, 1, 1);
+    
+    m_btnAnnotate = new QPushButton(tr("Annotate Image"));
+    catLayout->addWidget(m_btnAnnotate, 3, 0, 1, 3);
+    
+    mainLayout->addWidget(m_catGroup);
+    
+    connect(m_btnAnnotate, &QPushButton::clicked, this, &AnnotationToolDialog::refreshAutomaticAnnotations);
+    connect(m_chkWcsGrid, &QCheckBox::toggled, this, &AnnotationToolDialog::refreshAutomaticAnnotations);
+
     // Instruction for saving
     QLabel* tipLabel = new QLabel(tr("Tip: Annotations are saved as overlay. If you close the tool, annotations will disappear, and then reappear when you open this tool again. Open this tool to continue editing with full undo/redo support. To burn annotations into the image, use File > Save while the tool is open."));
     tipLabel->setStyleSheet("color: #AAAAAA; font-style: italic; border-top: 1px solid #444; padding-top: 5px;");
@@ -196,16 +240,32 @@ void AnnotationToolDialog::setViewer(ImageViewer* viewer) {
         }
     }
     
-    // Create overlay if needed
-    if (!m_overlay) {
+    // Create overlay if needed, or if the current one belongs to a different viewer
+    if (!m_overlay || m_overlay->parent() != viewer) {
+        if (m_overlay) {
+            logToFile("[setViewer] Overlay exists but belongs to a different viewer. Destroying it.");
+            // Save current annotations before destroying
+            m_savedAnnotations = m_overlay->annotations();
+            delete m_overlay;
+            m_overlay = nullptr;
+        }
+        
         logToFile("[setViewer] Creating new overlay");
         logToFile(QString("[setViewer] m_savedAnnotations size at creation: %1").arg(m_savedAnnotations.size()));
         
         m_overlay = new AnnotationOverlay(viewer);
         // Make overlay fill entire viewer area and auto-resize
         m_overlay->setGeometry(0, 0, viewer->width(), viewer->height());
-        m_overlay->show();
         
+        if (this->isVisible()) {
+            m_overlay->show();
+            m_overlay->setEnabled(true);
+        } else {
+            m_overlay->hide();
+            m_overlay->setEnabled(false);
+        }
+        
+        // ... (Restore logic remains same)
         // CRITICAL: Restore saved annotations from MainWindow if they exist
         // Find MainWindow by walking up the parent hierarchy
         QWidget* w = parentWidget();
@@ -225,13 +285,9 @@ void AnnotationToolDialog::setViewer(ImageViewer* viewer) {
             m_savedAnnotations = mainWin->m_persistedAnnotations;
             m_savedUndoStack = mainWin->m_persistedUndoStack;
             m_savedRedoStack = mainWin->m_persistedRedoStack;
-            logToFile(QString("[setViewer] Restored undo stack size: %1").arg(m_savedUndoStack.size()));
-            logToFile(QString("[setViewer] Restored redo stack size: %1").arg(m_savedRedoStack.size()));
         } else if (!m_savedAnnotations.isEmpty()) {
             logToFile(QString("[setViewer] Restoring %1 saved annotations from m_savedAnnotations").arg(m_savedAnnotations.size()));
             m_overlay->setAnnotations(m_savedAnnotations);
-        } else {
-            logToFile("[setViewer] No annotations to restore");
         }
         
         // Resize overlay when viewer is resized
@@ -241,22 +297,120 @@ void AnnotationToolDialog::setViewer(ImageViewer* viewer) {
             }
         });
         
-        // Connect signal that fires BEFORE annotation is added (for proper undo)
+        // Connect signals
         connect(m_overlay, &AnnotationOverlay::aboutToAddAnnotation,
                 this, &AnnotationToolDialog::onAboutToAddAnnotation);
-        // Connect for text input request
         connect(m_overlay, &AnnotationOverlay::textInputRequested,
                 this, &AnnotationToolDialog::onTextInputRequested);
     } else {
-        // Overlay already exists - just show it
-        logToFile(QString("[setViewer] Overlay already exists. Showing it. Current annotations: %1").arg(m_overlay->annotations().size()));
-        m_overlay->show();
+        // Overlay already exists and belongs to the correct viewer
+        logToFile(QString("[setViewer] Overlay already exists for this viewer. Syncing visibility with dialog. Current annotations: %1").arg(m_overlay->annotations().size()));
+        
+        if (this->isVisible()) {
+            m_overlay->show();
+            m_overlay->setEnabled(true);
+        } else {
+            m_overlay->hide();
+            m_overlay->setEnabled(false);
+        }
     }
     
     // Sync the draw mode from last state
     syncOverlayDrawMode();
     
+    // Auto-annotate if WCS is valid and no annotations exist yet
+    if (m_overlay && m_overlay->annotations().isEmpty() && WCSUtils::hasValidWCS(m_viewer->getBuffer().metadata())) {
+        refreshAutomaticAnnotations();
+    }
+    
     m_statusLabel->setText(tr("Ready to draw"));
+}
+
+void AnnotationToolDialog::refreshAutomaticAnnotations() {
+    if (!m_viewer || !m_overlay) return;
+
+    auto meta = m_viewer->getBuffer().metadata();
+    if (!WCSUtils::hasValidWCS(meta)) {
+        QMessageBox::warning(this, tr("WCS Error"), tr("Image must be plate solved first."));
+        return;
+    }
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    // Find data path
+    QString dataPath;
+    QStringList paths = {
+        QCoreApplication::applicationDirPath() + "/data",
+        QCoreApplication::applicationDirPath() + "/../data",
+        QCoreApplication::applicationDirPath() + "/../../data",
+        QDir::currentPath() + "/data"
+    };
+
+    for (const QString& p : paths) {
+        if (QDir(p).exists("messier.csv")) {
+            dataPath = p;
+            break;
+        }
+    }
+
+    if (dataPath.isEmpty()) {
+        QApplication::restoreOverrideCursor();
+        QMessageBox::warning(this, tr("Data Error"), tr("Could not find catalog data directory."));
+        return;
+    }
+
+    QVector<CatalogObject> objects;
+    int w = m_viewer->getBuffer().width();
+    int h = m_viewer->getBuffer().height();
+
+    auto deduplicate = [](QVector<CatalogObject>& current, const QVector<CatalogObject>& news) {
+        const double EPSILON = 1.0/1800;
+        for (const auto& n : news) {
+            bool duplicate = false;
+            for (const auto& c : current) {
+                if (std::abs(c.ra - n.ra) < EPSILON && std::abs(c.dec - n.dec) < EPSILON) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                current.append(n);
+            }
+        }
+    };
+
+    if (m_chkMessier->isChecked()) {
+        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/messier.csv", meta, "Messier", w, h));
+    }
+    if (m_chkNGC->isChecked()) {
+        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/ngc.csv", meta, "NGC", w, h));
+    }
+    if (m_chkIC->isChecked()) {
+        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/ic.csv", meta, "IC", w, h));
+    }
+    if (m_chkLdN->isChecked()) {
+        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/ldn.csv", meta, "LdN", w, h));
+    }
+    if (m_chkSh2->isChecked()) {
+        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/sh2.csv", meta, "Sh2", w, h));
+    }
+    if (m_chkStars->isChecked()) {
+        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/stars.csv", meta, "Star", w, h));
+    }
+    if (m_chkConstellations->isChecked()) {
+        objects.append(AnnotationEngine::loadConstellationLines(dataPath + "/constellations.csv", meta, w, h));
+        // Add constellation names
+        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/constellationsnames.csv", meta, "ConstellationName", w, h));
+    }
+
+    // Pass WCS Grid check state to overlay
+    m_overlay->setWCSGridVisible(m_chkWcsGrid->isChecked());
+
+    m_overlay->setWCSObjects(objects);
+    m_overlay->setWCSObjectsVisible(true);
+    
+    QApplication::restoreOverrideCursor();
+    m_statusLabel->setText(tr("Annotations updated. Found %1 unique objects.").arg(objects.size()));
 }
 
 QVector<Annotation> AnnotationToolDialog::saveAnnotations() const {
@@ -353,18 +507,16 @@ void AnnotationToolDialog::renderAnnotations(QPainter& painter, const QRectF& im
 }
 
 void AnnotationToolDialog::onClearAnnotations() {
-    if (m_overlay) {
-        // Save current state for undo
-        pushUndoState();
-        m_overlay->clearManualAnnotations();
-    }
+    if (!m_overlay) return; // Added check
+    // Save current state for undo
+    pushUndoState();
+    m_overlay->clearManualAnnotations();
 }
 
 void AnnotationToolDialog::onColorChanged(int index) {
-    if (m_overlay) {
-        QColor color = m_colorCombo->itemData(index).value<QColor>();
-        m_overlay->setDrawColor(color);
-    }
+    if (!m_overlay) return; // Added check
+    QColor color = m_colorCombo->itemData(index).value<QColor>();
+    m_overlay->setDrawColor(color);
 }
 
 void AnnotationToolDialog::onAboutToAddAnnotation() {
@@ -391,7 +543,7 @@ void AnnotationToolDialog::onUndo() {
     logToFile(QString("[onUndo] Popped from undo: %1 annotations").arg(prevState.size()));
     
     m_overlay->setAnnotations(prevState);
-    logToFile(QString("[onUndo] Overlay now has %1 annotations").arg(m_overlay->annotations().size()));
+    logToFile(QString("[onUndo] Overlay now has %1 annotations").arg(m_overlay ? m_overlay->annotations().size() : 0));
     
     updateUndoRedoButtons();
 }
@@ -509,9 +661,9 @@ void AnnotationToolDialog::hideEvent(QHideEvent* event) {
             mainWin->m_persistedAnnotations = m_savedAnnotations;
             mainWin->m_persistedUndoStack = m_savedUndoStack;
             mainWin->m_persistedRedoStack = m_savedRedoStack;
-            logToFile(QString("[hideEvent] MainWindow::m_persistedAnnotations now has %1 annotations").arg(mainWin->m_persistedAnnotations.size()));
-            logToFile(QString("[hideEvent] MainWindow::m_persistedUndoStack now has %1 states").arg(mainWin->m_persistedUndoStack.size()));
-            logToFile(QString("[hideEvent] MainWindow::m_persistedRedoStack now has %1 states").arg(mainWin->m_persistedRedoStack.size()));
+            logToFile(QString("[hideEvent] MainWindow::m_persistedAnnotations now has %1 annotations").arg(mainWin ? mainWin->m_persistedAnnotations.size() : 0));
+            logToFile(QString("[hideEvent] MainWindow::m_persistedUndoStack now has %1 states").arg(mainWin ? mainWin->m_persistedUndoStack.size() : 0));
+            logToFile(QString("[hideEvent] MainWindow::m_persistedRedoStack now has %1 states").arg(mainWin ? mainWin->m_persistedRedoStack.size() : 0));
         } else {
             logToFile("[hideEvent] WARNING: Could not find MainWindow in parent hierarchy!");
         }

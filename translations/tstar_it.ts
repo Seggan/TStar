@@ -291,12 +291,24 @@
             <translation type="finished">Aggiungi Etichetta Testo</translation>
         </message>
         <message>
+            <source>Annotate Image</source>
+            <translation type="finished">Annota Immagine</translation>
+        </message>
+        <message>
             <source>Annotation Tool</source>
             <translation type="finished">Strumento Annotazione</translation>
         </message>
         <message>
+            <source>Annotations updated. Found %1 unique objects.</source>
+            <translation type="finished">Annotazioni aggiornate. Trovati %1 oggetti unici.</translation>
+        </message>
+        <message>
             <source>Arrow</source>
             <translation type="finished">Freccia</translation>
+        </message>
+        <message>
+            <source>Catalogs &amp;&amp; Grid</source>
+            <translation type="finished">Cataloghi e Griglia</translation>
         </message>
         <message>
             <source>Circle</source>
@@ -327,8 +339,20 @@
             <translation type="finished">Colore:</translation>
         </message>
         <message>
+            <source>Constellations</source>
+            <translation type="finished">Costellazioni</translation>
+        </message>
+        <message>
+            <source>Could not find catalog data directory.</source>
+            <translation type="finished">Impossibile trovare la directory dei dati del catalogo.</translation>
+        </message>
+        <message>
             <source>Cyan</source>
             <translation type="finished">Ciano</translation>
+        </message>
+        <message>
+            <source>Data Error</source>
+            <translation type="finished">Errore Dati</translation>
         </message>
         <message>
             <source>Draw Arrow</source>
@@ -353,6 +377,26 @@
         <message>
             <source>Green</source>
             <translation type="finished">Verde</translation>
+        </message>
+        <message>
+            <source>IC</source>
+            <translation type="finished">IC</translation>
+        </message>
+        <message>
+            <source>Image must be plate solved first.</source>
+            <translation type="finished">L'immagine deve essere prima risolta astrometricamente.</translation>
+        </message>
+        <message>
+            <source>LdN</source>
+            <translation type="finished">LdN</translation>
+        </message>
+        <message>
+            <source>Messier</source>
+            <translation type="finished">Messier</translation>
+        </message>
+        <message>
+            <source>NGC</source>
+            <translation type="finished">NGC</translation>
         </message>
         <message>
             <source>No image loaded</source>
@@ -391,6 +435,14 @@
             <translation type="finished">Seleziona/Pan (no disegno)</translation>
         </message>
         <message>
+            <source>Sh2</source>
+            <translation type="finished">Sh2</translation>
+        </message>
+        <message>
+            <source>Stars</source>
+            <translation type="finished">Stelle</translation>
+        </message>
+        <message>
             <source>Text</source>
             <translation type="finished">Testo</translation>
         </message>
@@ -409,6 +461,14 @@
         <message>
             <source>Undo</source>
             <translation type="finished">Annulla</translation>
+        </message>
+        <message>
+            <source>WCS Error</source>
+            <translation type="finished">Errore WCS</translation>
+        </message>
+        <message>
+            <source>WCS Grid (RA/Dec)</source>
+            <translation type="finished">Griglia WCS (AR/Dec)</translation>
         </message>
         <message>
             <source>White</source>
@@ -2152,236 +2212,484 @@
     <context>
         <name>DeconvolutionDialog</name>
         <message>
-            <source>0 = original in masked area, 1 = deconvolved.</source>
-            <translation type="finished">0 = originale nell'area mascherata, 1 = deconvoluto.</translation>
+            <source>%1 frames loaded</source>
+            <translation type="finished">%1 frame caricati</translation>
         </message>
         <message>
-            <source>Airy</source>
-            <translation type="finished">Airy</translation>
+            <source>(optional) star_mask_ref_path</source>
+            <translation type="finished">(opzionale) star_mask_ref_path</translation>
         </message>
         <message>
-            <source>Airy Aperture:</source>
-            <translation type="finished">Apertura Airy:</translation>
+            <source>0 frames loaded</source>
+            <translation type="finished">0 frame caricati</translation>
         </message>
         <message>
-            <source>Airy Focal Len:</source>
-            <translation type="finished">Lunghezza Focale Airy:</translation>
+            <source>&gt;0 absolute | &lt;0 auto (|delta| x RMS via MAD) | 0 = flat (like L2)</source>
+            <translation type="finished">&gt;0 assoluto | &lt;0 auto (|delta| x RMS via MAD) | 0 = piatto (come L2)</translation>
         </message>
         <message>
-            <source>Airy Obstruction:</source>
-            <translation type="finished">Ostruzione Airy:</translation>
+            <source>Add Frames…</source>
+            <translation type="finished">Aggiungi Frame…</translation>
         </message>
         <message>
-            <source>Airy Pixel Size:</source>
-            <translation type="finished">Dimens. Pixel Airy:</translation>
+            <source>Add at least one FITS frame.</source>
+            <translation type="finished">Aggiungi almeno un frame FITS.</translation>
         </message>
         <message>
-            <source>Airy Wavelength:</source>
-            <translation type="finished">Lunghezza d'onda Airy:</translation>
+            <source>Algorithm:</source>
+            <translation type="finished">Algoritmo:</translation>
         </message>
         <message>
-            <source>Algorithm</source>
-            <translation type="finished">Algoritmo</translation>
+            <source>Aligned Frames</source>
+            <translation type="finished">Frame Allineati</translation>
         </message>
         <message>
-            <source>Angle:</source>
-            <translation type="finished">Angolo:</translation>
+            <source>Angular Step (°):</source>
+            <translation type="finished">Passo Angolare (°):</translation>
         </message>
         <message>
             <source>Apply</source>
             <translation type="finished">Applica</translation>
         </message>
         <message>
-            <source>Applying deconvolution...</source>
-            <translation type="finished">Applicazione deconvoluzione...</translation>
+            <source>Aspect Ratio:</source>
+            <translation type="finished">Rapporto d'aspetto:</translation>
         </message>
         <message>
-            <source>Auto</source>
-            <translation type="finished">Auto</translation>
+            <source>Blend Mode:</source>
+            <translation type="finished">Metodo Fusione:</translation>
         </message>
         <message>
-            <source>Blend in mask:</source>
-            <translation type="finished">Mescola in maschera:</translation>
+            <source>Bootstrap frames (bootstrap_frames=):</source>
+            <translation type="finished">Frame di bootstrap (bootstrap_frames=):</translation>
         </message>
         <message>
-            <source>Border Handling</source>
-            <translation type="finished">Gestione bordi</translation>
+            <source>Browse…</source>
+            <translation type="finished">Sfoglia…</translation>
+        </message>
+        <message>
+            <source>Clear All</source>
+            <translation type="finished">Cancella Tutto</translation>
+        </message>
+        <message>
+            <source>Clip σ (clip_sigma=):</source>
+            <translation type="finished">Clip σ (clip_sigma=):</translation>
         </message>
         <message>
             <source>Close</source>
             <translation type="finished">Chiudi</translation>
         </message>
         <message>
-            <source>Computing preview...</source>
-            <translation type="finished">Calcolo anteprima...</translation>
+            <source>Color Mode (color_mode=):</source>
+            <translation type="finished">Modalità Colore (color_mode=):</translation>
         </message>
         <message>
-            <source>Convergence tol:</source>
-            <translation type="finished">Tolleranza conv.:</translation>
+            <source>Completed: %1</source>
+            <translation type="finished">Completato: %1</translation>
         </message>
         <message>
-            <source>Custom image</source>
-            <translation type="finished">Immagine personalizzata</translation>
+            <source>Convolution</source>
+            <translation type="finished">Convoluzione</translation>
+        </message>
+        <message>
+            <source>Convolution / Deconvolution</source>
+            <translation type="finished">Convoluzione / Deconvoluzione</translation>
+        </message>
+        <message>
+            <source>Could not estimate PSF from the image.</source>
+            <translation type="finished">Impossibile stimare la PSF dall'immagine.</translation>
         </message>
         <message>
             <source>Deconvolution</source>
             <translation type="finished">Deconvoluzione</translation>
         </message>
         <message>
-            <source>Deconvolution [%1] applied: FWHM=%2px, iter=%3</source>
-            <translation type="finished">Deconvoluzione [%1] applicata: FWHM=%2px, iter=%3</translation>
+            <source>Deconvolution completed.\nSaved: %1</source>
+            <translation type="finished">Deconvoluzione completata. Salvato: %1</translation>
         </message>
         <message>
-            <source>Dilation radius:</source>
-            <translation type="finished">Raggio dilatazione:</translation>
+            <source>Deconvolution failed: </source>
+            <translation type="finished">Deconvoluzione fallita:</translation>
         </message>
         <message>
-            <source>Disk</source>
-            <translation type="finished">Disco</translation>
+            <source>Deconvolve L* Only</source>
+            <translation type="finished">Deconvolvi Solo L*</translation>
         </message>
         <message>
-            <source>Done - %1 iterations, d=%2</source>
-            <translation type="finished">Fatto - %1 iterazioni, d=%2</translation>
+            <source>Detection σ:</source>
+            <translation type="finished">σ Rilevamento:</translation>
         </message>
         <message>
-            <source>Enable star mask</source>
-            <translation type="finished">Abilita maschera stelle</translation>
+            <source>Disable Stellar PSF</source>
+            <translation type="finished">Disabilita PSF Stellare</translation>
         </message>
         <message>
-            <source>Estimated FWHM: %1 px</source>
-            <translation type="finished">FWHM stimata: %1 px</translation>
+            <source>Early Stopping (EarlyStopper)</source>
+            <translation type="finished">Arresto Anticipato (EarlyStopper)</translation>
         </message>
         <message>
-            <source>Estimating FWHM from stars...</source>
-            <translation type="finished">Stima FWHM dalle stelle...</translation>
+            <source>Enable de-ring</source>
+            <translation type="finished">Abilita de-ring</translation>
         </message>
         <message>
-            <source>FWHM:</source>
-            <translation type="finished">FWHM:</translation>
+            <source>Error</source>
+            <translation type="finished">Errore</translation>
         </message>
         <message>
-            <source>Failed: </source>
-            <translation type="finished">Fallito:</translation>
+            <source>Error: %1</source>
+            <translation type="finished">Errore: %1</translation>
         </message>
         <message>
-            <source>Failed:\n</source>
-            <translation type="finished">Fallito:</translation>
+            <source>Estimated PSF (64×64):</source>
+            <translation type="finished">PSF Stimata (64x64):</translation>
         </message>
         <message>
-            <source>Full Width at Half Maximum of the PSF in pixels.</source>
-            <translation type="finished">Larghezza a metà altezza (FWHM) della PSF in pixel.</translation>
+            <source>FITS Files (*.fits *.fit *.fts);;All Files (*)</source>
+            <translation type="finished">File FITS (*.fits *.fit *.fts);;Tutti i File (*)</translation>
         </message>
         <message>
-            <source>Gaussian</source>
-            <translation type="finished">Gaussiano</translation>
+            <source>FITS Files (*.fits *.fit);;All Files (*)</source>
+            <translation type="finished">File FITS (*.fits *.fit);;Tutti i File (*)</translation>
         </message>
         <message>
-            <source>Iteration Control</source>
-            <translation type="finished">Controllo iterazioni</translation>
+            <source>Half-Width (px):</source>
+            <translation type="finished">Mezza Larghezza (px):</translation>
+        </message>
+        <message>
+            <source>Huber δ (huber_delta=):</source>
+            <translation type="finished">Huber δ (huber_delta=):</translation>
+        </message>
+        <message>
+            <source>Iteration Parameters</source>
+            <translation type="finished">Parametri Iterazione</translation>
         </message>
         <message>
             <source>Iterations:</source>
             <translation type="finished">Iterazioni:</translation>
         </message>
         <message>
-            <source>K (noise power):</source>
-            <translation type="finished">K (potenza rumore):</translation>
+            <source>Kappa (ratio clamp):</source>
+            <translation type="finished">Kappa (clamp rapporto):</translation>
         </message>
         <message>
-            <source>Kernel size:</source>
-            <translation type="finished">Dimensione kernel:</translation>
+            <source>Kurtosis (σ):</source>
+            <translation type="finished">Curtosi (σ):</translation>
         </message>
         <message>
-            <source>Measure FWHM from stars in the image.</source>
-            <translation type="finished">Misura FWHM dalle stelle nell'immagine.</translation>
+            <source>LS Operator:</source>
+            <translation type="finished">Operatore LS:</translation>
         </message>
         <message>
-            <source>Method:</source>
-            <translation type="finished">Metodo:</translation>
+            <source>Loss (rho=):</source>
+            <translation type="finished">Perdita (rho=):</translation>
         </message>
         <message>
-            <source>Minor/major axis ratio. 1.0 = circular PSF.</source>
-            <translation type="finished">Rapporto asse minore/maggiore. 1.0 = PSF circolare.</translation>
+            <source>Low-memory mode (low_mem=True)</source>
+            <translation type="finished">Modalità memoria ridotta (low_mem=True)</translation>
         </message>
         <message>
-            <source>Mirror padding:</source>
-            <translation type="finished">Padding specchiato:</translation>
+            <source>MFDeconv</source>
+            <translation type="finished">MFDeconv</translation>
         </message>
         <message>
-            <source>Moffat</source>
-            <translation type="finished">Moffat</translation>
+            <source>Max Iterations (iters=):</source>
+            <translation type="finished">Iterazioni Max (iters=):</translation>
         </message>
         <message>
-            <source>Moffat beta:</source>
-            <translation type="finished">Moffat beta:</translation>
+            <source>Max Iterations:</source>
+            <translation type="finished">Iterazioni Max:</translation>
         </message>
         <message>
-            <source>PSF kernel preview (logarithmic scale)</source>
-            <translation type="finished">Anteprima kernel PSF (scala logaritmica)</translation>
+            <source>Max Stars:</source>
+            <translation type="finished">Max Stelle:</translation>
         </message>
         <message>
-            <source>PSF preview:</source>
-            <translation type="finished">Anteprima PSF:</translation>
+            <source>Median (tiled exact median, RAM-bounded)</source>
+            <translation type="finished">Mediana (mediana esatta a blocchi, limitata da RAM)</translation>
         </message>
         <message>
-            <source>PSF type:</source>
-            <translation type="finished">Tipo PSF:</translation>
+            <source>Min Area (px²):</source>
+            <translation type="finished">Area Min (px²):</translation>
         </message>
         <message>
-            <source>Point Spread Function (PSF)</source>
-            <translation type="finished">Funzione di diffusione del punto (PSF)</translation>
+            <source>Min Iterations (min_iters=):</source>
+            <translation type="finished">Iterazioni Min (min_iters=):</translation>
+        </message>
+        <message>
+            <source>Missing output</source>
+            <translation type="finished">Output mancante</translation>
+        </message>
+        <message>
+            <source>Multi-Frame</source>
+            <translation type="finished">Multi-Frame</translation>
+        </message>
+        <message>
+            <source>Multi-channel</source>
+            <translation type="finished">Multi-canale</translation>
+        </message>
+        <message>
+            <source>No Stars</source>
+            <translation type="finished">Nessuna Stella</translation>
+        </message>
+        <message>
+            <source>No frames</source>
+            <translation type="finished">Nessun frame</translation>
+        </message>
+        <message>
+            <source>Noise/Signal (λ):</source>
+            <translation type="finished">Rumore/Segnale (λ):</translation>
+        </message>
+        <message>
+            <source>Output</source>
+            <translation type="finished">Output</translation>
+        </message>
+        <message>
+            <source>Output path</source>
+            <translation type="finished">Percorso di output</translation>
+        </message>
+        <message>
+            <source>Output path:</source>
+            <translation type="finished">Percorso di output:</translation>
+        </message>
+        <message>
+            <source>PSF Aspect:</source>
+            <translation type="finished">Aspetto PSF:</translation>
+        </message>
+        <message>
+            <source>PSF Estimator</source>
+            <translation type="finished">Stimatore PSF</translation>
+        </message>
+        <message>
+            <source>PSF Kurtosis:</source>
+            <translation type="finished">Curtosi PSF:</translation>
+        </message>
+        <message>
+            <source>PSF Radius:</source>
+            <translation type="finished">Raggio PSF:</translation>
+        </message>
+        <message>
+            <source>PSF Rotation:</source>
+            <translation type="finished">Rotazione PSF:</translation>
         </message>
         <message>
             <source>Preview</source>
             <translation type="finished">Anteprima</translation>
         </message>
         <message>
-            <source>Preview - %1 iterations</source>
-            <translation type="finished">Anteprima - %1 iterazioni</translation>
+            <source>Radial Step (px):</source>
+            <translation type="finished">Passo Radiale (px):</translation>
         </message>
         <message>
-            <source>RL + Total Variation (RLTV)  [recommended]</source>
-            <translation type="finished">RL + Variazione Totale (RLTV) [raccomandato]</translation>
+            <source>Radius:</source>
+            <translation type="finished">Raggio:</translation>
         </message>
         <message>
-            <source>Reset</source>
-            <translation type="finished">Reimposta</translation>
+            <source>Reduces LRU cache, disables prefetch, limits batch</source>
+            <translation type="finished">Riduce cache LRU, disabilita prefetch, limita batch</translation>
         </message>
         <message>
-            <source>Reset to original.</source>
-            <translation type="finished">Ripristina all'originale.</translation>
+            <source>Regularization:</source>
+            <translation type="finished">Regolarizzazione:</translation>
         </message>
         <message>
-            <source>Richardson-Lucy (RL)</source>
-            <translation type="finished">Richardson-Lucy (RL)</translation>
+            <source>Relaxation (0–1):</source>
+            <translation type="finished">Rilassamento (0-1):</translation>
         </message>
         <message>
-            <source>Roundness:</source>
-            <translation type="finished">Rotondità:</translation>
+            <source>Relaxation (relax=):</source>
+            <translation type="finished">Rilassamento (relax=):</translation>
         </message>
         <message>
-            <source>Star Protection Mask</source>
-            <translation type="finished">Maschera protezione stelle</translation>
+            <source>Remove</source>
+            <translation type="finished">Rimuovi</translation>
         </message>
         <message>
-            <source>TV Regularisation</source>
-            <translation type="finished">Regolarizzazione TV</translation>
+            <source>Robust (bootstrap + +/-4*MAD clip + sigma-clipped Welford)</source>
+            <translation type="finished">Robusto (bootstrap + +/-4*MAD clip + sigma-clipped Welford)</translation>
         </message>
         <message>
-            <source>Threshold:</source>
-            <translation type="finished">Soglia:</translation>
+            <source>Rotation:</source>
+            <translation type="finished">Rotazione:</translation>
         </message>
         <message>
-            <source>Wiener / MMSE</source>
-            <translation type="finished">Wiener / MMSE</translation>
+            <source>Run SEP Extraction</source>
+            <translation type="finished">Esegui Estrazione SEP</translation>
         </message>
         <message>
-            <source>Wiener Parameters</source>
-            <translation type="finished">Parametri Wiener</translation>
+            <source>SR-PSF Solver (visible only if factor &gt; 1)</source>
+            <translation type="finished">Risolutore SR-PSF (visibile solo se fattore &gt; 1)</translation>
         </message>
         <message>
-            <source>lambda_TV weight:</source>
-            <translation type="finished">Peso lambda_TV:</translation>
+            <source>Saturation Cutoff:</source>
+            <translation type="finished">Soglia di Saturazione:</translation>
+        </message>
+        <message>
+            <source>Save Intermediate Iterations (save_intermediate=)</source>
+            <translation type="finished">Salva Iterazioni Intermedie (save_intermediate=)</translation>
+        </message>
+        <message>
+            <source>Save PSF…</source>
+            <translation type="finished">Salva PSF…</translation>
+        </message>
+        <message>
+            <source>Save every (save_every=):</source>
+            <translation type="finished">Salva ogni (save_every=):</translation>
+        </message>
+        <message>
+            <source>Seed (seed_mode=)</source>
+            <translation type="finished">Seme (seed_mode=)</translation>
+        </message>
+        <message>
+            <source>Select aligned FITS frames</source>
+            <translation type="finished">Seleziona frame FITS allineati</translation>
+        </message>
+        <message>
+            <source>Specify an output path.</source>
+            <translation type="finished">Specifica un percorso di output.</translation>
+        </message>
+        <message>
+            <source>Star Mask Configuration</source>
+            <translation type="finished">Configurazione Maschera Stelle</translation>
+        </message>
+        <message>
+            <source>Strength:</source>
+            <translation type="finished">Forza:</translation>
+        </message>
+        <message>
+            <source>Super-Resolution factor (super_res_factor=):</source>
+            <translation type="finished">Fattore Super-Risoluzione (super_res_factor=):</translation>
+        </message>
+        <message>
+            <source>TV Denoise</source>
+            <translation type="finished">Denoise TV</translation>
+        </message>
+        <message>
+            <source>TV Weight:</source>
+            <translation type="finished">Peso TV:</translation>
+        </message>
+        <message>
+            <source>Undo</source>
+            <translation type="finished">Annulla</translation>
+        </message>
+        <message>
+            <source>Use Star Masks (use_star_masks=)</source>
+            <translation type="finished">Usa Maschere Stelle (use_star_masks=)</translation>
+        </message>
+        <message>
+            <source>Use Variance Maps (use_variance_maps=)</source>
+            <translation type="finished">Usa Mappe di Varianza (use_variance_maps=)</translation>
+        </message>
+        <message>
+            <source>Use as Current PSF</source>
+            <translation type="finished">Usa come PSF Corrente</translation>
+        </message>
+        <message>
+            <source>Using Stellar PSF</source>
+            <translation type="finished">Uso PSF Stellare</translation>
+        </message>
+        <message>
+            <source>Variance Map Configuration</source>
+            <translation type="finished">Configurazione Mappa di Varianza</translation>
+        </message>
+        <message>
+            <source>[low_mem=True] Reduced LRU cache, prefetch disabled.</source>
+            <translation type="finished">[low_mem=True] Cache LRU ridotta, prefetch disabilitato.</translation>
+        </message>
+        <message>
+            <source>bh=</source>
+            <translation type="finished">bh=</translation>
+        </message>
+        <message>
+            <source>bw=</source>
+            <translation type="finished">bw=</translation>
+        </message>
+        <message>
+            <source>early_frac=</source>
+            <translation type="finished">early_frac=</translation>
+        </message>
+        <message>
+            <source>ellipse_scale=</source>
+            <translation type="finished">ellipse_scale=</translation>
+        </message>
+        <message>
+            <source>ema_alpha=</source>
+            <translation type="finished">ema_alpha=</translation>
+        </message>
+        <message>
+            <source>floor=</source>
+            <translation type="finished">floor=</translation>
+        </message>
+        <message>
+            <source>grow_px=</source>
+            <translation type="finished">grow_px=</translation>
+        </message>
+        <message>
+            <source>keep_floor=</source>
+            <translation type="finished">keep_floor=</translation>
+        </message>
+        <message>
+            <source>max_objs=</source>
+            <translation type="finished">max_objs=</translation>
+        </message>
+        <message>
+            <source>max_radius_px=</source>
+            <translation type="finished">max_radius_px=</translation>
+        </message>
+        <message>
+            <source>patience=</source>
+            <translation type="finished">patience=</translation>
+        </message>
+        <message>
+            <source>smooth_sigma=</source>
+            <translation type="finished">smooth_sigma=</translation>
+        </message>
+        <message>
+            <source>soft_sigma=</source>
+            <translation type="finished">soft_sigma=</translation>
+        </message>
+        <message>
+            <source>sr_psf_opt_iters=</source>
+            <translation type="finished">sr_psf_opt_iters=</translation>
+        </message>
+        <message>
+            <source>sr_psf_opt_lr=</source>
+            <translation type="finished">sr_psf_opt_lr=</translation>
+        </message>
+        <message>
+            <source>sr_sigma=</source>
+            <translation type="finished">sr_sigma=</translation>
+        </message>
+        <message>
+            <source>star_mask_ref_path=</source>
+            <translation type="finished">star_mask_ref_path=</translation>
+        </message>
+        <message>
+            <source>thresh_sigma=</source>
+            <translation type="finished">thresh_sigma=</translation>
+        </message>
+        <message>
+            <source>tol_rel_floor=</source>
+            <translation type="finished">tol_rel_floor=</translation>
+        </message>
+        <message>
+            <source>tol_upd_floor=</source>
+            <translation type="finished">tol_upd_floor=</translation>
+        </message>
+        <message>
+            <source>■ Stop</source>
+            <translation type="finished">■ Stop</translation>
+        </message>
+        <message>
+            <source>▲</source>
+            <translation type="finished">▲</translation>
+        </message>
+        <message>
+            <source>▶ Start MFDeconv</source>
+            <translation type="finished">▶ Avvia MFDeconv</translation>
+        </message>
+        <message>
+            <source>▼</source>
+            <translation type="finished">▼</translation>
         </message>
     </context>
     <context>
@@ -5166,6 +5474,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Home Directory cambiata in: %1</translation>
         </message>
         <message>
+            <source>Image Annotation</source>
+            <translation type="finished">Annotazione Immagine</translation>
+        </message>
+        <message>
             <source>Image Annotator</source>
             <translation type="finished">Annotatore Immagini</translation>
         </message>
@@ -5614,10 +5926,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Apertura Statistical Stretch...</translation>
         </message>
         <message>
-            <source>Opening TGV Denoise...</source>
-            <translation type="finished">Apertura TGV Denoise...</translation>
-        </message>
-        <message>
             <source>Opening Temperature / Tint tool...</source>
             <translation type="finished">Apertura strumento Temperatura / Tinta...</translation>
         </message>
@@ -5989,10 +6297,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Stretch Tools</source>
             <translation type="finished">Strumenti di Stretching</translation>
-        </message>
-        <message>
-            <source>TGV Denoise</source>
-            <translation type="finished">TGV Denoise</translation>
         </message>
         <message>
             <source>TIFF Files (*.tiff *.tif);;</source>
@@ -8999,212 +9303,256 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
     <context>
         <name>SPCCDialog</name>
         <message>
-            <source>Aperture radius:</source>
-            <translation type="finished">Raggio apertura:</translation>
+            <source>(None)</source>
+            <translation type="finished">(Nessuno)</translation>
         </message>
         <message>
-            <source>B_in</source>
-            <translation type="finished">B_in</translation>
+            <source>B Filter:</source>
+            <translation type="finished">Filtro B:</translation>
         </message>
         <message>
-            <source>B_out</source>
-            <translation type="finished">B_out</translation>
-        </message>
-        <message>
-            <source>Calibration Options</source>
-            <translation type="finished">Opzioni Calibrazione</translation>
-        </message>
-        <message>
-            <source>Calibration Results</source>
-            <translation type="finished">Risultati calibrazione</translation>
+            <source>Background Method:</source>
+            <translation type="finished">Metodo di Sfondo:</translation>
         </message>
         <message>
             <source>Calibration complete.</source>
             <translation type="finished">Calibrazione completata.</translation>
         </message>
         <message>
-            <source>Calibration failed:\n</source>
-            <translation type="finished">Calibrazione fallita:\n</translation>
+            <source>Calibration failed.</source>
+            <translation type="finished">Calibrazione fallita.</translation>
         </message>
         <message>
-            <source>Camera / Sensor:</source>
-            <translation type="finished">Fotocamera / Sensore:</translation>
+            <source>Catalog Error</source>
+            <translation type="finished">Errore Catalogo</translation>
         </message>
         <message>
-            <source>Catalog Download Error</source>
-            <translation type="finished">Errore Download Catalogo</translation>
-        </message>
-        <message>
-            <source>Catalog error: </source>
-            <translation type="finished">Errore catalogo:</translation>
-        </message>
-        <message>
-            <source>Catalog loaded (%1 stars). Running Calibration...</source>
-            <translation type="finished">Catalogo caricato (%1 stelle). Calibrazione in corso...</translation>
+            <source>Catalog Error: %1</source>
+            <translation type="finished">Errore Catalogo: %1</translation>
         </message>
         <message>
             <source>Close</source>
             <translation type="finished">Chiudi</translation>
         </message>
         <message>
-            <source>Data directory not configured.</source>
-            <translation type="finished">Cartella dati non configurata.</translation>
+            <source>Database Missing</source>
+            <translation type="finished">Database Mancante</translation>
         </message>
         <message>
-            <source>Embedded catalog not found. Querying Gaia DR3 via VizieR (this may take a moment)...</source>
-            <translation type="finished">Catalogo integrato non trovato. Query a Gaia DR3 via VizieR (potrebbe richiedere un momento)...</translation>
+            <source>Equipment / Filters</source>
+            <translation type="finished">Attrezzatura / Filtri</translation>
         </message>
         <message>
-            <source>Empty Catalog</source>
-            <translation type="finished">Catalogo Vuoto</translation>
+            <source>Estimate full 3x3 correction matrix (uncheck for diagonal only)</source>
+            <translation type="finished">Stima matrice di correzione completa 3x3 (deseleziona per solo diagonale)</translation>
         </message>
         <message>
-            <source>Error</source>
-            <translation type="finished">Errore</translation>
+            <source>Fetch stars (Step 1) before running calibration.</source>
+            <translation type="finished">Ottieni stelle (Passo 1) prima di eseguire la calibrazione.</translation>
         </message>
         <message>
-            <source>Failed: </source>
-            <translation type="finished">Fallito:</translation>
+            <source>Fetched %1 stars; %2 have Pickles SED matches.</source>
+            <translation type="finished">Ottenute %1 stelle; %2 hanno corrispondenze Pickles SED.</translation>
         </message>
         <message>
-            <source>Filter:</source>
-            <translation type="finished">Filtro:</translation>
+            <source>G Filter:</source>
+            <translation type="finished">Filtro G:</translation>
         </message>
         <message>
-            <source>G_in</source>
-            <translation type="finished">G_in</translation>
+            <source>Gaia XP fallback for stars without Pickles match (slower)</source>
+            <translation type="finished">Fallback Gaia XP per stelle senza corrispondenza Pickles (più lento)</translation>
         </message>
         <message>
-            <source>G_out</source>
-            <translation type="finished">G_out</translation>
+            <source>Gradient Surface Method:</source>
+            <translation type="finished">Metodo Superficie Gradiente:</translation>
         </message>
         <message>
-            <source>Image must be plate solved first.</source>
+            <source>Image must be plate-solved first.</source>
             <translation type="finished">L'immagine deve essere prima risolta astrometricamente.</translation>
         </message>
         <message>
-            <source>Limit to mag &lt;</source>
-            <translation type="finished">Limita a mag &lt;</translation>
+            <source>LP / Cut Filter 1:</source>
+            <translation type="finished">Filtro LP / Taglio 1:</translation>
         </message>
         <message>
-            <source>Magnitude limit:</source>
-            <translation type="finished">Limite magnitudine:</translation>
+            <source>LP / Cut Filter 2:</source>
+            <translation type="finished">Filtro LP / Taglio 2:</translation>
         </message>
         <message>
-            <source>Matching stars and solving color matrix...</source>
-            <translation type="finished">Abbinamento stelle e risoluzione matrice colore...</translation>
+            <source>Matched stars: %1 (from %2 detected)</source>
+            <translation type="finished">Stelle abbinate: %1 (da %2 rilevate)</translation>
         </message>
         <message>
-            <source>Max stars:</source>
-            <translation type="finished">Stelle max:</translation>
+            <source>Matched stars: -</source>
+            <translation type="finished">Stelle abbinate: -</translation>
         </message>
         <message>
-            <source>Minimum SNR:</source>
-            <translation type="finished">SNR minimo:</translation>
+            <source>Matching %1 catalog stars to image...</source>
+            <translation type="finished">Abbinamento di %1 stelle del catalogo all'immagine...</translation>
         </message>
         <message>
-            <source>Minimum signal-to-noise ratio for a star to be used.</source>
-            <translation type="finished">Rapporto segnale-rumore minimo per l'utilizzo di una stella.</translation>
+            <source>Missing Input</source>
+            <translation type="finished">Input Mancante</translation>
         </message>
         <message>
-            <source>Normalise to solar (G2V) white point</source>
-            <translation type="finished">Normalizza al punto di bianco solare (G2V)</translation>
+            <source>Model: %1</source>
+            <translation type="finished">Modello: %1</translation>
         </message>
         <message>
-            <source>Optional optical filter in the optical path (L, UV/IR cut, etc.)</source>
-            <translation type="finished">Filtro ottico opzionale nel percorso ottico (L, UV/IR cut, ecc.)</translation>
+            <source>Model: -</source>
+            <translation type="finished">Modello: -</translation>
         </message>
         <message>
-            <source>R/G/B scales: —</source>
-            <translation type="finished">Scale R/G/B: —</translation>
+            <source>No Image</source>
+            <translation type="finished">Nessuna Immagine</translation>
+        </message>
+        <message>
+            <source>No Stars</source>
+            <translation type="finished">Nessuna Stella</translation>
+        </message>
+        <message>
+            <source>No Stars Found</source>
+            <translation type="finished">Nessuna Stella Trovata</translation>
+        </message>
+        <message>
+            <source>No WCS</source>
+            <translation type="finished">Nessun WCS</translation>
+        </message>
+        <message>
+            <source>No active image to calibrate.</source>
+            <translation type="finished">Nessuna immagine attiva da calibrare.</translation>
+        </message>
+        <message>
+            <source>No catalog stars returned.</source>
+            <translation type="finished">Nessuna stella del catalogo restituita.</translation>
+        </message>
+        <message>
+            <source>No reference stars found in the catalog.</source>
+            <translation type="finished">Nessuna stella di riferimento trovata nel catalogo.</translation>
+        </message>
+        <message>
+            <source>Open Spectral Viewer</source>
+            <translation type="finished">Apri Visualizzatore Spettrale</translation>
+        </message>
+        <message>
+            <source>Options</source>
+            <translation type="finished">Opzioni</translation>
+        </message>
+        <message>
+            <source>Please open and plate-solve an image before fetching stars.</source>
+            <translation type="finished">Apri e risolvi astrometricamente un'immagine prima di ottenere le stelle.</translation>
+        </message>
+        <message>
+            <source>Querying star catalog (Gaia DR3)...</source>
+            <translation type="finished">Interrogazione del catalogo stellare (Gaia DR3)...</translation>
+        </message>
+        <message>
+            <source>R Filter:</source>
+            <translation type="finished">Filtro R:</translation>
         </message>
         <message>
             <source>RMS residual: %1</source>
             <translation type="finished">Residuo RMS: %1</translation>
         </message>
         <message>
-            <source>R_in</source>
-            <translation type="finished">R_in</translation>
-        </message>
-        <message>
-            <source>R_out</source>
-            <translation type="finished">R_out</translation>
+            <source>RMS residual: -</source>
+            <translation type="finished">Residuo RMS: -</translation>
         </message>
         <message>
             <source>Reset</source>
             <translation type="finished">Reimposta</translation>
         </message>
         <message>
-            <source>Reset to original.</source>
-            <translation type="finished">Ripristina all'originale.</translation>
+            <source>Results</source>
+            <translation type="finished">Risultati</translation>
         </message>
         <message>
-            <source>Residual: —</source>
-            <translation type="finished">Residuo: —</translation>
+            <source>Run chromatic gradient extraction after calibration</source>
+            <translation type="finished">Esegui estrazione gradiente cromatico dopo calibrazione</translation>
         </message>
         <message>
-            <source>Run SPCC</source>
-            <translation type="finished">Esegui SPCC</translation>
+            <source>SEP source extraction threshold in units of background sigma.</source>
+            <translation type="finished">Soglia estrazione sorgente SEP in unità di sigma di fondo.</translation>
         </message>
         <message>
-            <source>Running SPCC...</source>
-            <translation type="finished">Esecuzione SPCC...</translation>
+            <source>SPCC Complete</source>
+            <translation type="finished">SPCC Completata</translation>
         </message>
         <message>
-            <source>Running SPCC…</source>
-            <translation type="finished">Esecuzione SPCC…</translation>
+            <source>SPCC Error</source>
+            <translation type="finished">Errore SPCC</translation>
         </message>
         <message>
-            <source>SPCC</source>
-            <translation type="finished">SPCC</translation>
+            <source>Scale factors (R, G, B): %1, %2, %3</source>
+            <translation type="finished">Fattori di scala (R, G, B): %1, %2, %3</translation>
         </message>
         <message>
-            <source>Scales  R=×%1   G=×%2   B=×%3</source>
-            <translation type="finished">Scale R=×%1 G=×%2 B=×%3</translation>
+            <source>Scale factors (R, G, B): -, -, -</source>
+            <translation type="finished">Fattori di scala (R, G, B): -, -, -</translation>
         </message>
         <message>
-            <source>Sensor &amp; Filter Profile</source>
-            <translation type="finished">Profilo sensore e filtro</translation>
+            <source>Select a white reference SED (e.g. G2V or A0V).</source>
+            <translation type="finished">Seleziona un SED di riferimento bianco (es. G2V o A0V).</translation>
+        </message>
+        <message>
+            <source>Select at least one of the R, G or B filter curves.</source>
+            <translation type="finished">Seleziona almeno una delle curve di filtro R, G o B.</translation>
+        </message>
+        <message>
+            <source>Sensor (QE curve):</source>
+            <translation type="finished">Sensore (curva QE):</translation>
+        </message>
+        <message>
+            <source>Spectral Viewer</source>
+            <translation type="finished">Visualizzatore Spettrale</translation>
         </message>
         <message>
             <source>Spectrophotometric Color Calibration</source>
             <translation type="finished">Calibrazione colore spettrofotometrica</translation>
         </message>
         <message>
-            <source>Spectrophotometric Color Calibration (SPCC)</source>
-            <translation type="finished">Calibrazione colore spettrofotometrica (SPCC)</translation>
+            <source>Star Detect Threshold (sigma):</source>
+            <translation type="finished">Soglia Rilevamento Stelle (sigma):</translation>
         </message>
         <message>
-            <source>Star Detection &amp; Cross-Match</source>
-            <translation type="finished">Rilevamento stelle e cross-match</translation>
+            <source>Starting calibration...</source>
+            <translation type="finished">Avvio calibrazione...</translation>
         </message>
         <message>
-            <source>Stars used: %1 / %2</source>
-            <translation type="finished">Stelle usate: %1 / %2</translation>
+            <source>Step 1: Fetch Stars from Active Image</source>
+            <translation type="finished">Passo 1: Ottieni Stelle da Immagine Attiva</translation>
         </message>
         <message>
-            <source>Stars used: —</source>
-            <translation type="finished">Stelle usate: —</translation>
+            <source>Step 2: Run Calibration</source>
+            <translation type="finished">Passo 2: Esegui Calibrazione</translation>
         </message>
         <message>
-            <source>Subtract background before calibration</source>
-            <translation type="finished">Sottrai sfondo prima della calibrazione</translation>
+            <source>Warning: tstar_data.fits not found — combo boxes will be empty.</source>
+            <translation type="finished">Avviso: tstar_data.fits non trovato — le caselle a discesa saranno vuote.</translation>
         </message>
         <message>
-            <source>Use full 3×3 colour matrix (vs. diagonal)</source>
-            <translation type="finished">Usa matrice colore 3×3 completa (vs diagonale)</translation>
+            <source>White Reference (SED):</source>
+            <translation type="finished">Riferimento Bianco (SED):</translation>
         </message>
         <message>
-            <source>Using embedded Gaia catalog...</source>
-            <translation type="finished">Utilizzo catalogo Gaia integrato...</translation>
+            <source>affine</source>
+            <translation type="finished">affine</translation>
         </message>
         <message>
-            <source>WARNING: Gaia query returned 0 stars. Check image coordinates.</source>
-            <translation type="finished">ATTENZIONE: la query Gaia ha restituito 0 stelle. Controlla le coordinate dell'immagine.</translation>
+            <source>quadratic</source>
+            <translation type="finished">quadratico</translation>
         </message>
         <message>
-            <source>White balance:</source>
-            <translation type="finished">Bilanciamento del bianco:</translation>
+            <source>slope-only</source>
+            <translation type="finished">solo-pendenza</translation>
+        </message>
+        <message>
+            <source>tstar_data.fits could not be loaded from:\n%1</source>
+            <translation type="finished">tstar_data.fits non può essere caricato da: %1</translation>
+        </message>
+        <message>
+            <source>tstar_data.fits could not be loaded.</source>
+            <translation type="finished">tstar_data.fits non può essere caricato.</translation>
         </message>
     </context>
     <context>
@@ -11288,113 +11636,6 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>© 2026 SetiAstro</source>
             <translation type="finished">© 2026 SetiAstro</translation>
-        </message>
-    </context>
-    <context>
-        <name>TGVDenoiseDialog</name>
-        <message>
-            <source>Advanced TGV Parameters</source>
-            <translation type="finished">Parametri TGV avanzati</translation>
-        </message>
-        <message>
-            <source>Apply</source>
-            <translation type="finished">Applica</translation>
-        </message>
-        <message>
-            <source>Applying TGV Denoise…</source>
-            <translation type="finished">Applicazione TGV Denoise…</translation>
-        </message>
-        <message>
-            <source>Auto-estimate noise level</source>
-            <translation type="finished">Stima automatica livello rumore</translation>
-        </message>
-        <message>
-            <source>Close</source>
-            <translation type="finished">Chiudi</translation>
-        </message>
-        <message>
-            <source>Computing preview…</source>
-            <translation type="finished">Calcolo anteprima…</translation>
-        </message>
-        <message>
-            <source>Convergence tol:</source>
-            <translation type="finished">Tolleranza conv.:</translation>
-        </message>
-        <message>
-            <source>Done — %1 iterations, gap=%2</source>
-            <translation type="finished">Fatto — %1 iterazioni, gap=%2</translation>
-        </message>
-        <message>
-            <source>Failed: </source>
-            <translation type="finished">Fallito:</translation>
-        </message>
-        <message>
-            <source>High</source>
-            <translation type="finished">Alto</translation>
-        </message>
-        <message>
-            <source>Low</source>
-            <translation type="finished">Basso</translation>
-        </message>
-        <message>
-            <source>Max iterations:</source>
-            <translation type="finished">Iterazioni max:</translation>
-        </message>
-        <message>
-            <source>Noise Reduction Strength</source>
-            <translation type="finished">Intensità riduzione rumore</translation>
-        </message>
-        <message>
-            <source>Preview</source>
-            <translation type="finished">Anteprima</translation>
-        </message>
-        <message>
-            <source>Preview failed: </source>
-            <translation type="finished">Anteprima fallita:</translation>
-        </message>
-        <message>
-            <source>Preview — %1 iterations, gap=%2</source>
-            <translation type="finished">Anteprima — %1 iterazioni, gap=%2</translation>
-        </message>
-        <message>
-            <source>Process each channel independently</source>
-            <translation type="finished">Elabora ogni canale separatamente</translation>
-        </message>
-        <message>
-            <source>Processing failed:\n</source>
-            <translation type="finished">Elaborazione fallita:\n</translation>
-        </message>
-        <message>
-            <source>Reset</source>
-            <translation type="finished">Reimposta</translation>
-        </message>
-        <message>
-            <source>Reset to original.</source>
-            <translation type="finished">Ripristina all'originale.</translation>
-        </message>
-        <message>
-            <source>TGV Denoise</source>
-            <translation type="finished">TGV Denoise</translation>
-        </message>
-        <message>
-            <source>TGV Denoise applied: α₀=%1, α₁=%2, λ=%3, %4 iter</source>
-            <translation type="finished">TGV Denoise applicato: α₀=%1, α₁=%2, λ=%3, %4 iter</translation>
-        </message>
-        <message>
-            <source>α₀  (order 0 weight):</source>
-            <translation type="finished">α₀ (peso ordine 0):</translation>
-        </message>
-        <message>
-            <source>α₁  (order 1 weight):</source>
-            <translation type="finished">α₁ (peso ordine 1):</translation>
-        </message>
-        <message>
-            <source>λ  (data fidelity):</source>
-            <translation type="finished">λ (fedeltà dati):</translation>
-        </message>
-        <message>
-            <source>σ̂ = —</source>
-            <translation type="finished">σ̂ = —</translation>
         </message>
     </context>
     <context>

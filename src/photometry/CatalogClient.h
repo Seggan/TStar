@@ -12,6 +12,7 @@ struct CatalogStar {
     double magV;
     double B_V; // Color index
     double teff; // Effective Temperature (Gaia DR3)
+    double bp_rp; // Gaia BP-RP color index
 };
 
 class CatalogClient : public QObject {

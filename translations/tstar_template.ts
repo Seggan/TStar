@@ -291,11 +291,23 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Annotate Image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Annotation Tool</source>
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Annotations updated. Found %1 unique objects.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Arrow</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Catalogs &amp;&amp; Grid</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -327,7 +339,19 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Constellations</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Could not find catalog data directory.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Cyan</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Data Error</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -352,6 +376,26 @@
         </message>
         <message>
             <source>Green</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>IC</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Image must be plate solved first.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>LdN</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Messier</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>NGC</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -391,6 +435,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Sh2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stars</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Text</source>
             <translation type="unfinished" />
         </message>
@@ -408,6 +460,14 @@
         </message>
         <message>
             <source>Undo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>WCS Error</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>WCS Grid (RA/Dec)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2152,39 +2212,39 @@
     <context>
         <name>DeconvolutionDialog</name>
         <message>
-            <source>0 = original in masked area, 1 = deconvolved.</source>
+            <source>%1 frames loaded</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Airy</source>
+            <source>(optional) star_mask_ref_path</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Airy Aperture:</source>
+            <source>0 frames loaded</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Airy Focal Len:</source>
+            <source>&gt;0 absolute | &lt;0 auto (|delta| x RMS via MAD) | 0 = flat (like L2)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Airy Obstruction:</source>
+            <source>Add Frames…</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Airy Pixel Size:</source>
+            <source>Add at least one FITS frame.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Airy Wavelength:</source>
+            <source>Algorithm:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Algorithm</source>
+            <source>Aligned Frames</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Angle:</source>
+            <source>Angular Step (°):</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2192,19 +2252,27 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Applying deconvolution...</source>
+            <source>Aspect Ratio:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Auto</source>
+            <source>Blend Mode:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Blend in mask:</source>
+            <source>Bootstrap frames (bootstrap_frames=):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Border Handling</source>
+            <source>Browse…</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Clear All</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Clip σ (clip_sigma=):</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2212,15 +2280,23 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Computing preview...</source>
+            <source>Color Mode (color_mode=):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Convergence tol:</source>
+            <source>Completed: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Custom image</source>
+            <source>Convolution</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Convolution / Deconvolution</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Could not estimate PSF from the image.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2228,55 +2304,63 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Deconvolution [%1] applied: FWHM=%2px, iter=%3</source>
+            <source>Deconvolution completed.\nSaved: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Dilation radius:</source>
+            <source>Deconvolution failed: </source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Disk</source>
+            <source>Deconvolve L* Only</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Done - %1 iterations, d=%2</source>
+            <source>Detection σ:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Enable star mask</source>
+            <source>Disable Stellar PSF</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Estimated FWHM: %1 px</source>
+            <source>Early Stopping (EarlyStopper)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Estimating FWHM from stars...</source>
+            <source>Enable de-ring</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>FWHM:</source>
+            <source>Error</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Failed: </source>
+            <source>Error: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Failed:\n</source>
+            <source>Estimated PSF (64×64):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Full Width at Half Maximum of the PSF in pixels.</source>
+            <source>FITS Files (*.fits *.fit *.fts);;All Files (*)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Gaussian</source>
+            <source>FITS Files (*.fits *.fit);;All Files (*)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Iteration Control</source>
+            <source>Half-Width (px):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Huber δ (huber_delta=):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Iteration Parameters</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2284,51 +2368,107 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>K (noise power):</source>
+            <source>Kappa (ratio clamp):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Kernel size:</source>
+            <source>Kurtosis (σ):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Measure FWHM from stars in the image.</source>
+            <source>LS Operator:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Method:</source>
+            <source>Loss (rho=):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Minor/major axis ratio. 1.0 = circular PSF.</source>
+            <source>Low-memory mode (low_mem=True)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Mirror padding:</source>
+            <source>MFDeconv</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Moffat</source>
+            <source>Max Iterations (iters=):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Moffat beta:</source>
+            <source>Max Iterations:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>PSF kernel preview (logarithmic scale)</source>
+            <source>Max Stars:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>PSF preview:</source>
+            <source>Median (tiled exact median, RAM-bounded)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>PSF type:</source>
+            <source>Min Area (px²):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Point Spread Function (PSF)</source>
+            <source>Min Iterations (min_iters=):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Missing output</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Multi-Frame</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Multi-channel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No Stars</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No frames</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Noise/Signal (λ):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Output</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Output path</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Output path:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF Aspect:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF Estimator</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF Kurtosis:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF Radius:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PSF Rotation:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2336,51 +2476,219 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Preview - %1 iterations</source>
+            <source>Radial Step (px):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>RL + Total Variation (RLTV)  [recommended]</source>
+            <source>Radius:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Reset</source>
+            <source>Reduces LRU cache, disables prefetch, limits batch</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Reset to original.</source>
+            <source>Regularization:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Richardson-Lucy (RL)</source>
+            <source>Relaxation (0–1):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Roundness:</source>
+            <source>Relaxation (relax=):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Star Protection Mask</source>
+            <source>Remove</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>TV Regularisation</source>
+            <source>Robust (bootstrap + +/-4*MAD clip + sigma-clipped Welford)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Threshold:</source>
+            <source>Rotation:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Wiener / MMSE</source>
+            <source>Run SEP Extraction</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Wiener Parameters</source>
+            <source>SR-PSF Solver (visible only if factor &gt; 1)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>lambda_TV weight:</source>
+            <source>Saturation Cutoff:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Save Intermediate Iterations (save_intermediate=)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Save PSF…</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Save every (save_every=):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Seed (seed_mode=)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Select aligned FITS frames</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Specify an output path.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Star Mask Configuration</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Strength:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Super-Resolution factor (super_res_factor=):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>TV Denoise</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>TV Weight:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Use Star Masks (use_star_masks=)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Use Variance Maps (use_variance_maps=)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Use as Current PSF</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Using Stellar PSF</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Variance Map Configuration</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>[low_mem=True] Reduced LRU cache, prefetch disabled.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>bh=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>bw=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>early_frac=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ellipse_scale=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>ema_alpha=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>floor=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>grow_px=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>keep_floor=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>max_objs=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>max_radius_px=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>patience=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>smooth_sigma=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>soft_sigma=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>sr_psf_opt_iters=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>sr_psf_opt_lr=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>sr_sigma=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>star_mask_ref_path=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>thresh_sigma=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>tol_rel_floor=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>tol_upd_floor=</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>■ Stop</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>▲</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>▶ Start MFDeconv</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>▼</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -5164,6 +5472,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Image Annotation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Image Annotator</source>
             <translation type="unfinished" />
         </message>
@@ -5612,10 +5924,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Opening TGV Denoise...</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Opening Temperature / Tint tool...</source>
             <translation type="unfinished" />
         </message>
@@ -5985,10 +6293,6 @@
         </message>
         <message>
             <source>Stretch Tools</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>TGV Denoise</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8996,23 +9300,15 @@
     <context>
         <name>SPCCDialog</name>
         <message>
-            <source>Aperture radius:</source>
+            <source>(None)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>B_in</source>
+            <source>B Filter:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>B_out</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Calibration Options</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Calibration Results</source>
+            <source>Background Method:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9020,23 +9316,15 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Calibration failed:\n</source>
+            <source>Calibration failed.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Camera / Sensor:</source>
+            <source>Catalog Error</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Catalog Download Error</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Catalog error: </source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Catalog loaded (%1 stars). Running Calibration...</source>
+            <source>Catalog Error: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9044,75 +9332,119 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Data directory not configured.</source>
+            <source>Database Missing</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Embedded catalog not found. Querying Gaia DR3 via VizieR (this may take a moment)...</source>
+            <source>Equipment / Filters</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Empty Catalog</source>
+            <source>Estimate full 3x3 correction matrix (uncheck for diagonal only)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Error</source>
+            <source>Fetch stars (Step 1) before running calibration.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Failed: </source>
+            <source>Fetched %1 stars; %2 have Pickles SED matches.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Filter:</source>
+            <source>G Filter:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>G_in</source>
+            <source>Gaia XP fallback for stars without Pickles match (slower)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>G_out</source>
+            <source>Gradient Surface Method:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Image must be plate solved first.</source>
+            <source>Image must be plate-solved first.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Limit to mag &lt;</source>
+            <source>LP / Cut Filter 1:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Magnitude limit:</source>
+            <source>LP / Cut Filter 2:</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Matching stars and solving color matrix...</source>
+            <source>Matched stars: %1 (from %2 detected)</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Max stars:</source>
+            <source>Matched stars: -</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Minimum SNR:</source>
+            <source>Matching %1 catalog stars to image...</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Minimum signal-to-noise ratio for a star to be used.</source>
+            <source>Missing Input</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Normalise to solar (G2V) white point</source>
+            <source>Model: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Optional optical filter in the optical path (L, UV/IR cut, etc.)</source>
+            <source>Model: -</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>R/G/B scales: —</source>
+            <source>No Image</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No Stars</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No Stars Found</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No WCS</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No active image to calibrate.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No catalog stars returned.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No reference stars found in the catalog.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Open Spectral Viewer</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Options</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Please open and plate-solve an image before fetching stars.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Querying star catalog (Gaia DR3)...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>R Filter:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9120,11 +9452,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>R_in</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>R_out</source>
+            <source>RMS residual: -</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9132,35 +9460,47 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Reset to original.</source>
+            <source>Results</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Residual: —</source>
+            <source>Run chromatic gradient extraction after calibration</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Run SPCC</source>
+            <source>SEP source extraction threshold in units of background sigma.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Running SPCC...</source>
+            <source>SPCC Complete</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Running SPCC…</source>
+            <source>SPCC Error</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>SPCC</source>
+            <source>Scale factors (R, G, B): %1, %2, %3</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Scales  R=×%1   G=×%2   B=×%3</source>
+            <source>Scale factors (R, G, B): -, -, -</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Sensor &amp; Filter Profile</source>
+            <source>Select a white reference SED (e.g. G2V or A0V).</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Select at least one of the R, G or B filter curves.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Sensor (QE curve):</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Spectral Viewer</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9168,39 +9508,47 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Spectrophotometric Color Calibration (SPCC)</source>
+            <source>Star Detect Threshold (sigma):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Star Detection &amp; Cross-Match</source>
+            <source>Starting calibration...</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Stars used: %1 / %2</source>
+            <source>Step 1: Fetch Stars from Active Image</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Stars used: —</source>
+            <source>Step 2: Run Calibration</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Subtract background before calibration</source>
+            <source>Warning: tstar_data.fits not found — combo boxes will be empty.</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Use full 3×3 colour matrix (vs. diagonal)</source>
+            <source>White Reference (SED):</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Using embedded Gaia catalog...</source>
+            <source>affine</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>WARNING: Gaia query returned 0 stars. Check image coordinates.</source>
+            <source>quadratic</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>White balance:</source>
+            <source>slope-only</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>tstar_data.fits could not be loaded from:\n%1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>tstar_data.fits could not be loaded.</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -11284,113 +11632,6 @@
         </message>
         <message>
             <source>© 2026 SetiAstro</source>
-            <translation type="unfinished" />
-        </message>
-    </context>
-    <context>
-        <name>TGVDenoiseDialog</name>
-        <message>
-            <source>Advanced TGV Parameters</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Apply</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Applying TGV Denoise…</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Auto-estimate noise level</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Close</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Computing preview…</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Convergence tol:</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Done — %1 iterations, gap=%2</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Failed: </source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>High</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Low</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Max iterations:</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Noise Reduction Strength</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Preview</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Preview failed: </source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Preview — %1 iterations, gap=%2</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Process each channel independently</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Processing failed:\n</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Reset</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Reset to original.</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>TGV Denoise</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>TGV Denoise applied: α₀=%1, α₁=%2, λ=%3, %4 iter</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>α₀  (order 0 weight):</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>α₁  (order 1 weight):</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>λ  (data fidelity):</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>σ̂ = —</source>
             <translation type="unfinished" />
         </message>
     </context>

@@ -58,7 +58,7 @@ public:
 
 private:
     // TAN projection (gnomonic) helpers
-    static void tanProject(double ra, double dec, double ra0, double dec0,
+    static bool tanProject(double ra, double dec, double ra0, double dec0,
                            double& xi, double& eta);
     
     static void tanDeproject(double xi, double eta, double ra0, double dec0,

@@ -55,9 +55,9 @@ class AlignChannelsDialog;
 class AnnotationToolDialog;
 class MultiscaleDecompDialog;
 class NarrowbandNormalizationDialog;
+class AnnotationToolDialog;
 class NBtoRGBStarsDialog;
-class TGVDenoiseDialog;
-class DeconvolutionDialog;
+// class DeconvolutionDialog;
 struct Annotation;
 class BlinkComparatorDialog;
 
@@ -150,8 +150,7 @@ private slots:
     void openAlignChannelsDialog();
     void openImageAnnotatorDialog();
     void openMultiscaleDecompDialog();
-    void openTGVDenoiseDialog();
-    void openDeconvolutionDialog();
+    // void openDeconvolutionDialog();
     void openNarrowbandNormalizationDialog();
     void openNBtoRGBStarsDialog();
     void openBlinkComparatorDialog();
@@ -166,6 +165,7 @@ private slots:
     void openTemperatureTintDialog();
     void openMagentaCorrectionDialog();
     void openColorProfileDialog();
+    void openAnnotationToolDialog();
     
     // Stacking Suite
     void openStackingDialog();
@@ -322,8 +322,7 @@ private:
     QPointer<class AlignChannelsDialog> m_alignChannelsDlg;
     QPointer<class AnnotationToolDialog> m_annotatorDlg;
     QPointer<class MultiscaleDecompDialog> m_multiscaleDecompDlg;
-    QPointer<class TGVDenoiseDialog> m_tgvDenoiseDlg;
-    QPointer<class DeconvolutionDialog> m_deconvolutionDlg;
+    // QPointer<class DeconvolutionDialog> m_deconvolutionDlg;
     QPointer<class NarrowbandNormalizationDialog> m_nbNormDlg;
     QPointer<class NBtoRGBStarsDialog> m_nbToRGBStarsDlg;
     QPointer<class BlinkComparatorDialog> m_blinkComparatorDlg;

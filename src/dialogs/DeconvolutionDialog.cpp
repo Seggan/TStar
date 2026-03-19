@@ -1,605 +1,1217 @@
 /*
- * DeconvolutionDialog.cpp  —  Qt6 dialog for image deconvolution
+ * DeconvolutionDialog.cpp
+ *
+ * UI for single-frame and multi-frame deconvolution workflows.
  */
 
+/*
 #include "DeconvolutionDialog.h"
-#include "ImageViewer.h"
-#include "MainWindow.h"
-#include "core/Logger.h"
-#include "Deconvolution.h"
 
-#include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
-#include <QLabel>
-#include <QPushButton>
-#include <QProgressBar>
-#include <QMessageBox>
-#include <QCloseEvent>
-#include <QTabWidget>
 #include <QSplitter>
-#include <QPainter>
-#include <QPixmap>
+#include <QPlainTextEdit>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QScrollArea>
+#include <QFrame>
+#include <QSizePolicy>
+#include <QRegularExpression>
+#include <QScrollBar>
 #include <QApplication>
-#include <QtConcurrent/QtConcurrentRun>
-#include <cmath>
-#include <algorithm>
 
-// ─── Constructor ──────────────────────────────────────────────────────────────
+#include "ImageViewer.h"
+#include "MainWindow.h"
+#include "StarDetector.h"
 
-DeconvolutionDialog::DeconvolutionDialog(ImageViewer* viewer, MainWindow* mw,
-                                          QWidget* parent)
-    : QDialog(parent), m_viewer(viewer), m_mainWindow(mw)
+// ─────────────────────────────────────────────────────────────────────────────
+// MFDeconvWorker
+// ─────────────────────────────────────────────────────────────────────────────
+
+MFDeconvWorker::MFDeconvWorker(const MFDeconvParams& params, QObject* parent)
+    : QThread(parent), m_params(params)
+{}
+
+MFDeconvWorker::~MFDeconvWorker()
 {
-    setWindowTitle(tr("Deconvolution"));
-    setWindowFlags(windowFlags() | Qt::Tool);
-    
-    // Doubled the minimum width for the two-column layout
-    setMinimumWidth(860);
-
-    if (m_viewer && m_viewer->getBuffer().isValid())
-        m_originalBuffer = m_viewer->getBuffer();
-
-    m_watcher = new QFutureWatcher<DeconvResult>(this);
-    buildUI();
-    connectSignals();
-    renderPSFThumbnail();
+    requestInterruption();
+    wait(5000);
 }
 
-DeconvolutionDialog::~DeconvolutionDialog() {
-    if (m_watcher->isRunning()) m_watcher->cancel();
+void MFDeconvWorker::requestStop()
+{
+    m_stopRequested = true;
+    requestInterruption();
+}
+
+
+// Parse "__PROGRESS__ 0.xxxx msg" messages and convert them to
+// progressUpdated(percent 0-100, msg). All other lines are forwarded
+// as statusMessage.
+
+void MFDeconvWorker::handleStatusLine(const QString& line)
+{
+    if (line.startsWith("__PROGRESS__ ")) {
+        QString rest = line.mid(13).trimmed();
+        QStringList parts = rest.split(' ', Qt::SkipEmptyParts);
+        bool ok = false;
+        double frac = parts.isEmpty() ? 0.0 : parts[0].toDouble(&ok);
+        if (!ok) frac = 0.0;
+        QString msg = (parts.size() > 1) ? parts.mid(1).join(' ') : QString();
+        int percent = (int)(frac * 100.0);
+        emit progressUpdated(percent, msg);
+    } else {
+        emit statusMessage(line);
+    }
+}
+
+void MFDeconvWorker::run()
+{
+    // Configure callback that forwards backend messages to the Qt thread.
+    MFDeconvParams params = m_params;
+    params.statusCallback = [this](const QString& msg) {
+        handleStatusLine(msg);
+    };
+
+    MFDeconvResult result = Deconvolution::applyMultiFrame(params);
+
+    if (result.success)
+        emit finished(true, "MF deconvolution complete.", result.outputPath);
+    else
+        emit finished(false, "MF deconvolution failed: " + result.errorMsg, QString());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeconvolutionDialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+DeconvolutionDialog::DeconvolutionDialog(ImageViewer* viewer, MainWindow* mw,
+                                           QWidget* parent)
+    : QDialog(parent), m_viewer(viewer), m_mainWindow(mw)
+{
+    setWindowTitle(tr("Convolution / Deconvolution"));
+    setWindowFlag(Qt::Window, true);
+    setModal(false);
+    resize(420, 650);
+    buildUI();
+    connectSignals();
+    updatePSFPreview();
+}
+
+DeconvolutionDialog::~DeconvolutionDialog()
+{
+    if (m_mfWorker) {
+        m_mfWorker->requestStop();
+        m_mfWorker->wait(5000);
+        delete m_mfWorker;
+    }
+    delete m_watcher;
 }
 
 void DeconvolutionDialog::setViewer(ImageViewer* viewer)
 {
     m_viewer = viewer;
-    if (m_viewer && m_viewer->getBuffer().isValid()) {
-        m_originalBuffer = m_viewer->getBuffer();
-    }
-}
-
-// ─── Build UI ────────────────────────────────────────────────────────────────
-
-void DeconvolutionDialog::buildUI()
-{
-    // Main vertical layout for the whole dialog
-    auto* root = new QVBoxLayout(this);
-    root->setSpacing(10);
-    root->setContentsMargins(12, 12, 12, 12);
-
-    // Horizontal layout to hold the two columns
-    auto* columnsLayout = new QHBoxLayout();
-    auto* leftColumn = new QVBoxLayout();
-    auto* rightColumn = new QVBoxLayout();
-    
-    // Setup spacing for columns
-    leftColumn->setSpacing(10);
-    rightColumn->setSpacing(10);
-
-    // =========================================================================
-    // LEFT COLUMN
-    // =========================================================================
-
-    // ── Algorithm selector ────────────────────────────────────────────────
-    auto* grpAlgo = new QGroupBox(tr("Algorithm"), this);
-    auto* hAlgo   = new QHBoxLayout(grpAlgo);
-    m_algoCombo   = new QComboBox(this);
-    m_algoCombo->addItems({ tr("Richardson-Lucy (RL)"),
-                            tr("RL + Total Variation (RLTV)  [recommended]"),
-                            tr("Wiener / MMSE") });
-    m_algoCombo->setCurrentIndex(1);
-    m_algoCombo->setToolTip(
-        tr("RL: classic iterative, fast, can ring.\n"
-           "RLTV: RL with TV regularisation, suppresses ringing - best for nebulae.\n"
-           "Wiener: frequency-domain single-pass, fastest, stable."));
-    hAlgo->addWidget(new QLabel(tr("Method:"), this));
-    hAlgo->addWidget(m_algoCombo);
-    leftColumn->addWidget(grpAlgo);
-
-    // ── PSF group ─────────────────────────────────────────────────────────
-    auto* grpPSF = new QGroupBox(tr("Point Spread Function (PSF)"), this);
-    auto* vPSF   = new QVBoxLayout(grpPSF);
-    auto* frmPSF = new QFormLayout;
-    frmPSF->setSpacing(5);
-
-    m_psfSourceCombo = new QComboBox(this);
-    m_psfSourceCombo->addItems({ tr("Gaussian"), tr("Moffat"), tr("Disk"), tr("Airy"), tr("Custom image") });
-    m_psfSourceCombo->setToolTip(
-        tr("Gaussian: simple symmetric bell, good for well-corrected optics.\n"
-           "Moffat: more realistic for seeing-limited images; heavier wings.\n"
-           "Disk: uniform disk of given diameter.\n"
-           "Airy: theoretical diffraction pattern of a circular aperture.\n"
-           "Custom: use a measured star as the PSF kernel."));
-    frmPSF->addRow(tr("PSF type:"), m_psfSourceCombo);
-
-    m_fwhmSpin = new QDoubleSpinBox(this);
-    m_fwhmSpin->setRange(0.5, 20.0); m_fwhmSpin->setSingleStep(0.1);
-    m_fwhmSpin->setValue(2.0); m_fwhmSpin->setSuffix(" px");
-    m_fwhmSpin->setToolTip(tr("Full Width at Half Maximum of the PSF in pixels."));
-    auto* hFWHM = new QHBoxLayout;
-    hFWHM->addWidget(m_fwhmSpin);
-    m_estimateFWHMBtn = new QPushButton(tr("Auto"), this);
-    m_estimateFWHMBtn->setFixedWidth(52);
-    m_estimateFWHMBtn->setToolTip(tr("Measure FWHM from stars in the image."));
-    hFWHM->addWidget(m_estimateFWHMBtn);
-    frmPSF->addRow(tr("FWHM:"), hFWHM);
-
-    m_betaSpin = new QDoubleSpinBox(this);
-    m_betaSpin->setRange(1.0, 20.0); m_betaSpin->setSingleStep(0.1);
-    m_betaSpin->setValue(4.5);
-    m_betaSpin->setToolTip(tr("Moffat beta exponent. Typical seeing: 2-4, "
-                              "well-corrected: 4-10."));
-    frmPSF->addRow(tr("Moffat beta:"), m_betaSpin);
-
-    m_angleSpin = new QDoubleSpinBox(this);
-    m_angleSpin->setRange(-90.0, 90.0); m_angleSpin->setSingleStep(1.0);
-    m_angleSpin->setValue(0.0); m_angleSpin->setSuffix(" deg");
-    frmPSF->addRow(tr("Angle:"), m_angleSpin);
-
-    m_roundnessSpin = new QDoubleSpinBox(this);
-    m_roundnessSpin->setRange(0.01, 1.0); m_roundnessSpin->setSingleStep(0.05);
-    m_roundnessSpin->setValue(1.0);
-    m_roundnessSpin->setToolTip(tr("Minor/major axis ratio. 1.0 = circular PSF."));
-    frmPSF->addRow(tr("Roundness:"), m_roundnessSpin);
-
-    m_airyWavelengthSpin = new QDoubleSpinBox(this);
-    m_airyWavelengthSpin->setRange(100.0, 1000.0); m_airyWavelengthSpin->setValue(550.0);
-    m_airyWavelengthSpin->setSuffix(" nm");
-    frmPSF->addRow(tr("Airy Wavelength:"), m_airyWavelengthSpin);
-
-    m_airyApertureSpin = new QDoubleSpinBox(this);
-    m_airyApertureSpin->setRange(10.0, 5000.0); m_airyApertureSpin->setValue(200.0);
-    m_airyApertureSpin->setSuffix(" mm");
-    frmPSF->addRow(tr("Airy Aperture:"), m_airyApertureSpin);
-
-    m_airyFocalLenSpin = new QDoubleSpinBox(this);
-    m_airyFocalLenSpin->setRange(10.0, 10000.0); m_airyFocalLenSpin->setValue(1000.0);
-    m_airyFocalLenSpin->setSuffix(" mm");
-    frmPSF->addRow(tr("Airy Focal Len:"), m_airyFocalLenSpin);
-
-    m_airyPixelSizeSpin = new QDoubleSpinBox(this);
-    m_airyPixelSizeSpin->setRange(0.5, 50.0); m_airyPixelSizeSpin->setValue(3.76);
-    m_airyPixelSizeSpin->setSuffix(" um");
-    frmPSF->addRow(tr("Airy Pixel Size:"), m_airyPixelSizeSpin);
-
-    m_airyObstructionSpin = new QDoubleSpinBox(this);
-    m_airyObstructionSpin->setRange(0.0, 0.99); m_airyObstructionSpin->setValue(0.0); m_airyObstructionSpin->setSingleStep(0.05);
-    frmPSF->addRow(tr("Airy Obstruction:"), m_airyObstructionSpin);
-
-    m_kernelSizeSpin = new QSpinBox(this);
-    m_kernelSizeSpin->setRange(0, 255); m_kernelSizeSpin->setSingleStep(2);
-    m_kernelSizeSpin->setValue(0);
-    m_kernelSizeSpin->setSpecialValueText(tr("Auto"));
-    frmPSF->addRow(tr("Kernel size:"), m_kernelSizeSpin);
-
-    vPSF->addLayout(frmPSF);
-
-    // PSF thumbnail
-    auto* hThumb = new QHBoxLayout;
-    hThumb->addStretch();
-    m_psfPreview = new QLabel(this);
-    m_psfPreview->setFixedSize(64, 64);
-    m_psfPreview->setFrameShape(QFrame::StyledPanel);
-    m_psfPreview->setAlignment(Qt::AlignCenter);
-    m_psfPreview->setToolTip(tr("PSF kernel preview (logarithmic scale)"));
-    hThumb->addWidget(new QLabel(tr("PSF preview:"), this));
-    hThumb->addWidget(m_psfPreview);
-    hThumb->addStretch();
-    vPSF->addLayout(hThumb);
-    leftColumn->addWidget(grpPSF);
-    
-    // Add vertical stretch to keep left column elements aligned to the top
-    leftColumn->addStretch();
-
-    // =========================================================================
-    // RIGHT COLUMN
-    // =========================================================================
-
-    // ── RL / RLTV iterations ──────────────────────────────────────────────
-    m_grpIter = new QGroupBox(tr("Iteration Control"), this);
-    auto* frmIter = new QFormLayout(m_grpIter);
-    m_iterSpin = new QSpinBox(this);
-    m_iterSpin->setRange(1, 2000); m_iterSpin->setSingleStep(10);
-    m_iterSpin->setValue(100);
-    frmIter->addRow(tr("Iterations:"), m_iterSpin);
-    m_tolSpin = new QDoubleSpinBox(this);
-    m_tolSpin->setDecimals(6); m_tolSpin->setRange(0, 0.01);
-    m_tolSpin->setSingleStep(1e-5); m_tolSpin->setValue(1e-4);
-    frmIter->addRow(tr("Convergence tol:"), m_tolSpin);
-    rightColumn->addWidget(m_grpIter);
-
-    // ── RLTV ─────────────────────────────────────────────────────────────
-    m_grpTV = new QGroupBox(tr("TV Regularisation"), this);
-    auto* frmTV = new QFormLayout(m_grpTV);
-    m_tvWeightSpin = new QDoubleSpinBox(this);
-    m_tvWeightSpin->setRange(0.0001, 1.0); m_tvWeightSpin->setSingleStep(0.005);
-    m_tvWeightSpin->setValue(0.01);
-    m_tvWeightSpin->setToolTip(
-          tr("lambda_TV - higher values produce smoother output but reduce sharpening.\n"
-              "Typical range: 0.005-0.05"));
-     frmTV->addRow(tr("lambda_TV weight:"), m_tvWeightSpin);
-    rightColumn->addWidget(m_grpTV);
-
-    // ── Wiener ───────────────────────────────────────────────────────────
-    m_grpWiener = new QGroupBox(tr("Wiener Parameters"), this);
-    auto* frmW = new QFormLayout(m_grpWiener);
-    m_wienerKSpin = new QDoubleSpinBox(this);
-    m_wienerKSpin->setDecimals(5); m_wienerKSpin->setRange(0.0001, 1.0);
-    m_wienerKSpin->setSingleStep(0.001); m_wienerKSpin->setValue(0.001);
-    m_wienerKSpin->setToolTip(
-        tr("Noise-to-signal power ratio K.\n"
-           "Lower K = more aggressive (noisier); higher K = less sharpening (smoother)."));
-    frmW->addRow(tr("K (noise power):"), m_wienerKSpin);
-    rightColumn->addWidget(m_grpWiener);
-
-    // ── Star protection mask ──────────────────────────────────────────────
-    m_grpStarMask = new QGroupBox(tr("Star Protection Mask"), this);
-    auto* frmSM = new QFormLayout(m_grpStarMask);
-    m_starMaskCheck = new QCheckBox(tr("Enable star mask"), this);
-    m_starMaskCheck->setChecked(true);
-    m_starMaskCheck->setToolTip(
-        tr("Protects bright stars from ringing artefacts by blending\n"
-           "deconvolved and original data in masked regions."));
-    frmSM->addRow(m_starMaskCheck);
-
-    m_starMaskThreshSpin = new QDoubleSpinBox(this);
-    m_starMaskThreshSpin->setRange(0.5, 1.0); m_starMaskThreshSpin->setSingleStep(0.02);
-    m_starMaskThreshSpin->setValue(0.85);
-    frmSM->addRow(tr("Threshold:"), m_starMaskThreshSpin);
-
-    m_starMaskRadiusSpin = new QDoubleSpinBox(this);
-    m_starMaskRadiusSpin->setRange(0.5, 20.0); m_starMaskRadiusSpin->setSingleStep(0.5);
-    m_starMaskRadiusSpin->setValue(2.0); m_starMaskRadiusSpin->setSuffix(" px");
-    frmSM->addRow(tr("Dilation radius:"), m_starMaskRadiusSpin);
-
-    m_starMaskBlendSpin = new QDoubleSpinBox(this);
-    m_starMaskBlendSpin->setRange(0.0, 1.0); m_starMaskBlendSpin->setSingleStep(0.05);
-    m_starMaskBlendSpin->setValue(0.5);
-    m_starMaskBlendSpin->setToolTip(tr("0 = original in masked area, 1 = deconvolved."));
-    frmSM->addRow(tr("Blend in mask:"), m_starMaskBlendSpin);
-    rightColumn->addWidget(m_grpStarMask);
-
-    // ── Border ────────────────────────────────────────────────────────────
-    auto* grpBorder = new QGroupBox(tr("Border Handling"), this);
-    auto* frmBorder = new QFormLayout(grpBorder);
-    m_borderPadSpin = new QSpinBox(this);
-    m_borderPadSpin->setRange(0, 128); m_borderPadSpin->setSingleStep(8);
-    m_borderPadSpin->setValue(32); m_borderPadSpin->setSuffix(" px");
-    m_borderPadSpin->setToolTip(tr("Mirror-pad the image before deconvolution\n"
-                                    "to reduce edge wrap artefacts."));
-    frmBorder->addRow(tr("Mirror padding:"), m_borderPadSpin);
-    rightColumn->addWidget(grpBorder);
-
-    // Add vertical stretch to keep right column elements aligned to the top
-    rightColumn->addStretch();
-
-    // Add columns to the main horizontal layout
-    columnsLayout->addLayout(leftColumn);
-    columnsLayout->addLayout(rightColumn);
-    
-    // Add columns layout to the root vertical layout
-    root->addLayout(columnsLayout);
-
-    // =========================================================================
-    // BOTTOM SECTION
-    // =========================================================================
-
-    // ── Progress ──────────────────────────────────────────────────────────
-    m_progressBar = new QProgressBar(this);
-    m_progressBar->setRange(0, 100);
-    m_progressBar->setValue(0);
-    m_progressBar->setVisible(false);
-    m_statusLabel = new QLabel(this);
-    m_statusLabel->setAlignment(Qt::AlignCenter);
-    root->addWidget(m_progressBar);
-    root->addWidget(m_statusLabel);
-
-    // ── Buttons ───────────────────────────────────────────────────────────
-    auto* hBtns = new QHBoxLayout;
-    m_resetBtn   = new QPushButton(tr("Reset"),   this);
-    m_previewBtn = new QPushButton(tr("Preview"), this);
-    m_applyBtn   = new QPushButton(tr("Apply"),   this);
-    m_closeBtn   = new QPushButton(tr("Close"),   this);
-    m_applyBtn->setDefault(true);
-    hBtns->addWidget(m_resetBtn);
-    hBtns->addStretch();
-    hBtns->addWidget(m_previewBtn);
-    hBtns->addWidget(m_applyBtn);
-    hBtns->addWidget(m_closeBtn);
-    root->addLayout(hBtns);
-
-    // Initial widget visibility
-    setAlgorithmWidgets(DeconvAlgorithm::RLTV);
-}
-
-// ─── Connect signals ──────────────────────────────────────────────────────────
-
-void DeconvolutionDialog::connectSignals()
-{
-    connect(m_algoCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &DeconvolutionDialog::onAlgorithmChanged);
-    connect(m_psfSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &DeconvolutionDialog::onPSFSourceChanged);
-    connect(m_estimateFWHMBtn, &QPushButton::clicked, this, &DeconvolutionDialog::onEstimateFWHM);
-    connect(m_fwhmSpin,    QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, &DeconvolutionDialog::onFWHMChanged);
-    connect(m_betaSpin,    QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double){ renderPSFThumbnail(); });
-    connect(m_angleSpin,   QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double){ renderPSFThumbnail(); });
-    connect(m_roundnessSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double){ renderPSFThumbnail(); });
-    connect(m_airyWavelengthSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double){ renderPSFThumbnail(); });
-    connect(m_airyApertureSpin,   QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double){ renderPSFThumbnail(); });
-    connect(m_airyFocalLenSpin,   QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double){ renderPSFThumbnail(); });
-    connect(m_airyPixelSizeSpin,  QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double){ renderPSFThumbnail(); });
-    connect(m_airyObstructionSpin,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double){ renderPSFThumbnail(); });
-    connect(m_previewBtn, &QPushButton::clicked, this, &DeconvolutionDialog::onPreview);
-    connect(m_applyBtn,   &QPushButton::clicked, this, &DeconvolutionDialog::onApply);
-    connect(m_resetBtn,   &QPushButton::clicked, this, &DeconvolutionDialog::onReset);
-    connect(m_closeBtn,   &QPushButton::clicked, this, &QDialog::close);
-    connect(m_watcher, &QFutureWatcher<DeconvResult>::finished,
-            this, &DeconvolutionDialog::onFinished);
-}
-
-// ─── Algorithm widget visibility ─────────────────────────────────────────────
-
-void DeconvolutionDialog::setAlgorithmWidgets(DeconvAlgorithm algo)
-{
-    m_grpIter->setVisible(algo != DeconvAlgorithm::Wiener);
-    m_grpTV->setVisible(algo == DeconvAlgorithm::RLTV);
-    m_grpWiener->setVisible(algo == DeconvAlgorithm::Wiener);
-    m_grpStarMask->setVisible(algo != DeconvAlgorithm::Wiener);
-    adjustSize();
-}
-
-void DeconvolutionDialog::onAlgorithmChanged(int index)
-{
-    static const DeconvAlgorithm map[] = {
-        DeconvAlgorithm::RichardsonLucy,
-        DeconvAlgorithm::RLTV,
-        DeconvAlgorithm::Wiener
-    };
-    if (index >= 0 && index < 3) setAlgorithmWidgets(map[index]);
-}
-
-void DeconvolutionDialog::onPSFSourceChanged(int index)
-{
-    bool isMoffat = (index == 1);
-    bool isGaussian = (index == 0);
-    bool isDisk = (index == 2);
-    bool isAiry = (index == 3);
-    
-    m_betaSpin->setEnabled(isMoffat);
-    m_fwhmSpin->setEnabled(isMoffat || isGaussian || isDisk);
-    m_estimateFWHMBtn->setEnabled(isMoffat || isGaussian || isDisk);
-    m_angleSpin->setEnabled(isMoffat || isGaussian);
-    m_roundnessSpin->setEnabled(isMoffat || isGaussian);
-    
-    m_airyWavelengthSpin->setEnabled(isAiry);
-    m_airyApertureSpin->setEnabled(isAiry);
-    m_airyFocalLenSpin->setEnabled(isAiry);
-    m_airyPixelSizeSpin->setEnabled(isAiry);
-    m_airyObstructionSpin->setEnabled(isAiry);
-
-    renderPSFThumbnail();
-}
-
-// ─── PSF thumbnail ────────────────────────────────────────────────────────────
-
-void DeconvolutionDialog::renderPSFThumbnail()
-{
-    DeconvParams p = collectParams();
-    cv::Mat k = Deconvolution::buildPSF(p, 63);
-
-    // Log-scale normalisation for display
-    double mn, mx;
-    cv::minMaxLoc(k, &mn, &mx);
-    if (mx < 1e-12) return;
-
-    QImage img(64, 64, QImage::Format_RGB32);
-    img.fill(Qt::black);
-    for (int y = 0; y < k.rows; y++) {
-        for (int x = 0; x < k.cols; x++) {
-            double v = k.at<float>(y, x) / static_cast<float>(mx);
-            v = std::log1p(v * 9.0) / std::log(10.0); // log stretch
-            int gray = static_cast<int>(std::clamp(v, 0.0, 1.0) * 255.0);
-            img.setPixel(x, y, qRgb(gray, gray, gray));
-        }
-    }
-    m_psfPreview->setPixmap(QPixmap::fromImage(img));
-}
-
-// ─── Collect params ───────────────────────────────────────────────────────────
-
-DeconvParams DeconvolutionDialog::collectParams() const
-{
-    DeconvParams p;
-    static const DeconvAlgorithm algos[] = {
-        DeconvAlgorithm::RichardsonLucy,
-        DeconvAlgorithm::RLTV,
-        DeconvAlgorithm::Wiener
-    };
-    int idx = m_algoCombo ? m_algoCombo->currentIndex() : 1;
-    p.algo          = algos[std::clamp(idx, 0, 2)];
-
-    static const PSFSource psfMap[] = { PSFSource::Gaussian, PSFSource::Moffat, PSFSource::Disk, PSFSource::Airy, PSFSource::Custom };
-    int psf_idx = m_psfSourceCombo ? m_psfSourceCombo->currentIndex() : 0;
-    p.psfSource     = psfMap[std::clamp(psf_idx, 0, 4)];
-    p.psfFWHM       = m_fwhmSpin      ? m_fwhmSpin->value()       : 2.0;
-    p.psfBeta       = m_betaSpin      ? m_betaSpin->value()        : 4.5;
-    p.psfAngle      = m_angleSpin     ? m_angleSpin->value()       : 0.0;
-    p.psfRoundness  = m_roundnessSpin ? m_roundnessSpin->value()   : 1.0;
-    
-    p.airyWavelength = m_airyWavelengthSpin ? m_airyWavelengthSpin->value() : 550.0;
-    p.airyAperture   = m_airyApertureSpin ? m_airyApertureSpin->value() : 200.0;
-    p.airyFocalLen   = m_airyFocalLenSpin ? m_airyFocalLenSpin->value() : 1000.0;
-    p.airyPixelSize  = m_airyPixelSizeSpin ? m_airyPixelSizeSpin->value() : 3.76;
-    p.airyObstruction= m_airyObstructionSpin ? m_airyObstructionSpin->value() : 0.0;
-    
-    p.kernelSize    = m_kernelSizeSpin? m_kernelSizeSpin->value()  : 0;
-
-    p.maxIter       = m_iterSpin      ? m_iterSpin->value()        : 100;
-    p.convergenceTol= m_tolSpin       ? m_tolSpin->value()         : 1e-4;
-    p.tvRegWeight   = m_tvWeightSpin  ? m_tvWeightSpin->value()    : 0.01;
-    p.wienerK       = m_wienerKSpin   ? m_wienerKSpin->value()     : 0.001;
-    p.borderPad     = m_borderPadSpin ? m_borderPadSpin->value()   : 32;
-
-    p.starMask.useMask   = m_starMaskCheck      && m_starMaskCheck->isChecked();
-    p.starMask.threshold = m_starMaskThreshSpin ? m_starMaskThreshSpin->value() : 0.85;
-    p.starMask.radius    = m_starMaskRadiusSpin ? m_starMaskRadiusSpin->value() : 2.0;
-    p.starMask.blend     = m_starMaskBlendSpin  ? m_starMaskBlendSpin->value()  : 0.5;
-
-    return p;
-}
-
-// ─── Slots ────────────────────────────────────────────────────────────────────
-
-void DeconvolutionDialog::onPreview()
-{
-    if (!m_viewer || !m_viewer->getBuffer().isValid()) return;
-    if (m_watcher->isRunning()) return;
-    m_isPreview = true;
-    setControlsEnabled(false);
-    m_progressBar->setVisible(true);
-    m_progressBar->setValue(0);
-    m_statusLabel->setText(tr("Computing preview..."));
-
-    // Always use the original clean buffer as input, not the progressively destroyed one
-    auto buf    = std::make_shared<ImageBuffer>(m_originalBuffer);
-    auto params = collectParams();
-    params.maxIter = std::min(params.maxIter, 20);
-    params.progressCallback = [this](int pct, const QString& msg) {
-        QMetaObject::invokeMethod(this, [this, pct, msg]() {
-            m_progressBar->setValue(pct);
-            if (!msg.isEmpty()) m_statusLabel->setText(msg);
-        }, Qt::QueuedConnection);
-    };
-
-    auto* raw = new std::shared_ptr<ImageBuffer>(buf);
-    m_watcher->setProperty("bufPtr", QVariant::fromValue(static_cast<void*>(raw)));
-    m_watcher->setFuture(QtConcurrent::run([buf, params]() {
-        return Deconvolution::apply(*buf, params);
-    }));
-}
-
-void DeconvolutionDialog::onApply()
-{
-    if (!m_viewer || !m_viewer->getBuffer().isValid()) return;
-    if (m_watcher->isRunning()) return;
-    m_isPreview = false;
-    setControlsEnabled(false);
-    m_progressBar->setVisible(true);
-    m_progressBar->setValue(0);
-    m_statusLabel->setText(tr("Applying deconvolution..."));
-
-    // Always use the original clean buffer as input
-    auto buf    = std::make_shared<ImageBuffer>(m_originalBuffer);
-    auto params = collectParams();
-    params.progressCallback = [this](int pct, const QString& msg) {
-        QMetaObject::invokeMethod(this, [this, pct, msg]() {
-            m_progressBar->setValue(pct);
-            if (!msg.isEmpty()) m_statusLabel->setText(msg);
-        }, Qt::QueuedConnection);
-    };
-
-    auto* raw = new std::shared_ptr<ImageBuffer>(buf);
-    m_watcher->setProperty("bufPtr", QVariant::fromValue(static_cast<void*>(raw)));
-    m_watcher->setFuture(QtConcurrent::run([buf, params]() {
-        return Deconvolution::apply(*buf, params);
-    }));
-}
-
-void DeconvolutionDialog::onFinished()
-{
-    m_progressBar->setVisible(false);
-    setControlsEnabled(true);
-
-    auto* raw = static_cast<std::shared_ptr<ImageBuffer>*>(
-        m_watcher->property("bufPtr").value<void*>());
-    if (!raw) return;
-
-    DeconvResult res = m_watcher->result();
-    if (res.success && m_viewer) {
-        if (m_isPreview) {
-            m_viewer->setBuffer(**raw, m_viewer->windowTitle(), true);
-            m_statusLabel->setText(tr("Preview - %1 iterations").arg(res.iterations));
-        } else {
-            // Restore original quickly so pushUndo grabs the accurate unaltered state first!
-            m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-            m_viewer->pushUndo();
-            // Now apply the newly computed DECONVOLVED state
-            m_viewer->setBuffer(**raw, m_viewer->windowTitle(), true);
-            m_originalBuffer = **raw; // Commit! Future previews start from here.
-            m_viewer->refreshDisplay(true);
-            QString algo = m_algoCombo->currentText();
-            m_statusLabel->setText(tr("Done - %1 iterations, d=%2")
-                .arg(res.iterations).arg(res.finalChange, 0, 'e', 2));
-            if (m_mainWindow)
-                Logger::info(tr("Deconvolution [%1] applied: FWHM=%2px, iter=%3")
-                    .arg(algo).arg(m_fwhmSpin->value()).arg(res.iterations));
-        }
-    } else {
-        m_statusLabel->setText(tr("Failed: ") + res.errorMsg);
-        QMessageBox::warning(this, tr("Deconvolution"), tr("Failed:\n") + res.errorMsg);
-    }
-    delete raw;
-}
-
-void DeconvolutionDialog::onReset()
-{
-    if (!m_viewer || !m_viewer->getBuffer().isValid()) return;
-    m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-    m_viewer->refreshDisplay(true);
-    m_statusLabel->setText(tr("Reset to original."));
-}
-
-void DeconvolutionDialog::onEstimateFWHM()
-{
-    if (!m_viewer || !m_viewer->getBuffer().isValid()) return;
-    setControlsEnabled(false);
-    m_statusLabel->setText(tr("Estimating FWHM from stars..."));
-    QApplication::processEvents();
-
-    double fwhm = Deconvolution::estimateFWHM(m_viewer->getBuffer());
-    m_fwhmSpin->setValue(fwhm);
-    m_statusLabel->setText(tr("Estimated FWHM: %1 px").arg(fwhm, 0, 'f', 2));
-    setControlsEnabled(true);
-}
-
-void DeconvolutionDialog::onFWHMChanged(double) {
-    renderPSFThumbnail();
-}
-
-void DeconvolutionDialog::setControlsEnabled(bool en)
-{
-    m_algoCombo->setEnabled(en);
-    m_psfSourceCombo->setEnabled(en);
-    m_fwhmSpin->setEnabled(en);
-    m_betaSpin->setEnabled(en && m_psfSourceCombo->currentIndex() == 1);
-    m_angleSpin->setEnabled(en);
-    m_roundnessSpin->setEnabled(en);
-    m_estimateFWHMBtn->setEnabled(en);
-    m_iterSpin->setEnabled(en);
-    m_tolSpin->setEnabled(en);
-    m_tvWeightSpin->setEnabled(en);
-    m_wienerKSpin->setEnabled(en);
-    m_starMaskCheck->setEnabled(en);
-    m_previewBtn->setEnabled(en);
-    m_applyBtn->setEnabled(en);
-    m_resetBtn->setEnabled(en);
 }
 
 void DeconvolutionDialog::closeEvent(QCloseEvent* event)
 {
-    if (m_watcher->isRunning()) { m_watcher->cancel(); m_watcher->waitForFinished(); }
-    
-    // If the user closes the dialog after previewing without hitting apply, restore original!
-    if (m_viewer && m_viewer->getBuffer().isValid()) {
-        m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-        m_viewer->refreshDisplay(true);
+    if (m_mfWorker && m_mfWorker->isRunning()) {
+        m_mfWorker->requestStop();
+        m_mfWorker->wait(2000);
     }
-    
     QDialog::closeEvent(event);
 }
+
+void DeconvolutionDialog::showEvent(QShowEvent* event)
+{
+    QDialog::showEvent(event);
+    if (m_viewer && !m_originalBuffer.isValid()) {
+        // Snapshot current image as baseline for preview/undo.
+        m_originalBuffer = m_viewer->getBuffer();
+    }
+    updatePSFPreview();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildUI
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::buildUI()
+{
+    auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+
+    auto* widget = new QWidget;
+    auto* layout = new QVBoxLayout(widget);
+    scroll->setWidget(widget);
+    mainLayout->addWidget(scroll);
+
+    m_tabs = new QTabWidget;
+    layout->addWidget(m_tabs);
+
+    buildConvolutionTab();
+    buildDeconvolutionTab();
+    buildPSFEstimatorTab();
+    buildTVDenoiseTab();
+    buildMultiFrameTab();
+
+    // PSF preview chip
+    m_convPSFLabel = new QLabel;
+    m_convPSFLabel->setFixedSize(64, 64);
+    m_convPSFLabel->setStyleSheet("border: 1px solid #888;");
+    layout->addWidget(m_convPSFLabel, 0, Qt::AlignHCenter);
+
+    // Strength slider (single image only)
+    auto* srow = new QHBoxLayout;
+    srow->addWidget(new QLabel(tr("Strength:")));
+    m_strengthSlider = new QSlider(Qt::Horizontal);
+    m_strengthSlider->setRange(0, 100);
+    m_strengthSlider->setValue(100);
+    srow->addWidget(m_strengthSlider);
+    m_strengthSpin = new QDoubleSpinBox;
+    m_strengthSpin->setRange(0.0, 1.0);
+    m_strengthSpin->setSingleStep(0.01);
+    m_strengthSpin->setValue(1.0);
+    m_strengthSpin->setFixedWidth(60);
+    srow->addWidget(m_strengthSpin);
+    layout->addLayout(srow);
+
+    // Single image buttons
+    auto* row1 = new QHBoxLayout;
+    m_previewBtn = new QPushButton(tr("Preview"));
+    m_undoBtn    = new QPushButton(tr("Undo"));
+    row1->addWidget(m_previewBtn);
+    row1->addWidget(m_undoBtn);
+    layout->addLayout(row1);
+
+    auto* row2 = new QHBoxLayout;
+    m_pushBtn    = new QPushButton(tr("Apply"));
+    m_closeBtn   = new QPushButton(tr("Close"));
+    row2->addWidget(m_pushBtn);
+    row2->addWidget(m_closeBtn);
+    layout->addLayout(row2);
+
+    layout->addStretch();
+
+    m_statusLabel = new QLabel;
+    m_statusLabel->setStyleSheet("color:#fff;background:#333;padding:4px;");
+    m_statusLabel->setFixedHeight(24);
+    layout->addWidget(m_statusLabel);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildConvolutionTab
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::buildConvolutionTab()
+{
+    auto* tab    = new QWidget;
+    auto* layout = new QVBoxLayout(tab);
+    auto* form   = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight);
+
+    m_convRadiusSpin = new QDoubleSpinBox; m_convRadiusSpin->setRange(0.1, 200.0); m_convRadiusSpin->setValue(5.0);  m_convRadiusSpin->setSuffix(" px");
+    m_convShapeSpin  = new QDoubleSpinBox; m_convShapeSpin->setRange(0.1, 10.0);   m_convShapeSpin->setValue(2.0);
+    m_convAspectSpin = new QDoubleSpinBox; m_convAspectSpin->setRange(0.1, 10.0);  m_convAspectSpin->setValue(1.0);
+    m_convRotSpin    = new QDoubleSpinBox; m_convRotSpin->setRange(0.0, 360.0);    m_convRotSpin->setValue(0.0);    m_convRotSpin->setSuffix("°");
+
+    form->addRow(tr("Radius:"),       m_convRadiusSpin);
+    form->addRow(tr("Kurtosis (σ):"), m_convShapeSpin);
+    form->addRow(tr("Aspect Ratio:"), m_convAspectSpin);
+    form->addRow(tr("Rotation:"),     m_convRotSpin);
+    layout->addLayout(form);
+    layout->addStretch();
+    m_tabs->addTab(tab, tr("Convolution"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildDeconvolutionTab
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::buildDeconvolutionTab()
+{
+    auto* tab    = new QWidget;
+    auto* layout = new QVBoxLayout(tab);
+
+    // Algo combo
+    auto* algoRow = new QHBoxLayout;
+    algoRow->addWidget(new QLabel(tr("Algorithm:")));
+    m_algoCombo = new QComboBox;
+    m_algoCombo->addItems({"Richardson-Lucy", "Wiener", "Larson-Sekanina", "Van Cittert"});
+    algoRow->addWidget(m_algoCombo);
+    algoRow->addStretch();
+    layout->addLayout(algoRow);
+
+    // PSF sliders (shared RL/Wiener)
+    m_psfParamGroup = new QWidget;
+    auto* psfForm = new QFormLayout(m_psfParamGroup);
+    psfForm->setLabelAlignment(Qt::AlignRight);
+    m_rlPsfRadiusSpin  = new QDoubleSpinBox; m_rlPsfRadiusSpin->setRange(0.1, 100.0); m_rlPsfRadiusSpin->setValue(3.0);  m_rlPsfRadiusSpin->setSuffix(" px");
+    m_rlPsfShapeSpin   = new QDoubleSpinBox; m_rlPsfShapeSpin->setRange(0.1, 10.0);   m_rlPsfShapeSpin->setValue(2.0);
+    m_rlPsfAspectSpin  = new QDoubleSpinBox; m_rlPsfAspectSpin->setRange(0.1, 10.0);  m_rlPsfAspectSpin->setValue(1.0);
+    m_rlPsfRotSpin     = new QDoubleSpinBox; m_rlPsfRotSpin->setRange(0.0, 360.0);    m_rlPsfRotSpin->setValue(0.0);     m_rlPsfRotSpin->setSuffix("°");
+    psfForm->addRow(tr("PSF Radius:"),   m_rlPsfRadiusSpin);
+    psfForm->addRow(tr("PSF Kurtosis:"), m_rlPsfShapeSpin);
+    psfForm->addRow(tr("PSF Aspect:"),   m_rlPsfAspectSpin);
+    psfForm->addRow(tr("PSF Rotation:"), m_rlPsfRotSpin);
+    layout->addWidget(m_psfParamGroup);
+
+    // Custom PSF bar (visible when stellar PSF is active)
+    m_customPsfBar = new QWidget;
+    auto* barLayout = new QHBoxLayout(m_customPsfBar);
+    barLayout->setContentsMargins(0,0,0,0);
+    m_customPsfLabel = new QLabel(tr("Using Stellar PSF"));
+    m_customPsfLabel->setStyleSheet("color:#fff;background:#007acc;padding:2px;");
+    m_disableCustomBtn = new QPushButton(tr("Disable Stellar PSF"));
+    barLayout->addWidget(m_customPsfLabel);
+    barLayout->addWidget(m_disableCustomBtn);
+    barLayout->addStretch();
+    m_customPsfBar->setVisible(false);
+    layout->addWidget(m_customPsfBar);
+
+    // RL widget
+    m_rlWidget = new QWidget;
+    auto* rlForm = new QFormLayout(m_rlWidget);
+    rlForm->setLabelAlignment(Qt::AlignRight);
+    m_rlIterSpin = new QDoubleSpinBox; m_rlIterSpin->setRange(1, 200); m_rlIterSpin->setValue(30);
+    m_rlRegCombo = new QComboBox; m_rlRegCombo->addItems({"None (Plain R–L)", "Tikhonov (L2)", "Total Variation (TV)"});
+    m_rlClipCheck = new QCheckBox(tr("Enable de-ring")); m_rlClipCheck->setChecked(true);
+    m_rlLumCheck  = new QCheckBox(tr("Deconvolve L* Only")); m_rlLumCheck->setChecked(true);
+    rlForm->addRow(tr("Iterations:"),     m_rlIterSpin);
+    rlForm->addRow(tr("Regularization:"), m_rlRegCombo);
+    rlForm->addRow(QString(), m_rlClipCheck);
+    rlForm->addRow(QString(), m_rlLumCheck);
+    layout->addWidget(m_rlWidget);
+
+    // Wiener widget
+    m_wienerWidget = new QWidget;
+    auto* wForm = new QFormLayout(m_wienerWidget);
+    wForm->setLabelAlignment(Qt::AlignRight);
+    m_wienerNsrSpin = new QDoubleSpinBox; m_wienerNsrSpin->setRange(0.0, 1.0); m_wienerNsrSpin->setSingleStep(0.001); m_wienerNsrSpin->setValue(0.01);
+    m_wienerRegCombo = new QComboBox; m_wienerRegCombo->addItems({"None (Classical Wiener)", "Tikhonov (L2)"});
+    m_wienerLumCheck = new QCheckBox(tr("Deconvolve L* Only")); m_wienerLumCheck->setChecked(true);
+    m_wienerDeringCheck = new QCheckBox(tr("Enable de-ring")); m_wienerDeringCheck->setChecked(true);
+    wForm->addRow(tr("Noise/Signal (λ):"), m_wienerNsrSpin);
+    wForm->addRow(tr("Regularization:"),   m_wienerRegCombo);
+    wForm->addRow(QString(), m_wienerLumCheck);
+    wForm->addRow(QString(), m_wienerDeringCheck);
+    m_wienerWidget->setVisible(false);
+    layout->addWidget(m_wienerWidget);
+
+    // LS widget
+    m_lsWidget = new QWidget;
+    auto* lsForm = new QFormLayout(m_lsWidget);
+    lsForm->setLabelAlignment(Qt::AlignRight);
+    m_lsRadStepSpin = new QDoubleSpinBox; m_lsRadStepSpin->setRange(0.0, 50.0); m_lsRadStepSpin->setSuffix(" px");
+    m_lsAngStepSpin = new QDoubleSpinBox; m_lsAngStepSpin->setRange(0.1, 360.0); m_lsAngStepSpin->setValue(1.0); m_lsAngStepSpin->setSuffix("°");
+    m_lsOpCombo    = new QComboBox; m_lsOpCombo->addItems({"Divide", "Subtract"});
+    m_lsBlendCombo = new QComboBox; m_lsBlendCombo->addItems({"SoftLight", "Screen"});
+    lsForm->addRow(tr("Radial Step (px):"), m_lsRadStepSpin);
+    lsForm->addRow(tr("Angular Step (°):"), m_lsAngStepSpin);
+    lsForm->addRow(tr("LS Operator:"),      m_lsOpCombo);
+    lsForm->addRow(tr("Blend Mode:"),       m_lsBlendCombo);
+    m_lsWidget->setVisible(false);
+    layout->addWidget(m_lsWidget);
+
+    // VC widget
+    m_vcWidget = new QWidget;
+    auto* vcForm = new QFormLayout(m_vcWidget);
+    vcForm->setLabelAlignment(Qt::AlignRight);
+    m_vcIterSpin  = new QDoubleSpinBox; m_vcIterSpin->setRange(1, 1000); m_vcIterSpin->setValue(10);
+    m_vcRelaxSpin = new QDoubleSpinBox; m_vcRelaxSpin->setRange(0.0, 1.0); m_vcRelaxSpin->setSingleStep(0.01);
+    vcForm->addRow(tr("Iterations:"),      m_vcIterSpin);
+    vcForm->addRow(tr("Relaxation (0–1):"), m_vcRelaxSpin);
+    m_vcWidget->setVisible(false);
+    layout->addWidget(m_vcWidget);
+
+    layout->addStretch();
+    m_tabs->addTab(tab, tr("Deconvolution"));
+
+    // Update visibility when algorithm changes
+    connect(m_algoCombo, &QComboBox::currentTextChanged, this, &DeconvolutionDialog::onAlgorithmChanged);
+    onAlgorithmChanged(m_algoCombo->currentText());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildPSFEstimatorTab
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::buildPSFEstimatorTab()
+{
+    auto* tab    = new QWidget;
+    auto* layout = new QVBoxLayout(tab);
+    auto* form   = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight);
+
+    m_sepThreshSpin    = new QDoubleSpinBox; m_sepThreshSpin->setRange(1.0, 5.0);      m_sepThreshSpin->setValue(2.5);   m_sepThreshSpin->setSuffix(" σ");
+    m_sepMinAreaSpin   = new QSpinBox;       m_sepMinAreaSpin->setRange(1, 100);        m_sepMinAreaSpin->setValue(5);
+    m_sepSatSpin       = new QDoubleSpinBox; m_sepSatSpin->setRange(1000, 100000);      m_sepSatSpin->setValue(50000);    m_sepSatSpin->setSuffix(" ADU");
+    m_sepMaxStarsSpin  = new QSpinBox;       m_sepMaxStarsSpin->setRange(1, 500);       m_sepMaxStarsSpin->setValue(50);
+    m_sepStampSpin     = new QSpinBox;       m_sepStampSpin->setRange(5, 50);           m_sepStampSpin->setValue(15);
+
+    form->addRow(tr("Detection σ:"),       m_sepThreshSpin);
+    form->addRow(tr("Min Area (px²):"),    m_sepMinAreaSpin);
+    form->addRow(tr("Saturation Cutoff:"), m_sepSatSpin);
+    form->addRow(tr("Max Stars:"),         m_sepMaxStarsSpin);
+    form->addRow(tr("Half-Width (px):"),   m_sepStampSpin);
+    layout->addLayout(form);
+
+    auto* hBtn = new QHBoxLayout;
+    m_sepRunBtn  = new QPushButton(tr("Run SEP Extraction"));
+    m_sepSaveBtn = new QPushButton(tr("Save PSF…"));
+    m_sepUseBtn  = new QPushButton(tr("Use as Current PSF"));
+    hBtn->addWidget(m_sepRunBtn);
+    hBtn->addWidget(m_sepSaveBtn);
+    hBtn->addWidget(m_sepUseBtn);
+    layout->addLayout(hBtn);
+
+    layout->addWidget(new QLabel(tr("Estimated PSF (64×64):")));
+    m_sepPsfPreview = new QLabel;
+    m_sepPsfPreview->setFixedSize(64, 64);
+    m_sepPsfPreview->setStyleSheet("border: 1px solid #888;");
+    layout->addWidget(m_sepPsfPreview, 0, Qt::AlignHCenter);
+    layout->addStretch();
+    m_tabs->addTab(tab, tr("PSF Estimator"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildTVDenoiseTab
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::buildTVDenoiseTab()
+{
+    auto* tab    = new QWidget;
+    auto* layout = new QVBoxLayout(tab);
+    auto* form   = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight);
+
+    m_tvWeightSpin = new QDoubleSpinBox; m_tvWeightSpin->setRange(0.0, 1.0); m_tvWeightSpin->setSingleStep(0.01); m_tvWeightSpin->setValue(0.1);
+    m_tvIterSpin   = new QDoubleSpinBox; m_tvIterSpin->setRange(1, 100);    m_tvIterSpin->setValue(10);
+    m_tvMultiCheck = new QCheckBox(tr("Multi-channel")); m_tvMultiCheck->setChecked(true);
+
+    form->addRow(tr("TV Weight:"),      m_tvWeightSpin);
+    form->addRow(tr("Max Iterations:"), m_tvIterSpin);
+    form->addRow(QString(), m_tvMultiCheck);
+    layout->addLayout(form);
+    layout->addStretch();
+    m_tabs->addTab(tab, tr("TV Denoise"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildMultiFrameTab
+// Exposes all MFDeconv parameters.
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::buildMultiFrameTab()
+{
+    auto* tab       = new QWidget;
+    auto* outerScrl = new QScrollArea;
+    outerScrl->setWidgetResizable(true);
+    outerScrl->setWidget(tab);
+
+    auto* layout = new QVBoxLayout(tab);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 1. Frame list
+    // ──────────────────────────────────────────────────────────────────────
+    auto* frameGroup = new QGroupBox(tr("Aligned Frames"));
+    auto* frameLayout = new QVBoxLayout(frameGroup);
+
+    m_mfFrameList = new QListWidget;
+    m_mfFrameList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_mfFrameList->setMinimumHeight(120);
+    frameLayout->addWidget(m_mfFrameList);
+
+    auto* frameBtn = new QHBoxLayout;
+    m_mfAddBtn     = new QPushButton(tr("Add Frames…"));
+    m_mfRemoveBtn  = new QPushButton(tr("Remove"));
+    m_mfClearBtn   = new QPushButton(tr("Clear All"));
+    m_mfMoveUpBtn  = new QPushButton(tr("▲"));
+    m_mfMoveDownBtn= new QPushButton(tr("▼"));
+    m_mfMoveUpBtn->setFixedWidth(30); m_mfMoveDownBtn->setFixedWidth(30);
+    frameBtn->addWidget(m_mfAddBtn); frameBtn->addWidget(m_mfRemoveBtn);
+    frameBtn->addWidget(m_mfClearBtn); frameBtn->addStretch();
+    frameBtn->addWidget(m_mfMoveUpBtn); frameBtn->addWidget(m_mfMoveDownBtn);
+    frameLayout->addLayout(frameBtn);
+
+    m_mfFrameCountLabel = new QLabel(tr("0 frames loaded"));
+    frameLayout->addWidget(m_mfFrameCountLabel);
+    layout->addWidget(frameGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 2. Output path
+    // ──────────────────────────────────────────────────────────────────────
+    auto* outGroup  = new QGroupBox(tr("Output"));
+    auto* outLayout = new QFormLayout(outGroup);
+    auto* outRow    = new QHBoxLayout;
+    m_mfOutputEdit  = new QLineEdit;
+    m_mfBrowseOutBtn= new QPushButton(tr("Browse…"));
+    outRow->addWidget(m_mfOutputEdit); outRow->addWidget(m_mfBrowseOutBtn);
+    outLayout->addRow(tr("Output path:"), outRow);
+    layout->addWidget(outGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 3. Base parameters — iters, kappa, relax, loss
+    // ──────────────────────────────────────────────────────────────────────
+    auto* baseGroup  = new QGroupBox(tr("Iteration Parameters"));
+    auto* baseForm   = new QFormLayout(baseGroup);
+
+    m_mfItersSpin   = new QSpinBox;       m_mfItersSpin->setRange(1, 500);     m_mfItersSpin->setValue(20);
+    m_mfMinItersSpin= new QSpinBox;       m_mfMinItersSpin->setRange(1, 100);  m_mfMinItersSpin->setValue(3);
+    m_mfKappaSpin   = new QDoubleSpinBox; m_mfKappaSpin->setRange(1.01, 100);  m_mfKappaSpin->setValue(2.0);   m_mfKappaSpin->setSingleStep(0.1);
+    m_mfRelaxSpin   = new QDoubleSpinBox; m_mfRelaxSpin->setRange(0.0, 1.0);   m_mfRelaxSpin->setValue(0.7);   m_mfRelaxSpin->setSingleStep(0.05);
+
+    baseForm->addRow(tr("Max Iterations (iters=):"),    m_mfItersSpin);
+    baseForm->addRow(tr("Min Iterations (min_iters=):"), m_mfMinItersSpin);
+    baseForm->addRow(tr("Kappa (ratio clamp):"),         m_mfKappaSpin);
+    baseForm->addRow(tr("Relaxation (relax=):"),         m_mfRelaxSpin);
+
+    // Loss function
+    auto* rhoRow = new QHBoxLayout;
+    m_mfRhoCombo = new QComboBox;
+    m_mfRhoCombo->addItems({"huber", "l2"});
+    rhoRow->addWidget(new QLabel(tr("Loss (rho=):"))); rhoRow->addWidget(m_mfRhoCombo); rhoRow->addStretch();
+    baseForm->addRow(rhoRow);
+
+    m_mfHuberDeltaLabel = new QLabel(tr("Huber δ (huber_delta=):"));
+    m_mfHuberDeltaSpin  = new QDoubleSpinBox;
+    m_mfHuberDeltaSpin->setRange(-10.0, 10.0);
+    m_mfHuberDeltaSpin->setValue(0.0);
+    m_mfHuberDeltaSpin->setSingleStep(0.1);
+    m_mfHuberDeltaSpin->setToolTip(tr(">0 absolute | <0 auto (|delta| x RMS via MAD) | 0 = flat (like L2)"));
+    baseForm->addRow(m_mfHuberDeltaLabel, m_mfHuberDeltaSpin);
+
+    // Color mode
+    m_mfColorModeCombo = new QComboBox;
+    m_mfColorModeCombo->addItems({"luma", "perchannel"});
+    m_mfColorModeCombo->setToolTip(tr("luma: process ITU-R BT.709 luminance\n"
+                                       "perchannel: process R, G, B independently"));
+    baseForm->addRow(tr("Color Mode (color_mode=):"), m_mfColorModeCombo);
+
+    layout->addWidget(baseGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 4. Seed mode
+    // ──────────────────────────────────────────────────────────────────────
+    auto* seedGroup  = new QGroupBox(tr("Seed (seed_mode=)"));
+    auto* seedLayout = new QVBoxLayout(seedGroup);
+
+    m_mfSeedBtnGroup = new QButtonGroup(this);
+    m_mfSeedRobustRadio = new QRadioButton(tr("Robust (bootstrap + +/-4*MAD clip + sigma-clipped Welford)"));
+    m_mfSeedMedianRadio = new QRadioButton(tr("Median (tiled exact median, RAM-bounded)"));
+    m_mfSeedRobustRadio->setChecked(true);
+    m_mfSeedBtnGroup->addButton(m_mfSeedRobustRadio, 0);
+    m_mfSeedBtnGroup->addButton(m_mfSeedMedianRadio, 1);
+    seedLayout->addWidget(m_mfSeedRobustRadio);
+    seedLayout->addWidget(m_mfSeedMedianRadio);
+
+    auto* seedParamForm = new QFormLayout;
+    m_mfBootstrapSpin = new QSpinBox;       m_mfBootstrapSpin->setRange(1, 200); m_mfBootstrapSpin->setValue(20);
+    m_mfClipSigmaSpin = new QDoubleSpinBox; m_mfClipSigmaSpin->setRange(1.0, 20.0); m_mfClipSigmaSpin->setValue(5.0); m_mfClipSigmaSpin->setSingleStep(0.5);
+    seedParamForm->addRow(tr("Bootstrap frames (bootstrap_frames=):"), m_mfBootstrapSpin);
+    seedParamForm->addRow(tr("Clip σ (clip_sigma=):"),                 m_mfClipSigmaSpin);
+    seedLayout->addLayout(seedParamForm);
+    layout->addWidget(seedGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 5. Star masks
+    // ──────────────────────────────────────────────────────────────────────
+    m_mfStarMaskCheck = new QCheckBox(tr("Use Star Masks (use_star_masks=)"));
+    layout->addWidget(m_mfStarMaskCheck);
+
+    m_mfStarMaskGroup = new QGroupBox(tr("Star Mask Configuration"));
+    auto* smForm = new QFormLayout(m_mfStarMaskGroup);
+
+    const DeconvStarMask defaultMask;
+    m_mfSmThreshSpin   = new QDoubleSpinBox; m_mfSmThreshSpin->setRange(0.5, 20.0); m_mfSmThreshSpin->setValue(defaultMask.threshSigma); m_mfSmThreshSpin->setSuffix(" sigma");
+    m_mfSmMaxObjsSpin  = new QSpinBox;       m_mfSmMaxObjsSpin->setRange(1, 10000); m_mfSmMaxObjsSpin->setValue(defaultMask.maxObjs);
+    m_mfSmGrowPxSpin   = new QSpinBox;       m_mfSmGrowPxSpin->setRange(0, 50);     m_mfSmGrowPxSpin->setValue(defaultMask.growPx);            m_mfSmGrowPxSpin->setSuffix(" px");
+    m_mfSmEllScaleSpin = new QDoubleSpinBox; m_mfSmEllScaleSpin->setRange(0.1, 5.0); m_mfSmEllScaleSpin->setValue(defaultMask.ellipseScale);   m_mfSmEllScaleSpin->setSingleStep(0.1);
+    m_mfSmSoftSigmaSpin= new QDoubleSpinBox; m_mfSmSoftSigmaSpin->setRange(0.0, 20.0); m_mfSmSoftSigmaSpin->setValue(defaultMask.softSigma);
+    m_mfSmMaxRadiusSpin= new QSpinBox;       m_mfSmMaxRadiusSpin->setRange(1, 200); m_mfSmMaxRadiusSpin->setValue(defaultMask.maxRadiusPx); m_mfSmMaxRadiusSpin->setSuffix(" px");
+    m_mfSmKeepFloorSpin= new QDoubleSpinBox; m_mfSmKeepFloorSpin->setRange(0.0, 0.99); m_mfSmKeepFloorSpin->setValue(defaultMask.keepFloor);  m_mfSmKeepFloorSpin->setSingleStep(0.01);
+
+    smForm->addRow(tr("thresh_sigma="),  m_mfSmThreshSpin);
+    smForm->addRow(tr("max_objs="),      m_mfSmMaxObjsSpin);
+    smForm->addRow(tr("grow_px="),       m_mfSmGrowPxSpin);
+    smForm->addRow(tr("ellipse_scale="), m_mfSmEllScaleSpin);
+    smForm->addRow(tr("soft_sigma="),    m_mfSmSoftSigmaSpin);
+    smForm->addRow(tr("max_radius_px="), m_mfSmMaxRadiusSpin);
+    smForm->addRow(tr("keep_floor="),    m_mfSmKeepFloorSpin);
+
+    auto* refRow = new QHBoxLayout;
+    m_mfSmRefPathEdit  = new QLineEdit; m_mfSmRefPathEdit->setPlaceholderText(tr("(optional) star_mask_ref_path"));
+    m_mfSmRefBrowseBtn = new QPushButton(tr("Browse…"));
+    refRow->addWidget(m_mfSmRefPathEdit); refRow->addWidget(m_mfSmRefBrowseBtn);
+    smForm->addRow(tr("star_mask_ref_path="), refRow);
+
+    m_mfStarMaskGroup->setEnabled(false);
+    layout->addWidget(m_mfStarMaskGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 6. Variance maps
+    // ──────────────────────────────────────────────────────────────────────
+    m_mfVarMapCheck = new QCheckBox(tr("Use Variance Maps (use_variance_maps=)"));
+    layout->addWidget(m_mfVarMapCheck);
+
+    m_mfVarMapGroup = new QGroupBox(tr("Variance Map Configuration"));
+    auto* vmForm = new QFormLayout(m_mfVarMapGroup);
+    m_mfVmBwSpin     = new QSpinBox;       m_mfVmBwSpin->setRange(8, 256);    m_mfVmBwSpin->setValue(64);    m_mfVmBwSpin->setSuffix(" px");
+    m_mfVmBhSpin     = new QSpinBox;       m_mfVmBhSpin->setRange(8, 256);    m_mfVmBhSpin->setValue(64);    m_mfVmBhSpin->setSuffix(" px");
+    m_mfVmSmoothSpin = new QDoubleSpinBox; m_mfVmSmoothSpin->setRange(0.0, 10.0); m_mfVmSmoothSpin->setValue(1.0); m_mfVmSmoothSpin->setSingleStep(0.1);
+    m_mfVmFloorSpin  = new QDoubleSpinBox; m_mfVmFloorSpin->setRange(1e-12, 1e-4); m_mfVmFloorSpin->setValue(1e-8); m_mfVmFloorSpin->setDecimals(10);
+    vmForm->addRow(tr("bw="),           m_mfVmBwSpin);
+    vmForm->addRow(tr("bh="),           m_mfVmBhSpin);
+    vmForm->addRow(tr("smooth_sigma="), m_mfVmSmoothSpin);
+    vmForm->addRow(tr("floor="),        m_mfVmFloorSpin);
+    m_mfVarMapGroup->setEnabled(false);
+    layout->addWidget(m_mfVarMapGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 7. Early stopping
+    // ──────────────────────────────────────────────────────────────────────
+    m_mfEarlyStopGroup = new QGroupBox(tr("Early Stopping (EarlyStopper)"));
+    auto* esForm = new QFormLayout(m_mfEarlyStopGroup);
+    m_mfEsTolUpdSpin    = new QDoubleSpinBox; m_mfEsTolUpdSpin->setRange(1e-6, 0.1); m_mfEsTolUpdSpin->setValue(2e-4); m_mfEsTolUpdSpin->setDecimals(6);
+    m_mfEsTolRelSpin    = new QDoubleSpinBox; m_mfEsTolRelSpin->setRange(1e-6, 0.1); m_mfEsTolRelSpin->setValue(5e-4); m_mfEsTolRelSpin->setDecimals(6);
+    m_mfEsEarlyFracSpin = new QDoubleSpinBox; m_mfEsEarlyFracSpin->setRange(0.01, 1.0); m_mfEsEarlyFracSpin->setValue(0.40); m_mfEsEarlyFracSpin->setSingleStep(0.05);
+    m_mfEsEmaAlphaSpin  = new QDoubleSpinBox; m_mfEsEmaAlphaSpin->setRange(0.01, 1.0);  m_mfEsEmaAlphaSpin->setValue(0.5);  m_mfEsEmaAlphaSpin->setSingleStep(0.05);
+    m_mfEsPatienceSpin  = new QSpinBox;       m_mfEsPatienceSpin->setRange(1, 20);       m_mfEsPatienceSpin->setValue(2);
+    esForm->addRow(tr("tol_upd_floor="),  m_mfEsTolUpdSpin);
+    esForm->addRow(tr("tol_rel_floor="),  m_mfEsTolRelSpin);
+    esForm->addRow(tr("early_frac="),     m_mfEsEarlyFracSpin);
+    esForm->addRow(tr("ema_alpha="),      m_mfEsEmaAlphaSpin);
+    esForm->addRow(tr("patience="),       m_mfEsPatienceSpin);
+    layout->addWidget(m_mfEarlyStopGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 8. Super-Resolution
+    // ──────────────────────────────────────────────────────────────────────
+    auto* srRow = new QHBoxLayout;
+    srRow->addWidget(new QLabel(tr("Super-Resolution factor (super_res_factor=):")));
+    m_mfSrFactorSpin = new QSpinBox; m_mfSrFactorSpin->setRange(1, 4); m_mfSrFactorSpin->setValue(1);
+    srRow->addWidget(m_mfSrFactorSpin); srRow->addStretch();
+    layout->addLayout(srRow);
+
+    m_mfSrGroup = new QGroupBox(tr("SR-PSF Solver (visible only if factor > 1)"));
+    auto* srForm = new QFormLayout(m_mfSrGroup);
+    m_mfSrSigmaSpin    = new QDoubleSpinBox; m_mfSrSigmaSpin->setRange(0.1, 10.0); m_mfSrSigmaSpin->setValue(1.1); m_mfSrSigmaSpin->setSingleStep(0.1);
+    m_mfSrOptItersSpin = new QSpinBox;       m_mfSrOptItersSpin->setRange(10, 1000); m_mfSrOptItersSpin->setValue(250);
+    m_mfSrOptLrSpin    = new QDoubleSpinBox; m_mfSrOptLrSpin->setRange(1e-4, 1.0);  m_mfSrOptLrSpin->setValue(0.1); m_mfSrOptLrSpin->setDecimals(4);
+    srForm->addRow(tr("sr_sigma="),          m_mfSrSigmaSpin);
+    srForm->addRow(tr("sr_psf_opt_iters="),  m_mfSrOptItersSpin);
+    srForm->addRow(tr("sr_psf_opt_lr="),     m_mfSrOptLrSpin);
+    m_mfSrGroup->setVisible(false);
+    layout->addWidget(m_mfSrGroup);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 9. Intermediate saves
+    // ──────────────────────────────────────────────────────────────────────
+    m_mfSaveIntermCheck = new QCheckBox(tr("Save Intermediate Iterations (save_intermediate=)"));
+    layout->addWidget(m_mfSaveIntermCheck);
+    auto* siRow = new QHBoxLayout;
+    siRow->addWidget(new QLabel(tr("Save every (save_every=):")));
+    m_mfSaveEverySpin = new QSpinBox; m_mfSaveEverySpin->setRange(1, 50); m_mfSaveEverySpin->setValue(1);
+    m_mfSaveEverySpin->setEnabled(false);
+    siRow->addWidget(m_mfSaveEverySpin); siRow->addStretch();
+    layout->addLayout(siRow);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 10. Low-mem mode
+    // ──────────────────────────────────────────────────────────────────────
+    m_mfLowMemCheck = new QCheckBox(tr("Low-memory mode (low_mem=True)"));
+    m_mfLowMemCheck->setToolTip(tr("Reduces LRU cache, disables prefetch, limits batch"));
+    layout->addWidget(m_mfLowMemCheck);
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 11. Run/stop controls + progress
+    // ──────────────────────────────────────────────────────────────────────
+    auto* runLayout = new QHBoxLayout;
+    m_mfStartBtn = new QPushButton(tr("▶ Start MFDeconv"));
+    m_mfStopBtn  = new QPushButton(tr("■ Stop"));
+    m_mfStopBtn->setEnabled(false);
+    runLayout->addWidget(m_mfStartBtn); runLayout->addWidget(m_mfStopBtn);
+    layout->addLayout(runLayout);
+
+    m_mfProgressBar = new QProgressBar;
+    m_mfProgressBar->setRange(0, 100);
+    m_mfProgressBar->setValue(0);
+    layout->addWidget(m_mfProgressBar);
+
+    m_mfStatusLabel = new QLabel;
+    m_mfStatusLabel->setStyleSheet("color:#eee;background:#222;padding:2px;");
+    layout->addWidget(m_mfStatusLabel);
+
+    // Multi-line log area
+    m_mfLogEdit = new QPlainTextEdit;
+    m_mfLogEdit->setReadOnly(true);
+    m_mfLogEdit->setMaximumBlockCount(2000);
+    m_mfLogEdit->setFixedHeight(120);
+    m_mfLogEdit->setStyleSheet("font-family:monospace;font-size:10px;background:#1a1a1a;color:#ccc;");
+    layout->addWidget(m_mfLogEdit);
+
+    layout->addStretch();
+
+    // Add the tab through a scroll area
+    m_tabs->addTab(outerScrl, tr("Multi-Frame"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// connectSignals
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::connectSignals()
+{
+    // Single image
+    connect(m_previewBtn, &QPushButton::clicked, this, &DeconvolutionDialog::onPreview);
+    connect(m_pushBtn,    &QPushButton::clicked, this, &DeconvolutionDialog::onApply);
+    connect(m_undoBtn,    &QPushButton::clicked, this, &DeconvolutionDialog::onUndo);
+    connect(m_closeBtn,   &QPushButton::clicked, this, &DeconvolutionDialog::onClose);
+
+    connect(m_sepRunBtn, &QPushButton::clicked, this, &DeconvolutionDialog::onRunSEP);
+    connect(m_sepUseBtn, &QPushButton::clicked, this, &DeconvolutionDialog::onUseStellarPSF);
+
+    connect(m_algoCombo, &QComboBox::currentTextChanged,
+            this, &DeconvolutionDialog::onAlgorithmChanged);
+    connect(m_algoCombo, &QComboBox::currentTextChanged,
+            this, &DeconvolutionDialog::updatePSFPreview);
+
+    // Update PSF preview when sliders change
+    for (auto* sp : {m_convRadiusSpin, m_convShapeSpin, m_convAspectSpin, m_convRotSpin,
+                     m_rlPsfRadiusSpin, m_rlPsfShapeSpin, m_rlPsfAspectSpin, m_rlPsfRotSpin}) {
+        connect(sp, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                this, &DeconvolutionDialog::updatePSFPreview);
+    }
+
+    connect(m_lsOpCombo, &QComboBox::currentTextChanged, [this](const QString& op) {
+        m_lsBlendCombo->setCurrentText(op == "Divide" ? "SoftLight" : "Screen");
+    });
+
+    // Disable custom PSF if sliders change
+    if (m_disableCustomBtn)
+        connect(m_disableCustomBtn, &QPushButton::clicked, this, [this](){
+            m_useCustom = false;
+            m_customKernel.release();
+            m_customPsfBar->setVisible(false);
+        });
+
+    // ── MFDeconv ──────────────────────────────────────────────────────────
+    connect(m_mfAddBtn,      &QPushButton::clicked, this, &DeconvolutionDialog::onMFAddFrames);
+    connect(m_mfRemoveBtn,   &QPushButton::clicked, this, &DeconvolutionDialog::onMFRemoveFrame);
+    connect(m_mfClearBtn,    &QPushButton::clicked, this, &DeconvolutionDialog::onMFClearFrames);
+    connect(m_mfMoveUpBtn,   &QPushButton::clicked, this, &DeconvolutionDialog::onMFMoveUp);
+    connect(m_mfMoveDownBtn, &QPushButton::clicked, this, &DeconvolutionDialog::onMFMoveDown);
+    connect(m_mfBrowseOutBtn,&QPushButton::clicked, this, &DeconvolutionDialog::onMFBrowseOutput);
+    connect(m_mfStartBtn,    &QPushButton::clicked, this, &DeconvolutionDialog::onMFStart);
+    connect(m_mfStopBtn,     &QPushButton::clicked, this, &DeconvolutionDialog::onMFStop);
+
+    connect(m_mfColorModeCombo, &QComboBox::currentTextChanged,
+            this, &DeconvolutionDialog::onMFColorModeChanged);
+    connect(m_mfRhoCombo, &QComboBox::currentTextChanged,
+            this, &DeconvolutionDialog::onMFRhoChanged);
+    connect(m_mfSrFactorSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &DeconvolutionDialog::onMFSuperResChanged);
+    connect(m_mfStarMaskCheck, &QCheckBox::toggled,
+            this, &DeconvolutionDialog::onMFStarMaskToggled);
+    connect(m_mfVarMapCheck, &QCheckBox::toggled,
+            this, &DeconvolutionDialog::onMFVarMapToggled);
+    connect(m_mfSaveIntermCheck, &QCheckBox::toggled,
+            this, &DeconvolutionDialog::onMFSaveIntermediateToggled);
+    connect(m_mfLowMemCheck, &QCheckBox::toggled,
+            this, &DeconvolutionDialog::onMFLowMemToggled);
+
+    connect(m_mfSeedBtnGroup, &QButtonGroup::buttonToggled,
+            this, [this](QAbstractButton*, bool) { onMFSeedModeChanged(); });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// collectParams — collects parameters for a single image
+// ─────────────────────────────────────────────────────────────────────────────
+DeconvParams DeconvolutionDialog::collectParams() const
+{
+    DeconvParams p;
+    p.globalStrength = m_strengthSpin->value();
+
+    QString algo = m_algoCombo->currentText();
+    if      (algo == "Richardson-Lucy") p.algo = DeconvAlgorithm::RichardsonLucy;
+    else if (algo == "Wiener")          p.algo = DeconvAlgorithm::Wiener;
+    else if (algo == "Larson-Sekanina") p.algo = DeconvAlgorithm::LarsonSekanina;
+    else if (algo == "Van Cittert")     p.algo = DeconvAlgorithm::VanCittert;
+
+    p.psfFWHM       = m_rlPsfRadiusSpin->value();
+    p.psfBeta       = m_rlPsfShapeSpin->value();
+    p.psfRoundness  = m_rlPsfAspectSpin->value();
+    p.psfAngle      = m_rlPsfRotSpin->value();
+
+    if (m_useCustom && !m_customKernel.empty()) {
+        p.psfSource    = PSFSource::Custom;
+        p.customKernel = m_customKernel.clone();
+    }
+
+    p.maxIter = (int)m_rlIterSpin->value();
+    QString reg = m_rlRegCombo->currentText();
+    if      (reg.contains("Tikhonov")) p.regType = 1;
+    else if (reg.contains("TV"))       p.regType = 2;
+    else                               p.regType = 0;
+
+    p.dering       = m_rlClipCheck->isChecked();
+    p.luminanceOnly= m_rlLumCheck->isChecked();
+    p.wienerK      = m_wienerNsrSpin->value();
+
+    p.lsRadialStep  = m_lsRadStepSpin->value();
+    p.lsAngularStep = m_lsAngStepSpin->value();
+    p.lsOp          = (m_lsOpCombo->currentText() == "Divide")
+                        ? LSOperator::Divide : LSOperator::Subtract;
+    p.lsBlend       = (m_lsBlendCombo->currentText() == "SoftLight")
+                        ? LSBlendMode::SoftLight : LSBlendMode::Screen;
+
+    p.vcRelax = m_vcRelaxSpin->value();
+    p.maxIter = (algo == "Van Cittert") ? (int)m_vcIterSpin->value() : p.maxIter;
+
+    return p;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// collectMFParams — collects parameters for Multi-Frame
+// ─────────────────────────────────────────────────────────────────────────────
+MFDeconvParams DeconvolutionDialog::collectMFParams() const
+{
+    MFDeconvParams p;
+
+    // Frame list
+    for (int i = 0; i < m_mfFrameList->count(); ++i)
+        p.framePaths.push_back(m_mfFrameList->item(i)->text());
+    p.outputPath = m_mfOutputEdit->text();
+
+    // Iteration
+    p.maxIters  = m_mfItersSpin->value();
+    p.minIters  = m_mfMinItersSpin->value();
+    p.kappa     = m_mfKappaSpin->value();
+    p.relax     = m_mfRelaxSpin->value();
+
+    // Loss
+    p.rho        = (m_mfRhoCombo->currentText() == "l2") ? MFLossType::L2 : MFLossType::Huber;
+    p.huberDelta = m_mfHuberDeltaSpin->value();
+
+    // Color mode
+    p.colorMode  = m_mfColorModeCombo->currentText();
+
+    // Seed
+    p.seedMode       = m_mfSeedRobustRadio->isChecked() ? MFSeedMode::Robust : MFSeedMode::Median;
+    p.bootstrapFrames= m_mfBootstrapSpin->value();
+    p.clipSigma      = m_mfClipSigmaSpin->value();
+
+    // Star masks
+    p.useStarMasks = m_mfStarMaskCheck->isChecked();
+    if (p.useStarMasks) {
+        p.starMaskCfg.threshSigma  = m_mfSmThreshSpin->value();
+        p.starMaskCfg.maxObjs      = m_mfSmMaxObjsSpin->value();
+        p.starMaskCfg.growPx       = m_mfSmGrowPxSpin->value();
+        p.starMaskCfg.ellipseScale = m_mfSmEllScaleSpin->value();
+        p.starMaskCfg.softSigma    = m_mfSmSoftSigmaSpin->value();
+        p.starMaskCfg.maxRadiusPx  = m_mfSmMaxRadiusSpin->value();
+        p.starMaskCfg.keepFloor    = m_mfSmKeepFloorSpin->value();
+        p.starMaskRefPath          = m_mfSmRefPathEdit->text();
+    }
+
+    // Variance maps
+    p.useVarianceMaps = m_mfVarMapCheck->isChecked();
+    if (p.useVarianceMaps) {
+        p.varmapCfg.bw          = m_mfVmBwSpin->value();
+        p.varmapCfg.bh          = m_mfVmBhSpin->value();
+        p.varmapCfg.smoothSigma = m_mfVmSmoothSpin->value();
+        p.varmapCfg.floor       = m_mfVmFloorSpin->value();
+    }
+
+    // Early stopping
+    p.earlyStop.tolUpdFloor  = m_mfEsTolUpdSpin->value();
+    p.earlyStop.tolRelFloor  = m_mfEsTolRelSpin->value();
+    p.earlyStop.earlyFrac    = m_mfEsEarlyFracSpin->value();
+    p.earlyStop.emaAlpha     = m_mfEsEmaAlphaSpin->value();
+    p.earlyStop.patience     = m_mfEsPatienceSpin->value();
+    p.earlyStop.minIters     = p.minIters;
+
+    // SR
+    p.superResFactor = m_mfSrFactorSpin->value();
+    if (p.superResFactor > 1) {
+        p.srSigma      = m_mfSrSigmaSpin->value();
+        p.srPsfOptIters= m_mfSrOptItersSpin->value();
+        p.srPsfOptLr   = m_mfSrOptLrSpin->value();
+    }
+
+    // Intermediates
+    p.saveIntermediate = m_mfSaveIntermCheck->isChecked();
+    p.saveEvery        = m_mfSaveEverySpin->value();
+
+    // Low-mem
+    p.lowMem = m_mfLowMemCheck->isChecked();
+
+    return p;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slot: single image
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::onPreview()
+{
+    if (!m_viewer) return;
+    if (!m_originalBuffer.isValid()) return;
+    
+    DeconvParams params = collectParams();
+    m_previewBuffer = m_originalBuffer;
+    
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    DeconvResult result = Deconvolution::apply(m_previewBuffer, params);
+    QApplication::restoreOverrideCursor();
+    
+    if (result.success) {
+        m_viewer->setBuffer(m_previewBuffer, m_previewBuffer.name(), false);
+    } else {
+        QMessageBox::critical(this, tr("Error"), tr("Deconvolution failed: ") + result.errorMsg);
+    }
+}
+
+void DeconvolutionDialog::onApply()
+{
+    if (!m_viewer) return;
+    if (!m_originalBuffer.isValid()) return;
+
+    DeconvParams params = collectParams();
+    m_previewBuffer = m_originalBuffer;
+    
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    DeconvResult result = Deconvolution::apply(m_previewBuffer, params);
+    QApplication::restoreOverrideCursor();
+    
+    if (result.success) {
+        m_viewer->pushUndo();
+        m_viewer->setBuffer(m_previewBuffer, m_previewBuffer.name(), true);
+        m_originalBuffer = m_previewBuffer;
+        m_previewBtn->setEnabled(false); // disable until change
+    } else {
+        QMessageBox::critical(this, tr("Error"), tr("Deconvolution failed: ") + result.errorMsg);
+    }
+}
+
+void DeconvolutionDialog::onUndo()
+{
+    if (!m_viewer || !m_originalBuffer.isValid()) return;
+    m_viewer->setBuffer(m_originalBuffer, m_originalBuffer.name(), true);
+}
+
+void DeconvolutionDialog::onClose() { close(); }
+
+void DeconvolutionDialog::onFinished()
+{
+    setControlsEnabled(true);
+}
+
+void DeconvolutionDialog::onAlgorithmChanged(const QString& algo)
+{
+    m_rlWidget->setVisible(algo == "Richardson-Lucy");
+    m_wienerWidget->setVisible(algo == "Wiener");
+    m_lsWidget->setVisible(algo == "Larson-Sekanina");
+    m_vcWidget->setVisible(algo == "Van Cittert");
+    bool showPsf = (algo == "Richardson-Lucy" || algo == "Wiener");
+    m_psfParamGroup->setVisible(showPsf);
+    m_customPsfBar->setVisible(showPsf && m_useCustom && !m_customKernel.empty());
+}
+
+void DeconvolutionDialog::updatePSFPreview()
+{
+    QString currentTab = m_tabs->tabText(m_tabs->currentIndex());
+    QString algo = m_algoCombo->currentText();
+    
+    if (currentTab == "Convolution") {
+        double r = m_convRadiusSpin->value();
+        double k = m_convShapeSpin->value();
+        double a = m_convAspectSpin->value();
+        double rot = m_convRotSpin->value();
+        displayPSF(r, k, a, rot);
+    } else if (currentTab == "Deconvolution" && (algo == "Richardson-Lucy" || algo == "Wiener")) {
+        if (m_useCustom && !m_customKernel.empty()) {
+            displayStellarPSF();
+        } else {
+            double r = m_rlPsfRadiusSpin->value();
+            double k = m_rlPsfShapeSpin->value();
+            double a = m_rlPsfAspectSpin->value();
+            double rot = m_rlPsfRotSpin->value();
+            displayPSF(r, k, a, rot);
+        }
+    } else {
+        m_convPSFLabel->clear();
+    }
+}
+
+void DeconvolutionDialog::onRunSEP()
+{
+    if (!m_originalBuffer.isValid()) return;
+    
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    int stampSize = m_sepStampSpin->value();
+    cv::Mat psf = Deconvolution::estimateEmpiricalPSF(m_originalBuffer, stampSize);
+    QApplication::restoreOverrideCursor();
+    
+    if (psf.empty()) {
+        QMessageBox::warning(this, tr("No Stars"), tr("Could not estimate PSF from the image."));
+        return;
+    }
+    
+    m_customKernel = psf.clone();
+    
+    // Convert cv::Mat to QImage for preview
+    cv::Mat u8;
+    double minVal, maxVal;
+    cv::minMaxLoc(psf, &minVal, &maxVal);
+    if (maxVal > 0) {
+        psf.convertTo(u8, CV_8U, 255.0 / maxVal);
+    } else {
+        psf.convertTo(u8, CV_8U);
+    }
+    
+    QImage img(u8.data, u8.cols, u8.rows, u8.step, QImage::Format_Grayscale8);
+    QPixmap pixmap = QPixmap::fromImage(img).scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    m_sepPsfPreview->setPixmap(pixmap);
+    m_sepUseBtn->setEnabled(true);
+}
+
+void DeconvolutionDialog::onUseStellarPSF()
+{
+    if (m_customKernel.empty()) return;
+    m_useCustom = true;
+    m_customPsfBar->setVisible(true);
+    updatePSFPreview();
+}
+
+void DeconvolutionDialog::setControlsEnabled(bool en)
+{
+    m_previewBtn->setEnabled(en);
+    m_pushBtn->setEnabled(en);
+    m_undoBtn->setEnabled(en);
+}
+
+void DeconvolutionDialog::displayPSF(double r, double k, double a, double rot) {
+    DeconvParams p;
+    p.psfFWHM = r;
+    p.psfBeta = k;
+    p.psfRoundness = a;
+    p.psfAngle = rot;
+    
+    int ksize = (int)(r * 3) | 1; // Enforce odd kernel size
+    if (ksize < 11) ksize = 11;
+    cv::Mat psf = Deconvolution::buildPSF(p, ksize);
+    if (psf.empty()) return;
+    
+    cv::Mat u8;
+    double maxVal;
+    cv::minMaxLoc(psf, nullptr, &maxVal);
+    if (maxVal > 0) psf.convertTo(u8, CV_8U, 255.0 / maxVal);
+    else psf.convertTo(u8, CV_8U);
+    
+    QImage qimg(u8.data, u8.cols, u8.rows, u8.step, QImage::Format_Grayscale8);
+    QPixmap pixmap = QPixmap::fromImage(qimg).scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    m_convPSFLabel->setPixmap(pixmap);
+}
+
+void DeconvolutionDialog::displayStellarPSF() {
+    if (m_customKernel.empty()) return;
+    cv::Mat u8;
+    double maxVal;
+    cv::minMaxLoc(m_customKernel, nullptr, &maxVal);
+    if (maxVal > 0) m_customKernel.convertTo(u8, CV_8U, 255.0 / maxVal);
+    else m_customKernel.convertTo(u8, CV_8U);
+    
+    QImage qimg(u8.data, u8.cols, u8.rows, u8.step, QImage::Format_Grayscale8);
+    QPixmap pixmap = QPixmap::fromImage(qimg).scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    m_convPSFLabel->setPixmap(pixmap);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slot: Multi-Frame Deconvolution
+// ─────────────────────────────────────────────────────────────────────────────
+void DeconvolutionDialog::onMFAddFrames()
+{
+    QStringList files = QFileDialog::getOpenFileNames(
+        this, tr("Select aligned FITS frames"),
+        QString(),
+        tr("FITS Files (*.fits *.fit *.fts);;All Files (*)"));
+    for (const QString& f : files) {
+        if (!f.isEmpty()) {
+            m_mfFrameList->addItem(f);
+            // Auto-populate output path from the first frame
+            if (m_mfOutputEdit->text().isEmpty()) {
+                QFileInfo fi(f);
+                m_mfOutputEdit->setText(fi.absolutePath() + "/" + fi.baseName() + "_MFDeconv.fits");
+            }
+        }
+    }
+    updateMFFrameCount();
+}
+
+void DeconvolutionDialog::onMFRemoveFrame()
+{
+    for (auto* item : m_mfFrameList->selectedItems()) delete item;
+    updateMFFrameCount();
+}
+
+void DeconvolutionDialog::onMFClearFrames()
+{
+    m_mfFrameList->clear();
+    updateMFFrameCount();
+}
+
+void DeconvolutionDialog::onMFMoveUp()
+{
+    int row = m_mfFrameList->currentRow();
+    if (row <= 0) return;
+    auto* item = m_mfFrameList->takeItem(row);
+    m_mfFrameList->insertItem(row - 1, item);
+    m_mfFrameList->setCurrentRow(row - 1);
+}
+
+void DeconvolutionDialog::onMFMoveDown()
+{
+    int row = m_mfFrameList->currentRow();
+    if (row < 0 || row >= m_mfFrameList->count() - 1) return;
+    auto* item = m_mfFrameList->takeItem(row);
+    m_mfFrameList->insertItem(row + 1, item);
+    m_mfFrameList->setCurrentRow(row + 1);
+}
+
+void DeconvolutionDialog::onMFBrowseOutput()
+{
+    QString f = QFileDialog::getSaveFileName(
+        this, tr("Output path"),
+        m_mfOutputEdit->text(),
+        tr("FITS Files (*.fits *.fit);;All Files (*)"));
+    if (!f.isEmpty()) m_mfOutputEdit->setText(f);
+}
+
+void DeconvolutionDialog::onMFStart()
+{
+    if (m_mfFrameList->count() == 0) {
+        QMessageBox::warning(this, tr("No frames"), tr("Add at least one FITS frame."));
+        return;
+    }
+    if (m_mfOutputEdit->text().isEmpty()) {
+        QMessageBox::warning(this, tr("Missing output"), tr("Specify an output path."));
+        return;
+    }
+
+    MFDeconvParams params = collectMFParams();
+    setMFControlsEnabled(false);
+    m_mfProgressBar->setValue(0);
+    m_mfLogEdit->clear();
+
+    m_mfWorker = new MFDeconvWorker(params, this);
+    connect(m_mfWorker, &MFDeconvWorker::statusMessage,
+            this, &DeconvolutionDialog::onMFWorkerStatus);
+    connect(m_mfWorker, &MFDeconvWorker::progressUpdated,
+            this, &DeconvolutionDialog::onMFWorkerProgress);
+    connect(m_mfWorker, &MFDeconvWorker::finished,
+            this, &DeconvolutionDialog::onMFWorkerFinished);
+    connect(m_mfWorker, &QThread::finished,
+            m_mfWorker, &QObject::deleteLater);
+
+    m_mfWorker->start();
+    m_mfStopBtn->setEnabled(true);
+}
+
+void DeconvolutionDialog::onMFStop()
+{
+    if (m_mfWorker) m_mfWorker->requestStop();
+    m_mfStopBtn->setEnabled(false);
+}
+
+void DeconvolutionDialog::onMFWorkerStatus(const QString& msg)
+{
+    // Show the last line in the label and add to the log
+    m_mfStatusLabel->setText(msg.left(120));
+    m_mfLogEdit->appendPlainText(msg);
+    // Scroll to the bottom
+    m_mfLogEdit->verticalScrollBar()->setValue(m_mfLogEdit->verticalScrollBar()->maximum());
+}
+
+void DeconvolutionDialog::onMFWorkerProgress(int percent, const QString& msg)
+{
+    m_mfProgressBar->setValue(percent);
+    if (!msg.isEmpty()) m_mfStatusLabel->setText(msg.left(120));
+}
+
+void DeconvolutionDialog::onMFWorkerFinished(bool ok, const QString& msg, const QString& out)
+{
+    setMFControlsEnabled(true);
+    m_mfStopBtn->setEnabled(false);
+    m_mfProgressBar->setValue(ok ? 100 : 0);
+    m_mfWorker = nullptr;
+
+    if (ok) {
+        m_mfStatusLabel->setText(tr("Completed: %1").arg(out));
+        QMessageBox::information(this, tr("MFDeconv"), tr("Deconvolution completed. Saved: %1").arg(out));
+    } else {
+        m_mfStatusLabel->setText(tr("Error: %1").arg(msg));
+        QMessageBox::critical(this, tr("MFDeconv"), msg);
+    }
+}
+
+void DeconvolutionDialog::onMFColorModeChanged(const QString& mode)
+{
+    // UI updates depending on color mode (e.g. SR tooltip)
+    m_mfSrGroup->setVisible(m_mfSrFactorSpin->value() > 1);
+}
+
+void DeconvolutionDialog::onMFSeedModeChanged()
+{
+    bool robust = m_mfSeedRobustRadio->isChecked();
+    m_mfBootstrapSpin->setEnabled(robust);
+    m_mfClipSigmaSpin->setEnabled(robust);
+}
+
+void DeconvolutionDialog::onMFRhoChanged(const QString& rho)
+{
+    bool isHuber = (rho == "huber");
+    m_mfHuberDeltaSpin->setEnabled(isHuber);
+    m_mfHuberDeltaLabel->setEnabled(isHuber);
+}
+
+void DeconvolutionDialog::onMFSuperResChanged(int r)
+{
+    m_mfSrGroup->setVisible(r > 1);
+}
+
+void DeconvolutionDialog::onMFStarMaskToggled(bool on)
+{
+    m_mfStarMaskGroup->setEnabled(on);
+}
+
+void DeconvolutionDialog::onMFVarMapToggled(bool on)
+{
+    m_mfVarMapGroup->setEnabled(on);
+}
+
+void DeconvolutionDialog::onMFSaveIntermediateToggled(bool on)
+{
+    m_mfSaveEverySpin->setEnabled(on);
+}
+
+void DeconvolutionDialog::onMFLowMemToggled(bool on)
+{
+    if (on)
+    m_mfLogEdit->appendPlainText(tr("[low_mem=True] Reduced LRU cache, prefetch disabled."));
+}
+
+void DeconvolutionDialog::setMFControlsEnabled(bool en)
+{
+    m_mfStartBtn->setEnabled(en);
+    m_mfAddBtn->setEnabled(en);
+    m_mfRemoveBtn->setEnabled(en);
+    m_mfClearBtn->setEnabled(en);
+    m_mfOutputEdit->setEnabled(en);
+    m_mfBrowseOutBtn->setEnabled(en);
+}
+
+void DeconvolutionDialog::updateMFFrameCount()
+{
+    int n = m_mfFrameList->count();
+    m_mfFrameCountLabel->setText(tr("%1 frames loaded").arg(n));
+}
+*/

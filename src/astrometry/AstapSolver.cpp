@@ -295,7 +295,7 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
 
         auto parseOutputs = [&]() -> bool {
             if (QFile::exists(tempIni)) {
-                bool ok = parseAstapIni(tempIni, res);
+                bool ok = parseAstapIni(tempIni, height, res);
                 if (ok) {
                     res.success = true;
                     return true;
@@ -315,7 +315,7 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
             }
 
             if (QFile::exists(tempWcs)) {
-                if (parseAstapWCS(tempWcs, res)) {
+                if (parseAstapWCS(tempWcs, height, res)) {
                     res.success = true;
                     return true;
                 }
@@ -444,7 +444,7 @@ static double parseFitsValue(const QString& content, const QString& key) {
     return 0.0;
 }
 
-bool AstapSolver::parseAstapWCS(const QString& wcsFile, NativeSolveResult& res) {
+bool AstapSolver::parseAstapWCS(const QString& wcsFile, int imageHeight, NativeSolveResult& res) {
     QFile file(wcsFile);
     if (!file.open(QIODevice::ReadOnly)) return false;
     
@@ -453,16 +453,18 @@ bool AstapSolver::parseAstapWCS(const QString& wcsFile, NativeSolveResult& res) 
     res.crval1 = parseFitsValue(content, "CRVAL1");
     res.crval2 = parseFitsValue(content, "CRVAL2");
     res.crpix1 = parseFitsValue(content, "CRPIX1");
-    res.crpix2 = parseFitsValue(content, "CRPIX2");
+    // ASTAP solved a TIFF, so it evaluated Y upside down relative to TStar.
+    // Convert back from bottom-up FITS Y to TStar's raw memory Y.
+    res.crpix2 = imageHeight - parseFitsValue(content, "CRPIX2") + 1.0; 
     res.cd[0][0] = parseFitsValue(content, "CD1_1");
-    res.cd[0][1] = parseFitsValue(content, "CD1_2");
+    res.cd[0][1] = -parseFitsValue(content, "CD1_2"); // dRA/dY inverted
     res.cd[1][0] = parseFitsValue(content, "CD2_1");
-    res.cd[1][1] = parseFitsValue(content, "CD2_2");
+    res.cd[1][1] = -parseFitsValue(content, "CD2_2"); // dDec/dY inverted
     
     return res.cd[0][0] != 0.0;
 }
 
-bool AstapSolver::parseAstapIni(const QString& iniFile, NativeSolveResult& res) {
+bool AstapSolver::parseAstapIni(const QString& iniFile, int imageHeight, NativeSolveResult& res) {
     QFile file(iniFile);
     if (!file.open(QIODevice::ReadOnly)) return false;
     
@@ -476,11 +478,12 @@ bool AstapSolver::parseAstapIni(const QString& iniFile, NativeSolveResult& res) 
     res.crval1 = parseFitsValue(content, "CRVAL1");
     res.crval2 = parseFitsValue(content, "CRVAL2");
     res.crpix1 = parseFitsValue(content, "CRPIX1");
-    res.crpix2 = parseFitsValue(content, "CRPIX2");
+    // Apply Y-axis reflection for ASTAP solving a raw TIFF image
+    res.crpix2 = imageHeight - parseFitsValue(content, "CRPIX2") + 1.0;
     res.cd[0][0] = parseFitsValue(content, "CD1_1");
-    res.cd[0][1] = parseFitsValue(content, "CD1_2");
+    res.cd[0][1] = -parseFitsValue(content, "CD1_2");
     res.cd[1][0] = parseFitsValue(content, "CD2_1");
-    res.cd[1][1] = parseFitsValue(content, "CD2_2");
+    res.cd[1][1] = -parseFitsValue(content, "CD2_2");
     
     return res.cd[0][0] != 0.0;
 }

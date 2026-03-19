@@ -538,10 +538,8 @@ set(TSTAR_SOURCES
     src/algos/RawEditorProcessor.h
     src/algos/SPCC.cpp
     src/algos/SPCC.h
-    src/algos/TGVDenoise.cpp
-    src/algos/TGVDenoise.h
-    src/algos/Deconvolution.cpp
-    src/algos/Deconvolution.h
+    # src/algos/Deconvolution.cpp
+    # src/algos/Deconvolution.h
     
     # Background
     src/background/BackgroundExtraction.cpp
@@ -652,10 +650,10 @@ set(TSTAR_SOURCES
     src/dialogs/PCCDistributionDialog.h
     src/dialogs/SPCCDialog.cpp
     src/dialogs/SPCCDialog.h
-    src/dialogs/TGVDenoiseDialog.cpp
-    src/dialogs/TGVDenoiseDialog.h
-    src/dialogs/DeconvolutionDialog.cpp
-    src/dialogs/DeconvolutionDialog.h
+    src/dialogs/AnnotationToolDialog.cpp
+    src/dialogs/AnnotationToolDialog.h
+    # src/dialogs/DeconvolutionDialog.cpp
+    # src/dialogs/DeconvolutionDialog.h
     src/dialogs/CurvesDialog.cpp
     src/dialogs/CurvesDialog.h
     src/dialogs/HeaderViewerDialog.cpp
@@ -731,6 +729,8 @@ set(TSTAR_SOURCES
     # Astrometry
     src/astrometry/SimbadSearcher.cpp
     src/astrometry/SimbadSearcher.h
+    src/astrometry/AnnotationEngine.cpp
+    src/astrometry/AnnotationEngine.h
     src/astrometry/HiPSClient.cpp
     src/astrometry/HiPSClient.h
     src/astrometry/TriangleMatcher.cpp

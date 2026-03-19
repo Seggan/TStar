@@ -83,7 +83,7 @@ void CatalogClient::sendGaia() {
         return;
     }
     
-    qWarning() << "[CatalogClient] Querying Gaia DR3 on mirror" << m_currentMirrorIndex
+    qInfo() << "[CatalogClient] Querying Gaia DR3 on mirror" << m_currentMirrorIndex
                << VIZIER_MIRRORS[m_currentMirrorIndex];
     
     QString baseUrl = VIZIER_MIRRORS[m_currentMirrorIndex];
@@ -92,7 +92,7 @@ void CatalogClient::sendGaia() {
     query.addQueryItem("-source", "I/355/gaiadr3"); 
     query.addQueryItem("-c", QString("%1 %2").arg(m_lastQueryRa).arg(m_lastQueryDec));
     query.addQueryItem("-c.rm", QString::number(m_lastQueryRadius * 60.0)); // arcmin
-    query.addQueryItem("-out", "RA_ICRS,DE_ICRS,Gmag,BPmag,RPmag,Teff");
+    query.addQueryItem("-out", "RA_ICRS,DE_ICRS,Gmag,BPmag,RPmag,teff_gspphot");
     query.addQueryItem("-out.max", "3000");
     query.addQueryItem("-sort", "Gmag");   // sort brightest-first so the 3000-star limit
                                            // retains the most useful stars for plate solving
@@ -166,14 +166,14 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                 QString fieldID = xml.attributes().value("ID").toString();
                 
                 // Common aliases
-                if (fieldName == "RAJ2000" || fieldID == "RAJ2000" || fieldName == "RA_ICRS") idxRA = currentFieldIndex;
-                else if (fieldName == "DEJ2000" || fieldID == "DEJ2000" || fieldName == "DE_ICRS") idxDec = currentFieldIndex;
-                else if (fieldName == "Bmag" || fieldID == "Bmag") idxB = currentFieldIndex;
-                else if (fieldName == "Vmag" || fieldID == "Vmag") idxV = currentFieldIndex;
-                else if (fieldName == "Teff" || fieldID == "Teff" || fieldName == "teff_gspphot") idxTeff = currentFieldIndex;
-                else if (fieldName == "Gmag" || fieldID == "Gmag") idxG = currentFieldIndex;
-                else if (fieldName == "BPmag" || fieldID == "BPmag") idxBP = currentFieldIndex;
-                else if (fieldName == "RPmag" || fieldID == "RPmag") idxRP = currentFieldIndex;
+                if (fieldName == "RAJ2000" || fieldID == "RAJ2000" || fieldName == "RA_ICRS" || fieldName.toLower() == "ra") idxRA = currentFieldIndex;
+                else if (fieldName == "DEJ2000" || fieldID == "DEJ2000" || fieldName == "DE_ICRS" || fieldName.toLower() == "dec") idxDec = currentFieldIndex;
+                else if (fieldName == "Bmag" || fieldID == "Bmag" || fieldName.toLower() == "b") idxB = currentFieldIndex;
+                else if (fieldName == "Vmag" || fieldID == "Vmag" || fieldName.toLower() == "v") idxV = currentFieldIndex;
+                else if (fieldName == "Teff" || fieldID == "Teff" || fieldName == "teff_gspphot" || fieldName.toLower().contains("teff")) idxTeff = currentFieldIndex;
+                else if (fieldName == "Gmag" || fieldID == "Gmag" || fieldName.toLower() == "g") idxG = currentFieldIndex;
+                else if (fieldName == "BPmag" || fieldID == "BPmag" || fieldName.toLower() == "bpmag" || fieldName.toLower() == "bp") idxBP = currentFieldIndex;
+                else if (fieldName == "RPmag" || fieldID == "RPmag" || fieldName.toLower() == "rpmag" || fieldName.toLower() == "rp") idxRP = currentFieldIndex;
                 
                 currentFieldIndex++;
             }
@@ -228,13 +228,17 @@ void CatalogClient::onReply(QNetworkReply* reply) {
 
                     if (idxB != -1 && idxV != -1 && b > 0.0 && v > 0.0) {
                         s.B_V = b - v;
+                        s.bp_rp = 0.0;
                     } else if (idxBP != -1 && idxRP != -1 && bp_mag > 0.0 && rp_mag > 0.0) {
                         const double bprp = bp_mag - rp_mag;
                         s.B_V = gaiaBpRpToBV(bprp);
+                        s.bp_rp = bprp;
                     } else if (idxBP != -1 && idxG != -1 && bp_mag > 0.0 && g_mag > 0.0) {
                         s.B_V = bp_mag - g_mag;
+                        s.bp_rp = 0.0; // Approximation
                     } else {
                         s.B_V = 0.65; // G2V fallback
+                        s.bp_rp = 0.0;
                     }
                     
                     if ((s.magV > 0 || s.teff > 0)) { // Valid star

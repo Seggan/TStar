@@ -91,7 +91,7 @@ bool WCSUtils::isParityFlipped(const Metadata& meta) {
     return det > 0.0;
 }
 
-void WCSUtils::tanProject(double ra, double dec, double ra0, double dec0,
+bool WCSUtils::tanProject(double ra, double dec, double ra0, double dec0,
                           double& xi, double& eta) {
     // Gnomonic (TAN) projection: world to native plane
     double ra_rad = ra * DEG_TO_RAD;
@@ -108,11 +108,11 @@ void WCSUtils::tanProject(double ra, double dec, double ra0, double dec0,
     
     double denom = sinD * sinD0 + cosD * cosD0 * cosDR;
     
-    if (std::abs(denom) < 1e-10) {
-        // Point is near or beyond 90 degrees from tangent point
+    if (denom <= 1e-10) {
+        // Point is beyond 90 degrees from tangent point (or too close to horizon)
         xi = 0;
         eta = 0;
-        return;
+        return false;
     }
     
     xi = (cosD * sinDR) / denom;
@@ -121,6 +121,7 @@ void WCSUtils::tanProject(double ra, double dec, double ra0, double dec0,
     // Convert from radians to degrees
     xi *= RAD_TO_DEG;
     eta *= RAD_TO_DEG;
+    return true;
 }
 
 void WCSUtils::tanDeproject(double xi, double eta, double ra0, double dec0,
@@ -260,7 +261,7 @@ bool WCSUtils::pixelToWorld(const Metadata& meta, double px, double py,
     }
     
     // Relative pixel coordinates (0-indexed to CRPIX)
-    double u = px - meta.crpix1 + 1.0;  // FITS is 1-indexed
+    double u = px - meta.crpix1 + 1.0; 
     double v = py - meta.crpix2 + 1.0;
     
     // Apply SIP distortion if present
@@ -291,7 +292,11 @@ bool WCSUtils::worldToPixel(const Metadata& meta, double ra, double dec,
     
     // Project to native plane
     double xi, eta;
-    tanProject(ra, dec, meta.ra, meta.dec, xi, eta);
+    if (!tanProject(ra, dec, meta.ra, meta.dec, xi, eta)) {
+        px = 0;
+        py = 0;
+        return false;
+    }
     
     // Invert CD matrix: [u, v] = CD^-1 * [xi, eta]
     double det = meta.cd1_1 * meta.cd2_2 - meta.cd1_2 * meta.cd2_1;
@@ -314,7 +319,7 @@ bool WCSUtils::worldToPixel(const Metadata& meta, double ra, double dec,
     }
     
     // Convert back to pixel coordinates (0-indexed)
-    px = u + meta.crpix1 - 1.0;  // FITS is 1-indexed
+    px = u + meta.crpix1 - 1.0; 
     py = v + meta.crpix2 - 1.0;
     
     return true;

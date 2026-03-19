@@ -119,8 +119,7 @@
 #include "dialogs/TemperatureTintDialog.h"
 #include "dialogs/MagentaCorrectionDialog.h"
 #include "dialogs/MultiscaleDecompDialog.h"
-#include "dialogs/TGVDenoiseDialog.h"
-#include "dialogs/DeconvolutionDialog.h"
+// #include "dialogs/DeconvolutionDialog.h"
 #include "dialogs/NarrowbandNormalizationDialog.h"
 #include "dialogs/NBtoRGBStarsDialog.h"
 #include <QResizeEvent>
@@ -594,8 +593,7 @@ MainWindow::MainWindow(QWidget *parent)
                     if (m_cropDlg) m_cropDlg->setViewer(v);
                     if (m_astroSpikeDlg) m_astroSpikeDlg->setViewer(v);
                     if (m_annotatorDlg) m_annotatorDlg->setViewer(v);
-                    if (m_tgvDenoiseDlg) m_tgvDenoiseDlg->setViewer(v);
-                    if (m_deconvolutionDlg) m_deconvolutionDlg->setViewer(v);
+                    // if (m_deconvolutionDlg) m_deconvolutionDlg->setViewer(v);
 
                     if (m_headerPanel) m_headerPanel->setMetadata(v->getBuffer().metadata());
                     
@@ -1247,12 +1245,11 @@ MainWindow::MainWindow(QWidget *parent)
     addMenuAction(utilMenu, tr("Wavescale HDR"), "", [this](){
         openWavescaleHDRDialog();
     });
-    addMenuAction(utilMenu, tr("TGV Denoise"), "", [this](){
-        openTGVDenoiseDialog();
-    });
+    /*
     addMenuAction(utilMenu, tr("Deconvolution"), "", [this](){
         openDeconvolutionDialog();
     });
+    */
     addMenuAction(utilMenu, tr("FITS Header Editor"), "", [this](){
          openHeaderEditorDialog();
     });
@@ -3407,28 +3404,7 @@ void MainWindow::openSPCCDialog() {
     });
 }
 
-void MainWindow::openTGVDenoiseDialog() {
-    ImageViewer* viewer = currentViewer();
-    if (!viewer) {
-        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
-        return;
-    }
-
-    if (m_tgvDenoiseDlg) {
-        m_tgvDenoiseDlg->raise();
-        m_tgvDenoiseDlg->activateWindow();
-        m_tgvDenoiseDlg->setViewer(viewer);
-        return;
-    }
-
-    auto dlg = new TGVDenoiseDialog(viewer, this, nullptr);
-    m_tgvDenoiseDlg = dlg;
-    dlg->setAttribute(Qt::WA_DeleteOnClose);
-
-    log(tr("Opening TGV Denoise..."), Log_Info, true);
-    setupToolSubwindow(nullptr, dlg, tr("TGV Denoise"));
-}
-
+/*
 void MainWindow::openDeconvolutionDialog() {
     ImageViewer* viewer = currentViewer();
     if (!viewer) {
@@ -3450,6 +3426,7 @@ void MainWindow::openDeconvolutionDialog() {
     log(tr("Opening Deconvolution..."), Log_Info, true);
     setupToolSubwindow(nullptr, dlg, tr("Deconvolution"));
 }
+*/
 
 void MainWindow::openCurvesDialog() {
     ImageViewer* viewer = currentViewer();
@@ -3971,10 +3948,29 @@ void MainWindow::openPCCDistributionDialog() {
 
 void MainWindow::setupSidebarTools() {
     if (m_sidebar) {
+        m_sidebar->addBottomAction(QIcon(":/images/astrometry.svg"), tr("Image Annotation"), [this](){
+            openAnnotationToolDialog();
+        });
         m_sidebar->addBottomAction(QIcon(":/images/color_management.svg"), tr("Color Profile Management"), [this](){
             openColorProfileDialog();
         });
     }
+}
+
+void MainWindow::openAnnotationToolDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
+        return;
+    }
+    
+    if (!m_annotatorDlg) {
+        m_annotatorDlg = new AnnotationToolDialog(this);
+    }
+    m_annotatorDlg->setViewer(viewer);
+    m_annotatorDlg->show();
+    m_annotatorDlg->raise();
+    m_annotatorDlg->activateWindow();
 }
 
 void MainWindow::openColorProfileDialog() {

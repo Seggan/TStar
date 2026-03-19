@@ -2620,15 +2620,22 @@ void ImageBuffer::reframeWCS(const QTransform& trans, [[maybe_unused]] int oldWi
     // [ cd11 cd12 ]   [ m11 m12 ]
     // [ cd21 cd22 ] * [ m21 m22 ]
     
+    // Chain Rule: d(World)/d(NewPixel) = d(World)/d(OldPixel) * d(OldPixel)/d(NewPixel)
+    // [ CD11_new  CD12_new ] = [ CD11_old  CD12_old ] * [ dx/dx'  dx/dy' ]
+    // [ CD21_new  CD22_new ]   [ CD21_old  CD22_old ]   [ dy/dx'  dy/dy' ]
+    //
+    // For inv mapping (x,y) = f(x',y'): 
+    // dx/dx' = n11, dx/dy' = n21, dy/dx' = n12, dy/dy' = n22
+    
     double old_cd11 = m_meta.cd1_1;
     double old_cd12 = m_meta.cd1_2;
     double old_cd21 = m_meta.cd2_1;
     double old_cd22 = m_meta.cd2_2;
     
-    m_meta.cd1_1 = old_cd11 * inv.m11() + old_cd12 * inv.m21();
-    m_meta.cd1_2 = old_cd11 * inv.m12() + old_cd12 * inv.m22();
-    m_meta.cd2_1 = old_cd21 * inv.m11() + old_cd22 * inv.m21();
-    m_meta.cd2_2 = old_cd21 * inv.m12() + old_cd22 * inv.m22();
+    m_meta.cd1_1 = old_cd11 * inv.m11() + old_cd12 * inv.m12();
+    m_meta.cd1_2 = old_cd11 * inv.m21() + old_cd12 * inv.m22();
+    m_meta.cd2_1 = old_cd21 * inv.m11() + old_cd22 * inv.m12();
+    m_meta.cd2_2 = old_cd21 * inv.m21() + old_cd22 * inv.m22();
 
     syncWcsToHeaders();
 }
@@ -3003,14 +3010,12 @@ void ImageBuffer::cropRotated(float cx, float cy, float w, float h, float angleD
     m_height = outH;
     m_data = newData;
     
-    // WCS Transform: maps from new image coordinates to source image coordinates
-    // Sequence: translate to center of source, rotate, translate to center of destination
-    // This is the FORWARD mapping: dest_pixel -> source_pixel
-    // reframeWCS will invert it for the CD matrix, which is what we want
+    // WCS Transform: maps from source image coordinates to destination coordinates
+    // reframeWCS(trans) expects trans to be (Source -> Dest)
     QTransform wcsTrans;
-    wcsTrans.translate(cx, cy);          // Center at source center
-    wcsTrans.rotate(-angleDegrees);      // Rotate by negative angle (inverse rotation)
-    wcsTrans.translate(-halfW, -halfH);  // Translate from destination center
+    wcsTrans.translate(halfW, halfH);   // Center at dest center
+    wcsTrans.rotate(angleDegrees);      // Rotate forward 
+    wcsTrans.translate(-cx, -cy);       // From source center
     
     reframeWCS(wcsTrans, oldW, oldH);
     

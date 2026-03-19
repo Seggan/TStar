@@ -27,8 +27,8 @@ private:
     bool terminateAstapProcess(QProcess& process, int terminateWaitMs);
     QString getAstapExecutable();
     QString getAstapDatabasePath();
-    bool parseAstapWCS(const QString& wcsFile, NativeSolveResult& res);
-    bool parseAstapIni(const QString& iniFile, NativeSolveResult& res);
+    bool parseAstapWCS(const QString& wcsFile, int imageHeight, NativeSolveResult& res);
+    bool parseAstapIni(const QString& iniFile, int imageHeight, NativeSolveResult& res);
 
     QMutex m_processMutex;
     QProcess* m_runningProcess = nullptr;

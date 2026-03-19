@@ -456,7 +456,7 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars) {
     for(const auto& s : detected) {
         MatchStar ms;
         ms.x = s.x - imgCenterX;               // center X
-        ms.y = imgCenterY - s.y;                // center + flip Y (FITS convention: Y up = North)
+        ms.y = s.y - imgCenterY;               // center Y (match FITS raw memory orientation logic)
         ms.mag = -2.5 * std::log10(std::max(s.flux, 1.0)); // Instrumental magnitude
         imgMatchStars.push_back(ms);
     }

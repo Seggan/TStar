@@ -1,5 +1,6 @@
 #include "AnnotationOverlay.h"
 #include "ImageViewer.h"
+#include "../astrometry/WCSUtils.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <cmath>
@@ -63,7 +64,7 @@ void AnnotationOverlay::setDrawMode(DrawMode mode) {
 }
 
 void AnnotationOverlay::setWCSObjectsVisible(bool visible) {
-    m_wcsVisible = visible;
+    m_wcsObjectsVisible = visible;
     update();
 }
 
@@ -109,10 +110,172 @@ void AnnotationOverlay::placeTextAt(const QPointF& imagePos, const QString& text
     update();
 }
 
+void AnnotationOverlay::setWCSGridVisible(bool visible) {
+    if (m_wcsGridVisible != visible) {
+        m_wcsGridVisible = visible;
+        update();
+    }
+}
+
+void AnnotationOverlay::drawWCSGrid(QPainter& painter) {
+    if (!m_viewer) return;
+    auto meta = m_viewer->getBuffer().metadata();
+    if (!WCSUtils::hasValidWCS(meta)) return;
+
+    painter.save();
+    QPen gridPen(QColor(100, 150, 255, 120), 1, Qt::DashLine);
+    painter.setPen(gridPen);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // Estimate field of view to determine grid step size
+    double fovX, fovY;
+    int w = m_viewer->getBuffer().width();
+    int h = m_viewer->getBuffer().height();
+    if (!WCSUtils::getFieldOfView(meta, w, h, fovX, fovY)) {
+        painter.restore();
+        return;
+    }
+
+    double range = std::sqrt(fovX * fovX + fovY * fovY) * 0.5;
+    double step;
+
+    // DEC step logic
+    if (range > 16.0) step = 8.0;
+    else if (range > 8.0) step = 4.0;
+    else if (range > 4.0) step = 2.0;
+    else if (range > 2.0) step = 1.0;
+    else if (range > 1.0) step = 0.5;
+    else if (range > 0.5) step = 0.25;
+    else if (range > 0.3) step = 1.0/6.0;
+    else step = 1.0/12.0;
+
+    double centerRa, centerDec;
+    WCSUtils::pixelToWorld(meta, w/2.0, h/2.0, centerRa, centerDec);
+    
+    // RA step logic: scale by cos(dec) and snap to "nice" values
+    static const double ra_values[] = { 45, 30, 15, 10, 7.5, 5, 3.75, 2.5, 1.5, 1.25, 1, 0.75, 0.5, 0.25, 0.16666, 0.125, 0.08333, 0.0625, 0.04166, 0.025, 0.02083 };
+    double decRad = centerDec * M_PI / 180.0;
+    double step2 = std::min(45.0, step / (std::cos(decRad) + 0.000001));
+    double stepRA = 45.0;
+    for (double val : ra_values) {
+        if (val < step2) {
+            stepRA = val;
+            break;
+        }
+    }
+
+    // Determine RA and DEC bounds of the image
+    double cRa[4], cDec[4];
+    WCSUtils::pixelToWorld(meta, 0, 0, cRa[0], cDec[0]);
+    WCSUtils::pixelToWorld(meta, w, 0, cRa[1], cDec[1]);
+    WCSUtils::pixelToWorld(meta, w, h, cRa[2], cDec[2]);
+    WCSUtils::pixelToWorld(meta, 0, h, cRa[3], cDec[3]);
+
+    double minRa = cRa[0], maxRa = cRa[0];
+    double minDec = cDec[0], maxDec = cDec[0];
+    for (int i=1; i<4; ++i) {
+        if (cRa[i] < minRa) minRa = cRa[i];
+        if (cRa[i] > maxRa) maxRa = cRa[i];
+        if (cDec[i] < minDec) minDec = cDec[i];
+        if (cDec[i] > maxDec) maxDec = cDec[i];
+    }
+
+    if (maxRa - minRa > 180.0) { minRa = 0.0; maxRa = 360.0; }
+    minRa -= stepRA; maxRa += stepRA;
+    minDec -= step; maxDec += step;
+    minDec = std::max(-90.0, minDec);
+    maxDec = std::min(90.0, maxDec);
+    
+    QFont font = painter.font();
+    font.setPointSize(8);
+    painter.setFont(font);
+
+    auto drawPath = [&](bool isRA, double constantVal, double startVal, double endVal) {
+        QPainterPath path;
+        bool first = true;
+        int pts = 50;
+        QPointF borderPoint;
+        bool foundBorder = false;
+
+        for (int i = 0; i <= pts; ++i) {
+            double v = startVal + (endVal - startVal) * (i / (double)pts);
+            double ra = isRA ? constantVal : v;
+            double dec = isRA ? v : constantVal;
+            
+            double px, py;
+            if (WCSUtils::worldToPixel(meta, ra, dec, px, py)) {
+                QPointF widgetPt = mapFromImage(QPointF(px, py));
+                if (first) {
+                    path.moveTo(widgetPt);
+                    first = false;
+                } else {
+                    path.lineTo(widgetPt);
+                }
+
+                // Identify if this point is near the widget border for label placement
+                if (!foundBorder) {
+                    if (widgetPt.x() > 5 && widgetPt.x() < width() - 50 &&
+                        widgetPt.y() > 5 && widgetPt.y() < height() - 20) {
+                        borderPoint = widgetPt;
+                        foundBorder = true;
+                    }
+                }
+            }
+        }
+        painter.drawPath(path);
+        
+        // Draw coordinate label
+        if (foundBorder && m_viewer->zoomFactor() > 0.05) {
+            QString labelText;
+            if (isRA) {
+                double hVal = constantVal / 15.0;
+                int hours = (int)hVal;
+                double mRemain = (hVal - hours) * 60.0;
+                int mins = (int)mRemain;
+                if (stepRA < 0.25) { // Under 1 minute precision
+                    int secs = (int)((mRemain - mins) * 60.0 + 0.5);
+                    labelText = QString("%1h %2m %3s").arg(hours).arg(mins, 2, 10, QChar('0')).arg(secs, 2, 10, QChar('0'));
+                } else {
+                    labelText = QString("%1h %2m").arg(hours).arg(mins, 2, 10, QChar('0'));
+                }
+            } else {
+                if (step < 0.1) {
+                    double arcmin = std::abs(constantVal - (int)constantVal) * 60.0;
+                    labelText = QString("%1° %2'").arg((int)constantVal).arg((int)(arcmin + 0.5), 2, 10, QChar('0'));
+                } else {
+                    labelText = QString("%1°").arg(constantVal, 0, 'f', 1);
+                }
+            }
+            painter.setPen(QColor(150, 200, 255, 200));
+            painter.drawText(QRectF(borderPoint.x() + 3, borderPoint.y() + 3, 100, 20), Qt::AlignLeft | Qt::AlignTop, labelText);
+            painter.setPen(gridPen);
+        }
+    };
+
+    // Draw Meridians (RA)
+    double startRa = std::floor(minRa / stepRA) * stepRA;
+    for (double ra = startRa; ra <= maxRa; ra += stepRA) {
+        double r = ra;
+        while (r < 0) r += 360.0;
+        while (r >= 360.0) r -= 360.0;
+        drawPath(true, r, minDec, maxDec);
+    }
+
+    // Draw Parallels (Dec)
+    double startDec = std::floor(minDec / step) * step;
+    for (double dec = startDec; dec <= maxDec; dec += step) {
+        drawPath(false, dec, minRa, maxRa);
+    }
+
+    painter.restore();
+}
+
 QPointF AnnotationOverlay::mapToImage(const QPointF& widgetPos) const {
     if (!m_viewer) return widgetPos;
     return m_viewer->mapToScene(widgetPos.toPoint());
 }
+
+// Removed QPoint AnnotationOverlay::imageToWidget(const QPointF& imgPt) const
 
 QPointF AnnotationOverlay::mapFromImage(const QPointF& imagePos) const {
     if (!m_viewer) return imagePos;
@@ -122,17 +285,22 @@ QPointF AnnotationOverlay::mapFromImage(const QPointF& imagePos) const {
 void AnnotationOverlay::paintEvent(QPaintEvent* event) {
     Q_UNUSED(event);
     
+    if (!m_viewer) return; // Added check
     // Skip drawing if viewer is processing (to prevent crashes during stretch/resize)
     // Check the property that gets set during heavy operations
-    if (property("isProcessing").toBool() || !m_viewer) {
+    if (property("isProcessing").toBool()) { // Modified condition
         return;
     }
     
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
+    if (m_wcsGridVisible && WCSUtils::hasValidWCS(m_viewer->getBuffer().metadata())) {
+        drawWCSGrid(painter);
+    }
+    
     // Draw WCS objects if visible
-    if (m_wcsVisible) {
+    if (m_wcsObjectsVisible) {
         drawWCSObjects(painter);
     }
 
@@ -233,253 +401,358 @@ void AnnotationOverlay::drawAnnotation(QPainter& painter, const Annotation& ann)
 }
 
 void AnnotationOverlay::drawWCSObjects(QPainter& painter) {
+    if (!m_viewer) return;
+    
     QFont font = painter.font();
+    font.setPointSize(10);
+    painter.setFont(font);
+
+    auto meta = m_viewer->getBuffer().metadata();
+
     QList<QRectF> occupiedRects;
-    for (const auto& obj : m_wcsObjects) {
-        // Map Start Point
-        QPointF imagePos(obj.pixelX, obj.pixelY);
-        QPointF widgetPos = mapFromImage(imagePos);
+    int imgW = m_viewer->getBuffer().width();
+    int imgH = m_viewer->getBuffer().height();
+
+    for (const CatalogObject& obj : m_wcsObjects) {
+        double px, py;
+        if (!WCSUtils::worldToPixel(meta, obj.ra, obj.dec, px, py)) continue;
         
-        // Check if visible (broad check for optimization)
-        if (!rect().contains(widgetPos.toPoint()) && !obj.isLine) {
-             if (widgetPos.x() < -1000 || widgetPos.x() > width()+1000) continue;
+        // --- STRICT IMAGE CLIPPING ---
+        if (!obj.isLine) {
+            // Standard objects must be inside the image buffer
+            if (px < 0 || px >= imgW || py < 0 || py >= imgH) continue;
         }
+
+        QPointF imagePos(px, py);
+        QPointF widgetPos = mapFromImage(imagePos);
         
         // --- DRAWING LOGIC ---
         
         if (obj.isLine) {
             // CONSTELLATION LINE
-            QPointF imagePosEnd(obj.pixelXEnd, obj.pixelYEnd);
+            double pxEnd, pyEnd;
+            if (!WCSUtils::worldToPixel(meta, obj.raEnd, obj.decEnd, pxEnd, pyEnd)) continue;
+            
+            QPointF imagePosEnd(pxEnd, pyEnd);
             QPointF widgetPosEnd = mapFromImage(imagePosEnd);
             
-            // Draw Line
+            // Clip to viewport to avoid drawing outside the image area
+            painter.save();
+            QPointF p0 = mapFromImage(QPointF(0, 0));
+            QPointF p1 = mapFromImage(QPointF(imgW, imgH));
+            painter.setClipRect(QRectF(p0, p1).normalized());
             painter.setPen(QPen(QColor(100, 150, 255, 180), 2)); // Light Blue, semi-transparent
             painter.drawLine(widgetPos, widgetPosEnd);
-            continue; // Skip the rest (label/circle)
+            painter.restore();
+            continue; 
         }
         
         // --- STANDARD OBJECT DRAWING ---
         
         // Color based on catalog type
         QColor color = Qt::cyan;
-        if (obj.longType == "Messier") color = QColor(255, 220, 100); // Yellow-orange
-        else if (obj.longType == "NGC") color = QColor(100, 200, 255); // Light blue
-        else if (obj.longType == "IC") color = QColor(200, 150, 255); // Light purple
-        else if (obj.longType == "Sh2") color = QColor(255, 100, 100); // Reddish
-        else if (obj.longType == "LdN") color = QColor(200, 200, 200); // Greyish
-        else if (obj.longType == "Star") color = QColor(255, 255, 200); // White-Yellow
-        else if (obj.type == "Constellation") color = QColor(100, 150, 255); 
+        if (obj.longType == "Messier") color = QColor(255, 200, 50);   // Golden Yellow
+        else if (obj.longType == "NGC") color = QColor(80, 180, 255);  // Sky Blue
+        else if (obj.longType == "IC") color = QColor(200, 120, 255);  // Purple
+        else if (obj.longType == "Sh2") color = QColor(255, 80, 80);   // Soft Red
+        else if (obj.longType == "LdN") color = QColor(160, 160, 160); // Dark Grey
+        else if (obj.longType == "Star") color = QColor(255, 255, 220); // Warm White
+        else if (obj.type == "Constellation") color = QColor(120, 160, 255); // Blue-ish
 
         // Draw marker
-        double finalRadiusScreen = 0;
-        
+        double finalRadiusScreen = 3.0; // Point source default
         if (obj.diameter > 0) {
-            double pixScale = m_viewer ? m_viewer->pixelScale() : 1.0;
-            if (pixScale <= 0) pixScale = 1.0;
-            
-            // obj.diameter is in arcmin -> arcsec = * 60
-            // radius in arcsec = diameter * 30
-            // radius in pixels (image coords) = radius_arcsec / pixScale
-            double radiusImagePx = (obj.diameter * 30.0) / pixScale;
-            
-            // Convert to screen pixels by applying zoom
-            double zoom = m_viewer ? m_viewer->zoomFactor() : 1.0;
-            finalRadiusScreen = radiusImagePx * zoom;
-        } else {
-            // Point source default
-            finalRadiusScreen = 3.0;
+            double pixScale = m_viewer->pixelScale();
+            if (pixScale > 0) {
+                double radiusImagePx = (obj.diameter * 30.0) / pixScale;
+                finalRadiusScreen = radiusImagePx * m_viewer->zoomFactor();
+                
+                QRectF markerRect(widgetPos.x() - finalRadiusScreen, widgetPos.y() - finalRadiusScreen, 
+                                  finalRadiusScreen * 2, finalRadiusScreen * 2);
+                QPointF p0_v = mapFromImage(QPointF(0, 0));
+                QPointF p1_v = mapFromImage(QPointF(imgW, imgH));
+                QRectF imgRectWidget = QRectF(p0_v, p1_v).normalized();
+                
+                if (imgRectWidget.contains(markerRect.center()) && !imgRectWidget.contains(markerRect)) {
+                    // Object is partially clipped - always reduce by 10%
+                    finalRadiusScreen *= 0.9;
+                }
+            }
         }
         
-             QString labelText = (obj.longType == "Star") ? formatStarName(obj.name) : obj.name;
-             bool showLabel = !labelText.isEmpty();
-             
-             // Filter star labels by zoom
-             if (obj.longType == "Star" && m_viewer->zoomFactor() <= 0.5) showLabel = false;
-             
-             // 1. Draw Marker (Circle or Crosshair)
-             if (finalRadiusScreen > 5.0) {
-                 painter.setPen(QPen(color, 1)); // Thin 1px
-                 painter.setBrush(Qt::NoBrush);
-                 painter.drawEllipse(widgetPos, finalRadiusScreen, finalRadiusScreen);
-             } else {
-                 double gap = (obj.longType=="Star") ? 3.0 : 5.0;
-                 double len = (obj.longType=="Star") ? 7.0 : 10.0;
-                 painter.setPen(QPen(color, 1)); // Thin 1px
-                 
-                 // Crosshair with gap
-                 painter.drawLine(widgetPos - QPointF(0, gap + len), widgetPos - QPointF(0, gap));
-                 painter.drawLine(widgetPos + QPointF(0, gap), widgetPos + QPointF(0, gap + len));
-                 painter.drawLine(widgetPos - QPointF(gap + len, 0), widgetPos - QPointF(gap, 0));
-                 painter.drawLine(widgetPos + QPointF(gap, 0), widgetPos + QPointF(gap + len, 0));
-             }
+        bool isConstellationName = (obj.longType == "ConstellationName");
+        
+        if (obj.longType == "Star") {
+            finalRadiusScreen = 3.0; // Force cross-hair for stars
+        }        // --- LABEL PREPARATION ---
+        QString labelText;
+        if (obj.longType == "Star") {
+            if (!obj.alias.isEmpty()) {
+                labelText = obj.alias.split('/').first();
+            } else {
+                QString namePart = formatStarName(obj.name);
+                bool isBayer = (namePart.length() > 0 && (unsigned short)namePart.at(0).unicode() >= 0x0370 && (unsigned short)namePart.at(0).unicode() <= 0x03FF);
+                bool isFlamsteed = !namePart.isEmpty() && namePart.at(0).isDigit() && namePart.contains(' ');
+                
+                if (isBayer || isFlamsteed) {
+                    labelText = namePart;
+                } else {
+                    labelText = ""; // Hide catalog numbers
+                }
+            }
+        } else if (isConstellationName) {
+            labelText = obj.name;
+        } else {
+            // "gli alis SOLO PER LE STELLE NON ANCHE PER GLI ALTRI OGGETTI DA CATALOGO"
+            labelText = obj.name;
+        }
 
-             // 2. Draw Label (if enabled)
-             if (showLabel) {
-                 QFontMetricsF fm(painter.font());
-                 QRectF textRect = fm.boundingRect(labelText);
-                 double labelW = textRect.width();
-                 double labelH = textRect.height();
-                 
-                 if (finalRadiusScreen > 5.0) {
-                     double angle = -M_PI / 4.0; 
-                     
-                     auto getCirclePoint = [&](double r, double a) {
-                         return widgetPos + QPointF(r * std::cos(a), r * std::sin(a));
-                     };
-                     
-                     QPointF circleEdge = getCirclePoint(finalRadiusScreen, angle);
-                     QPointF textPos = getCirclePoint(finalRadiusScreen * 1.3, angle); 
-                     
-                     painter.setPen(QPen(color, 1));
-                     painter.drawLine(circleEdge, textPos);
-                     
-                     QPointF labelOrigin = textPos + QPointF(2, -2);
-                     painter.setPen(color);
-                     painter.drawText(labelOrigin, labelText);
-                     
-                     occupiedRects.append(QRectF(labelOrigin.x(), labelOrigin.y() - 15, labelW, labelH));
-                 } else {
-                     // Collison-aware placement for Small Objects
-                     double offset = 15.0;
-                     struct Pos { QPointF p; QRectF r; };
-                     std::vector<Pos> candidates;
-                     
-                     // Right
-                     QPointF pRight = widgetPos + QPointF(offset, labelH/2 - 2); 
-                     candidates.push_back({ pRight, QRectF(pRight.x(), pRight.y() - labelH + 2, labelW, labelH) });
-                     // Top
-                     QPointF pTop = widgetPos + QPointF(-labelW/2, -offset);
-                     candidates.push_back({ pTop, QRectF(pTop.x(), pTop.y() - labelH + 2, labelW, labelH) });
-                     // Left
-                     QPointF pLeft = widgetPos + QPointF(-offset - labelW, labelH/2 - 2);
-                     candidates.push_back({ pLeft, QRectF(pLeft.x(), pLeft.y() - labelH + 2, labelW, labelH) });
-                     // Bottom
-                     QPointF pBottom = widgetPos + QPointF(-labelW/2, offset + labelH);
-                     candidates.push_back({ pBottom, QRectF(pBottom.x(), pBottom.y() - labelH + 2, labelW, labelH) });
-                     
-                     int bestIdx = 0;
-                     for (int i=0; i<(int)candidates.size(); ++i) {
-                         bool collision = false;
-                         for (const auto& occupied : occupiedRects) {
-                             if (candidates[i].r.intersects(occupied)) {
-                                 collision = true;
-                                 break;
-                             }
-                         }
-                         if (!collision) {
-                             bestIdx = i;
-                             break;
-                         }
-                     }
-                     
-                     painter.setPen(color);
-                     painter.drawText(candidates[bestIdx].p, labelText);
-                     occupiedRects.append(candidates[bestIdx].r);
-                 }
-             }
+        bool showLabel = !labelText.isEmpty();
+        // Skip minor stars at low zoom, but keep proper names
+        if (obj.longType == "Star" && m_viewer->zoomFactor() <= 0.4 && obj.alias.isEmpty()) {
+            showLabel = false;
+        }
+        
+        // 1. Draw Marker (skip for constellation names)
+        if (!isConstellationName && finalRadiusScreen > 5.0) {
+            painter.setPen(QPen(color, 1));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawEllipse(widgetPos, finalRadiusScreen, finalRadiusScreen);
+        } else {
+            double gap = (obj.longType=="Star") ? 3.0 : 5.0;
+            double len = (obj.longType=="Star") ? 7.0 : 10.0;
+            painter.setPen(QPen(color, 1));
+            painter.drawLine(widgetPos - QPointF(0, gap + len), widgetPos - QPointF(0, gap));
+            painter.drawLine(widgetPos + QPointF(0, gap), widgetPos + QPointF(0, gap + len));
+            painter.drawLine(widgetPos - QPointF(gap + len, 0), widgetPos - QPointF(gap, 0));
+            painter.drawLine(widgetPos + QPointF(gap, 0), widgetPos + QPointF(gap + len, 0));
+        }
+
+        // 2. Draw Label
+        if (showLabel) {
+            QFontMetricsF fm(painter.font());
+            QRectF textRect = fm.boundingRect(labelText);
+            double labelW = textRect.width();
+            double labelH = textRect.height();
+            
+            if (finalRadiusScreen > 5.0) {
+                double angle = -M_PI / 4.0; 
+                auto getCirclePoint = [&](double r, double a) {
+                    return widgetPos + QPointF(r * std::cos(a), r * std::sin(a));
+                };
+                
+                QPointF circleEdge = getCirclePoint(finalRadiusScreen, angle);
+                QPointF textPos = getCirclePoint(finalRadiusScreen * 1.3, angle); 
+                
+                // EDGE AWARENESS: if textPos is out of widget bounds, flip angle 180 deg
+                if (textPos.x() < 20 || textPos.x() > width() - labelW - 20 || 
+                    textPos.y() < 20 || textPos.y() > height() - 20) {
+                    angle += M_PI; 
+                    circleEdge = getCirclePoint(finalRadiusScreen, angle);
+                    textPos = getCirclePoint(finalRadiusScreen * 1.3, angle);
+                }
+
+                painter.setPen(QPen(color, 1));
+                painter.drawLine(circleEdge, textPos);
+                
+                QPointF labelOrigin = textPos + QPointF(2, -2);
+                
+                // Edge push-in
+                if (labelOrigin.x() < 5) labelOrigin.setX(5);
+                if (labelOrigin.x() > width() - labelW - 5) labelOrigin.setX(width() - labelW - 5);
+                if (labelOrigin.y() < 15) labelOrigin.setY(15);
+                if (labelOrigin.y() > height() - 5) labelOrigin.setY(height() - 5);
+
+                painter.setPen(color);
+                painter.drawText(labelOrigin, labelText);
+                occupiedRects.append(QRectF(labelOrigin.x(), labelOrigin.y() - 15, labelW, labelH));
+            } else {
+                double offset = 15.0;
+                struct Pos { QPointF p; QRectF r; };
+                std::vector<Pos> candidates;
+                
+                QPointF pRight = widgetPos + QPointF(offset, labelH/2 - 2); 
+                candidates.push_back({ pRight, QRectF(pRight.x(), pRight.y() - labelH + 2, labelW, labelH) });
+                QPointF pTop = widgetPos + QPointF(-labelW/2, -offset);
+                candidates.push_back({ pTop, QRectF(pTop.x(), pTop.y() - labelH + 2, labelW, labelH) });
+                QPointF pLeft = widgetPos + QPointF(-offset - labelW, labelH/2 - 2);
+                candidates.push_back({ pLeft, QRectF(pLeft.x(), pLeft.y() - labelH + 2, labelW, labelH) });
+                QPointF pBottom = widgetPos + QPointF(-labelW/2, offset + labelH);
+                candidates.push_back({ pBottom, QRectF(pBottom.x(), pBottom.y() - labelH + 2, labelW, labelH) });
+                
+                Pos best = candidates[0];
+                bool found = false;
+                for (const auto& cand : candidates) {
+                    bool collision = false;
+                    if (cand.r.left() < 5 || cand.r.right() > width() - 5 || 
+                        cand.r.top() < 5 || cand.r.bottom() > height() - 5) {
+                        collision = true;
+                    }
+                    if (!collision) {
+                        for (const auto& occupied : occupiedRects) {
+                            if (cand.r.intersects(occupied)) { collision = true; break; }
+                        }
+                    }
+                    if (!collision) { best = cand; found = true; break; }
+                }
+                
+                if (!found) {
+                    if (best.r.left() < 5) best.p.rx() += (5 - best.r.left());
+                    if (best.r.right() > width() - 5) { best.p.rx() -= (best.r.right() - (width() - 5)); best.r.moveRight(width() - 5); }
+                    if (best.r.top() < 5) best.p.ry() += (5 - best.r.top());
+                    if (best.r.bottom() > height() - 5) { best.p.ry() -= (best.r.bottom() - (height() - 5)); best.r.moveBottom(height() - 5); }
+                }
+
+                painter.setPen(color);
+                painter.drawText(best.p, labelText);
+                occupiedRects.append(best.r);
+            }
+        }
     }
 }
 
 
 void AnnotationOverlay::renderToPainter(QPainter& painter, const QRectF& imageRect) {
+    if (!m_viewer) return; 
+    
     // Adaptive scale for burning text/lines into high-res images
     // Base reference: 1000px height.
     double scaleM = std::max(1.0, imageRect.height() / 1000.0);
     
     // Setup Font
     QFont font = painter.font();
-    font.setPointSizeF(12.0 * scaleM); 
+    font.setPointSizeF(11.0 * scaleM); 
     painter.setFont(font);
 
-    double pixScale = m_viewer ? m_viewer->pixelScale() : 1.0;
+    double pixScale = m_viewer->pixelScale();
     if (pixScale <= 0) pixScale = 1.0;
 
-    // --- DRAW WCS OBJECTS (Now empty, but kept for logic consistency) ---
+    // --- DRAW WCS OBJECTS ---
     for (const auto& obj : m_wcsObjects) {
         // Direct Image Coordinates
         QPointF imagePos(obj.pixelX, obj.pixelY);
         
-        // Bounds heck (relaxed)
-        if (!imageRect.contains(imagePos) && !obj.isLine) {
-            // Allow some margin for labels
-            if (imagePos.x() < -imageRect.width()*0.5 || imagePos.x() > imageRect.width()*1.5) continue;
+        // Basic coordinate fetch for markers
+        if (!obj.isLine) {
+            // We use the pre-calculated pixelX/pixelY or recalculate for safety?
+            // Re-calculate for export is safer as it uses the current buffer metadata
+            double tx, ty;
+            if (!WCSUtils::worldToPixel(m_viewer->getBuffer().metadata(), obj.ra, obj.dec, tx, ty)) continue;
+            imagePos = QPointF(tx, ty);
+            
+            // Clipping for markers (don't draw if far outside)
+            if (tx < -100 || tx > imageRect.width() + 100 || ty < -100 || ty > imageRect.height() + 100) continue;
         }
 
         // --- DRAWING LOGIC ---
-        
         if (obj.isLine) {
-            QPointF imagePosEnd(obj.pixelXEnd, obj.pixelYEnd);
+            double tx1, ty1, tx2, ty2;
+            auto& m = m_viewer->getBuffer().metadata();
+            if (!WCSUtils::worldToPixel(m, obj.ra, obj.dec, tx1, ty1)) continue;
+            if (!WCSUtils::worldToPixel(m, obj.raEnd, obj.decEnd, tx2, ty2)) continue;
             
-            // Draw Line
-            QPen pen(QColor(100, 150, 255, 255), 2.0 * scaleM); 
-            pen.setColor(QColor(100, 150, 255, 200));
-            painter.setPen(pen);
-            painter.drawLine(imagePos, imagePosEnd);
+            painter.save();
+            painter.setClipRect(imageRect); // Clip to image bounds
+            painter.setPen(QPen(QColor(100, 150, 255, 200), 2.0 * scaleM));
+            painter.drawLine(QPointF(tx1, ty1), QPointF(tx2, ty2));
+            painter.restore();
             continue; 
         }
         
-        // Color based on catalog type
         QColor color = Qt::cyan;
-        if (obj.longType == "Messier") color = QColor(255, 220, 100); 
-        else if (obj.longType == "NGC") color = QColor(100, 200, 255); 
-        else if (obj.longType == "IC") color = QColor(200, 150, 255); 
-        else if (obj.longType == "Sh2") color = QColor(255, 100, 100); 
-        else if (obj.longType == "LdN") color = QColor(200, 200, 200); 
-        else if (obj.longType == "Star") color = QColor(255, 255, 200); 
-        else if (obj.type == "Constellation") color = QColor(100, 150, 255); 
+        if (obj.longType == "Messier") color = QColor(255, 200, 50); 
+        else if (obj.longType == "NGC") color = QColor(80, 180, 255); 
+        else if (obj.longType == "IC") color = QColor(200, 120, 255); 
+        else if (obj.longType == "Sh2") color = QColor(255, 80, 80); 
+        else if (obj.longType == "LdN") color = QColor(160, 160, 160); 
+        else if (obj.longType == "Star") color = QColor(255, 255, 220); 
+        else if (obj.type == "Constellation") color = QColor(120, 160, 255); 
 
         // Draw marker
         double radiusImagePx = 0;
-        
-        if (obj.diameter > 0) {
-            // obj.diameter (arcmin) -> radius (arcsec) * 60 / 2 = diam * 30
+        if (obj.longType == "Star") {
+            radiusImagePx = 3.0 * scaleM; // Force point source for stars as in Siril
+        } else if (obj.diameter > 0) {
             radiusImagePx = (obj.diameter * 30.0) / pixScale;
+            
+            // --- SHRINK-TO-FIT LOGIC FOR EXPORT ---
+            QRectF mRect(imagePos.x() - radiusImagePx, imagePos.y() - radiusImagePx, 
+                              radiusImagePx * 2, radiusImagePx * 2);
+            if (imageRect.contains(mRect.center()) && !imageRect.contains(mRect)) {
+                // Large object partially outside - reduce by 10%
+                radiusImagePx *= 0.9;
+            }
         } else {
-            // Point source
             radiusImagePx = 3.0 * scaleM; 
         }
+
+        bool isConstellationName = (obj.longType == "ConstellationName");
         
+        // --- LABEL PREPARATION ---
+        QString labelText;
+        if (obj.longType == "Star") {
+            if (!obj.alias.isEmpty()) {
+                labelText = obj.alias.split('/').first();
+            } else {
+                QString namePart = formatStarName(obj.name);
+                bool isBayer = (namePart.length() > 0 && (unsigned short)namePart.at(0).unicode() >= 0x0370 && (unsigned short)namePart.at(0).unicode() <= 0x03FF);
+                bool isFlamsteed = !namePart.isEmpty() && namePart.at(0).isDigit() && namePart.contains(' ');
+                
+                if (isBayer || isFlamsteed) labelText = namePart;
+                else labelText = ""; 
+            }
+        } else {
+            labelText = obj.name;
+        }
+
+        bool showLabel = !labelText.isEmpty();
+        // Skip minor stars at low zoom
+        if (obj.longType == "Star" && m_viewer->zoomFactor() <= 0.4 && obj.alias.isEmpty()) {
+            showLabel = false;
+        }
+
         if (radiusImagePx > 5.0 * scaleM) {
              double angle = -M_PI / 4.0;
-             
              auto getPt = [&](double r, double a) {
                  return imagePos + QPointF(r * std::cos(a), r * std::sin(a));
              };
              
+             // Edge awareness for export
+             QPointF tp = getPt(radiusImagePx * 1.3, angle);
+             if (tp.x() < 10 || tp.x() > imageRect.width() - 50 || tp.y() < 10 || tp.y() > imageRect.height() - 10) {
+                 angle += M_PI;
+             }
+
              QPointF edge = getPt(radiusImagePx, angle);
              QPointF textPos = getPt(radiusImagePx * 1.3, angle);
              
-             // Draw Circle
-             painter.setPen(QPen(color, 1.0 * scaleM)); // Thin
-             painter.setBrush(Qt::NoBrush);
-             painter.drawEllipse(imagePos, radiusImagePx, radiusImagePx);
+             if (!isConstellationName) {
+                 painter.setPen(QPen(color, 1.0 * scaleM));
+                 painter.setBrush(Qt::NoBrush);
+                 painter.drawEllipse(imagePos, radiusImagePx, radiusImagePx);
+                 painter.drawLine(edge, textPos);
+             }
              
-             // Draw Leader
-             painter.drawLine(edge, textPos);
-             
-             // Draw Text
-             painter.setPen(color);
-             painter.drawText(textPos + QPointF(2.0*scaleM, -2.0*scaleM), formatStarName(obj.name));
-
-        } else {
-             // Crosshair Gap
+             if (showLabel) {
+                 painter.setPen(color);
+                 painter.drawText(textPos + QPointF(2.0*scaleM, -2.0*scaleM), labelText);
+             }
+        } else if (!isConstellationName) {
              double gap = (obj.longType=="Star") ? 3.0 * scaleM : 5.0 * scaleM;
              double len = (obj.longType=="Star") ? 7.0 * scaleM : 10.0 * scaleM;
              
-             painter.setPen(QPen(color, 1.0 * scaleM)); // Thin
-             
+             painter.setPen(QPen(color, 1.0 * scaleM));
              painter.drawLine(imagePos - QPointF(0, gap + len), imagePos - QPointF(0, gap));
              painter.drawLine(imagePos + QPointF(0, gap), imagePos + QPointF(0, gap + len));
              painter.drawLine(imagePos - QPointF(gap + len, 0), imagePos - QPointF(gap, 0));
              painter.drawLine(imagePos + QPointF(gap, 0), imagePos + QPointF(gap + len, 0));
              
-             // Label
-             if (!obj.name.isEmpty()) {
-                  // Simple offset for small objects
-                  painter.drawText(imagePos + QPointF(gap + len + 3.0*scaleM, 4.0*scaleM), formatStarName(obj.name));
+             if (showLabel) {
+                  painter.drawText(imagePos + QPointF(gap + len + 3.0*scaleM, 4.0*scaleM), labelText);
              }
         }
     }
+
 
     // --- DRAW MANUAL ANNOTATIONS ---
     for (const auto& ann : m_annotations) {
@@ -532,6 +805,10 @@ void AnnotationOverlay::renderToPainter(QPainter& painter, const QRectF& imageRe
 }
 
 void AnnotationOverlay::mousePressEvent(QMouseEvent* event) {
+    if (!m_viewer) { // Added check
+        event->ignore();
+        return;
+    }
     // If not in drawing mode, explicitly ignore to let parent (ImageViewer) handle pan/zoom
     // BUT: we should technically set WA_TransparentForMouseEvents when mode is None
     // efficiently to avoid even needing this.
@@ -559,6 +836,10 @@ void AnnotationOverlay::mousePressEvent(QMouseEvent* event) {
 }
 
 void AnnotationOverlay::mouseMoveEvent(QMouseEvent* event) {
+    if (!m_viewer) { // Added check
+        event->ignore();
+        return;
+    }
     if (m_isDrawing) {
         m_drawCurrent = mapToImage(event->pos());
         update();
@@ -570,6 +851,10 @@ void AnnotationOverlay::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void AnnotationOverlay::mouseReleaseEvent(QMouseEvent* event) {
+    if (!m_viewer) { // Added check
+        event->ignore();
+        return;
+    }
     if (!m_isDrawing) {
         event->ignore();
         return;

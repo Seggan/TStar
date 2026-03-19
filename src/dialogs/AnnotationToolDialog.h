@@ -11,6 +11,8 @@
 #include <QComboBox>
 #include <QButtonGroup>
 #include <QToolButton>
+#include <QGroupBox>
+#include <QCheckBox>
 #include "../ImageBuffer.h"
 
 class ImageViewer;
@@ -41,6 +43,8 @@ public:
     QVector<Annotation> getPersistedAnnotations() const { return m_savedAnnotations; }
     void setPersistedAnnotations(const QVector<Annotation>& annotations) { m_savedAnnotations = annotations; }
 
+    void refreshAutomaticAnnotations();
+
 private slots:
     void onToolSelected(int toolId);
 
@@ -66,7 +70,7 @@ protected:
 
 private:
     QPointer<ImageViewer> m_viewer;
-    AnnotationOverlay* m_overlay = nullptr;
+    QPointer<AnnotationOverlay> m_overlay;
 
     // Tool buttons
     QButtonGroup* m_toolGroup;
@@ -77,7 +81,18 @@ private:
     QToolButton* m_textBtn;
     
     // Filtering
-
+    QGroupBox* m_catGroup;
+    QCheckBox* m_chkMessier;
+    QCheckBox* m_chkNGC;
+    QCheckBox* m_chkIC;
+    QCheckBox* m_chkLdN;
+    QCheckBox* m_chkSh2;
+    QCheckBox* m_chkStars;
+    QCheckBox* m_chkConstellations;
+    QPushButton* m_btnAnnotate;
+    
+    // WCS Grid Filter
+    QCheckBox* m_chkWcsGrid;
 
     // Options
     QComboBox* m_colorCombo;

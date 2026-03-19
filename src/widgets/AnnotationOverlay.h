@@ -6,6 +6,7 @@
 #include <QMouseEvent>
 #include <QVector>
 #include <QString>
+#include <QPointer>
 
 class ImageViewer;
 
@@ -79,7 +80,11 @@ public:
 
     // WCS Annotations
     void setWCSObjectsVisible(bool visible);
-    bool wcsObjectsVisible() const { return m_wcsVisible; }
+    bool wcsObjectsVisible() const { return m_wcsObjectsVisible; }
+    void setWCSGridVisible(bool visible);
+    bool wcsGridVisible() const { return m_wcsGridVisible; }
+
+    // Save/Restore states
     void setWCSObjects(const QVector<CatalogObject>& objects);
     const QVector<CatalogObject>& wcsObjects() const { return m_wcsObjects; }
 
@@ -108,11 +113,13 @@ protected:
 
 private:
     void drawAnnotation(QPainter& painter, const Annotation& ann);
+    void drawArrow(QPainter& painter, const Annotation& ann, const QPen& pen);
     void drawWCSObjects(QPainter& painter);
+    void drawWCSGrid(QPainter& painter);
     QPointF mapToImage(const QPointF& widgetPos) const;
     QPointF mapFromImage(const QPointF& imagePos) const;
 
-    ImageViewer* m_viewer;
+    QPointer<ImageViewer> m_viewer;
     DrawMode m_drawMode = DrawMode::None;
     QColor m_drawColor = Qt::yellow;
     QString m_pendingText = "Label";
@@ -125,9 +132,12 @@ private:
     // Annotations
     QVector<Annotation> m_annotations;
 
-    // WCS Objects
+    // WCS Data
     QVector<CatalogObject> m_wcsObjects;
-    bool m_wcsVisible = false;
+    bool m_wcsObjectsVisible = false;
+    bool m_wcsGridVisible = false;
+
+    // Interaction state;
 };
 
 #endif // ANNOTATION_OVERLAY_H
