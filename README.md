@@ -13,7 +13,7 @@
 * Miroslav Bakoš: testing of the Windows version
 
 ### Live TStar website:
-https://ft2801.github.io/TStar-Website/
+https://ft2801.github.io/TStar-Astronomy-Website/
 
 ## Overview
 
@@ -148,12 +148,19 @@ TStar is available in multiple languages:
 ## Installation
 
 ### Windows
-TStar is distributed as a portable Windows x64 application.
-1. Download the latest release.
-2. Extract the archive.
-3. Run `TStar.exe`.
+TStar for Windows x64 is distributed as an installer package.
+1. Download the latest Windows release installer.
+2. Run `TStar_Setup_<version>.exe` and complete setup.
+3. Launch TStar from the Start Menu or desktop shortcut.
 
-*Note: Python environments for AI tools (StarNet, etc.) and required MSVC Redistributable DLLs are bundled internally. Very old processors (Intel 3rd gen or older, ancient AMDs) lacking AVX instructions may not support certain AI features.*
+### macOS
+TStar for macOS (Intel and Apple Silicon) is distributed as an installer package.
+1. Download the latest macOS release.
+2. Choose the installer that matches your processor:
+  - Apple Silicon (M1/M2/M3/...): arm64 build
+  - Intel Mac: x86_64 build
+3. Open the selected `.dmg` installer and complete installation.
+4. Launch TStar from Applications.
 
 ## Building from Source
 
