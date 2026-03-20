@@ -40,6 +40,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QStandardPaths>
+#include <QListView>
 #include <QtConcurrent/QtConcurrentRun>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,6 +73,9 @@ SPCCDialog::SPCCDialog(ImageViewer* viewer, MainWindow* mw, QWidget* parent)
 
     // Load spectral database eagerly so combo boxes can be populated
     m_storeLoaded = SPCC::loadTStarFits(m_dataPath, m_store);
+    
+    // Also load the TStar JSON database if it exists
+    SPCC::loadTStarDatabase(m_dataPath + "/TStar-spcc-database", m_store);
 
     // Background workers
     m_fetchWatcher = new QFutureWatcher<std::vector<StarRecord>>(this);
@@ -148,6 +152,31 @@ void SPCCDialog::buildUI() {
     m_sensorCombo    = new QComboBox;
     m_lpFilter1Combo = new QComboBox;
     m_lpFilter2Combo = new QComboBox;
+
+    m_whiteRefCombo->setMaxVisibleItems(10);
+    m_rFilterCombo->setMaxVisibleItems(10);
+    m_gFilterCombo->setMaxVisibleItems(10);
+    m_bFilterCombo->setMaxVisibleItems(10);
+    m_sensorCombo->setMaxVisibleItems(10);
+    m_lpFilter1Combo->setMaxVisibleItems(10);
+    m_lpFilter2Combo->setMaxVisibleItems(10);
+
+    m_whiteRefCombo->setView(new QListView());
+    m_rFilterCombo->setView(new QListView());
+    m_gFilterCombo->setView(new QListView());
+    m_bFilterCombo->setView(new QListView());
+    m_sensorCombo->setView(new QListView());
+    m_lpFilter1Combo->setView(new QListView());
+    m_lpFilter2Combo->setView(new QListView());
+
+    const QString s = "QComboBox { combobox-popup: 0; } QAbstractItemView { max-height: 300px; }";
+    m_whiteRefCombo->setStyleSheet(s);
+    m_rFilterCombo->setStyleSheet(s);
+    m_gFilterCombo->setStyleSheet(s);
+    m_bFilterCombo->setStyleSheet(s);
+    m_sensorCombo->setStyleSheet(s);
+    m_lpFilter1Combo->setStyleSheet(s);
+    m_lpFilter2Combo->setStyleSheet(s);
 
     formEquip->addRow(tr("White Reference (SED):"), m_whiteRefCombo);
     formEquip->addRow(tr("R Filter:"),              m_rFilterCombo);

@@ -257,6 +257,9 @@ public:
     /// Wavelengths are converted to Angstrom if they appear to be in nm.
     static bool loadTStarFits(const QString& dataPath, SPCCDataStore& out);
 
+    /// Load TStar JSON database from a directory (with subdirs mono_filters, etc.)
+    static bool loadTStarDatabase(const QString& dbPath, SPCCDataStore& out);
+
     /// Convenience: SED / filter / sensor name lists for populating combo boxes.
     static QStringList availableSEDs     (const SPCCDataStore& store);
     static QStringList availableFilters  (const SPCCDataStore& store);

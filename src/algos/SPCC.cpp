@@ -30,6 +30,9 @@
 #include <QLoggingCategory>
 #include <QRegularExpression>
 #include <QtMath>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 #include <fitsio.h>
 
@@ -254,6 +257,111 @@ bool SPCC::loadTStarFits(const QString& dataPath, SPCCDataStore& out) {
                    << out.filter_list.size() << "filters,"
                    << out.sensor_list.size() << "sensors)";
     return loaded > 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPCC::loadTStarDatabase
+// ─────────────────────────────────────────────────────────────────────────────
+bool SPCC::loadTStarDatabase(const QString& dbPath, SPCCDataStore& out) {
+    if (!QDir(dbPath).exists()) {
+        qCWarning(lcSPCC) << "TStar database directory not found:" << dbPath;
+        return false;
+    }
+
+    QStringList subdirs = {"mono_filters", "mono_sensors", "osc_filters", "osc_sensors", "wb_refs"};
+    int loadedFiles = 0;
+    int totalObjects = 0;
+
+    for (const QString& sub : subdirs) {
+        QDir dir(dbPath + "/" + sub);
+        if (!dir.exists()) continue;
+
+        QStringList filters;
+        filters << "*.json";
+        QFileInfoList list = dir.entryInfoList(filters, QDir::Files);
+
+        for (const QFileInfo& info : list) {
+            QFile f(info.absoluteFilePath());
+            if (!f.open(QIODevice::ReadOnly)) continue;
+
+            QByteArray data = f.readAll();
+            f.close();
+
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (doc.isNull()) continue;
+
+            // Could be a single object or an array of objects
+            QJsonArray arr;
+            if (doc.isArray()) {
+                arr = doc.array();
+            } else if (doc.isObject()) {
+                arr.append(doc.object());
+            }
+
+            for (int i = 0; i < arr.size(); ++i) {
+                QJsonObject jobj = arr[i].toObject();
+                if (jobj.isEmpty()) continue;
+
+                SPCCObject obj;
+                obj.name  = jobj.value("name").toString();
+                obj.model = jobj.value("model").toString();
+                if (obj.name.isEmpty()) continue;
+
+                QString typeStr = jobj.value("type").toString().toUpper();
+                if (typeStr == "MONO_SENSOR") obj.type = MONO_SENSOR;
+                else if (typeStr == "OSC_SENSOR")  obj.type = OSC_SENSOR;
+                else if (typeStr == "MONO_FILTER") obj.type = MONO_FILTER;
+                else if (typeStr == "OSC_FILTER")  obj.type = OSC_FILTER;
+                else if (typeStr == "OSC_LPF")     obj.type = OSC_LPF;
+                else if (typeStr == "WB_REF")      obj.type = WB_REF;
+                else continue;
+
+                // Wavelengths
+                QJsonObject wlObj = jobj.value("wavelength").toObject();
+                QJsonArray  wlArr = wlObj.value("value").toArray();
+                // Values
+                QJsonObject valObj = jobj.value("values").toObject();
+                QJsonArray  valArr = valObj.value("value").toArray();
+
+                if (wlArr.isEmpty() || valArr.isEmpty() || wlArr.size() != valArr.size()) continue;
+
+                for (int j = 0; j < wlArr.size(); ++j) {
+                    obj.x.push_back(wlArr[j].toDouble());
+                    obj.y.push_back(valArr[j].toDouble());
+                }
+
+                // If units are nm, convert to Angstrom
+                QString units = wlObj.value("units").toString().toLower();
+                if (units == "nm") {
+                    for (double& v : obj.x) v *= 10.0;
+                } else if (units == "micrometer" || units == "um") {
+                    for (double& v : obj.x) v *= 10000.0;
+                }
+
+                // Ensure Angstrom detection fallback
+                detectAndConvertToAngstrom(obj.x);
+
+                // Ensure monotonically increasing
+                if (obj.x.size() > 1 && obj.x[0] > obj.x[obj.x.size()-1]) {
+                    std::reverse(obj.x.begin(), obj.x.end());
+                    std::reverse(obj.y.begin(), obj.y.end());
+                }
+
+                obj.arrays_loaded = true;
+
+                if (obj.type == WB_REF)          out.sed_list.push_back(std::move(obj));
+                else if (obj.type == MONO_SENSOR || obj.type == OSC_SENSOR) out.sensor_list.push_back(std::move(obj));
+                else out.filter_list.push_back(std::move(obj));
+                
+                totalObjects++;
+            }
+            loadedFiles++;
+        }
+    }
+
+    qCInfo(lcSPCC) << "Loaded TStar database from" << dbPath << ":" 
+                   << loadedFiles << "files," << totalObjects << "objects.";
+    return totalObjects > 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
