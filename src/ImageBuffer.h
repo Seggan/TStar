@@ -147,6 +147,16 @@ public:
     void rotate270();  // CW (90 CCW)
     void mirrorX();    // Horizontal Flip
     void mirrorY();    // Vertical Flip
+    
+    enum InterpolationMethod {
+        Interpolation_Nearest,
+        Interpolation_Linear,
+        Interpolation_Cubic,
+        Interpolation_Lanczos
+    };
+
+    void bin(int factor);
+    void resample(int newWidth, int newHeight, InterpolationMethod method = Interpolation_Cubic);
 
     // Apply permanent stretch to m_data
     void performTrueStretch(const StretchParams& params);

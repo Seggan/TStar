@@ -727,9 +727,13 @@ CalibrationModel SPCC::fitColorModel(const std::vector<double>& meas_RG,
 void SPCC::applyColorModel(float* img_float,
                             int width, int height,
                             const CalibrationModel& model,
-                            double pivot_R, double pivot_B) {
+                            double pivot_R, double pivot_G, double pivot_B) {
     const size_t n_pixels = (size_t)width * height;
     const double eps = 1e-8;
+
+    // Neutralize background: anchor everyone to the average background level
+    // to remove any pre-existing color tint in the background pixels.
+    const double pivot_avg = (pivot_R + pivot_G + pivot_B) / 3.0;
 
     for (size_t i = 0; i < n_pixels; ++i) {
         const size_t base = i * 3;
@@ -747,12 +751,17 @@ void SPCC::applyColorModel(float* img_float,
         mR = std::max(0.25, std::min(4.0, mR));
         mB = std::max(0.25, std::min(4.0, mB));
 
-        const double R_new = pivot_R + (R - pivot_R) * mR;
-        const double B_new = pivot_B + (B - pivot_B) * mB;
+        // Scale factors: these transform (R/G) into (Expected_R/G).
+        // If the Expected ratios were normalized by the reference SED,
+        // then kR = mR and kB = mB are the scales to apply to R and B.
+        // We evaluate them relative to the neutral pivot_avg.
+        const double R_new = pivot_avg + (R - pivot_R) * mR;
+        const double G_new = pivot_avg + (G - pivot_G);
+        const double B_new = pivot_avg + (B - pivot_B) * mB;
 
         img_float[base]     = (float)std::max(0.0, std::min(1.0, R_new));
+        img_float[base + 1] = (float)std::max(0.0, std::min(1.0, G_new));
         img_float[base + 2] = (float)std::max(0.0, std::min(1.0, B_new));
-        // G channel is unchanged
     }
 }
 
@@ -1060,8 +1069,11 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
         if (!std::isfinite(S_sr) || !std::isfinite(S_sg) || !std::isfinite(S_sb)) continue;
         if (S_sg <= 0.0 || S_sr <= 0.0 || S_sb <= 0.0) continue;
 
-        const double eRG = S_sr / S_sg;
-        const double eBG = S_sb / S_sg;
+        // Normalize expected ratios by the white reference ratios.
+        // This ensures that a star matching the white reference SED
+        // will have eRG = 1.0 and eBG = 1.0.
+        const double eRG = (S_sr / S_sg) / (S_ref_R / S_ref_G);
+        const double eBG = (S_sb / S_sg) / (S_ref_B / S_ref_G);
         const double mRG = phot.R_star / phot.G_star;
         const double mBG = phot.B_star / phot.G_star;
 
@@ -1129,15 +1141,18 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     progress(75, "Applying colour calibration...");
 
     // Compute pivot values (median of each channel over the whole image)
-    std::vector<double> chanR(n_pixels), chanB(n_pixels);
+    // Compute pivot values (median of each channel over the whole image)
+    std::vector<double> chanR(n_pixels), chanG(n_pixels), chanB(n_pixels);
     for (size_t i = 0; i < n_pixels; ++i) {
         chanR[i] = img_f32[i*3];
+        chanG[i] = img_f32[i*3 + 1];
         chanB[i] = img_f32[i*3 + 2];
     }
     const double pivot_R = vectorMedianImpl(chanR);
+    const double pivot_G = vectorMedianImpl(chanG);
     const double pivot_B = vectorMedianImpl(chanB);
 
-    applyColorModel(img_f32.data(), W, H, model, pivot_R, pivot_B);
+    applyColorModel(img_f32.data(), W, H, model, pivot_R, pivot_G, pivot_B);
 
     // ─────────────────────────────────────────────────────────────────────────
     // 9. Optional: chromatic gradient removal

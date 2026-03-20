@@ -49,6 +49,7 @@ QString AstapSolver::getAstapDatabasePath() {
         astapDir + "/../Databases",
         astapDir + "/../Resources/deps/Databases",
         astapDir + "/../Resources/Databases",
+        astapDir + "/../Resources/data",
         "/usr/local/opt/astap/share/astap/Databases",
         "/usr/local/opt/astap/Databases",
         "/Library/ASTAP/Databases"

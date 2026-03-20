@@ -962,6 +962,37 @@
         </message>
     </context>
     <context>
+        <name>BinningDialog</name>
+        <message>
+            <source>1x1 (None)</source>
+            <translation type="finished">1x1 (Ninguno)</translation>
+        </message>
+        <message>
+            <source>2x2</source>
+            <translation type="finished">2x2</translation>
+        </message>
+        <message>
+            <source>3x3</source>
+            <translation type="finished">3x3</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="finished">Aplicar</translation>
+        </message>
+        <message>
+            <source>Binning Factor:</source>
+            <translation type="finished">Factor de Binning:</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="finished">Cerrar</translation>
+        </message>
+        <message>
+            <source>Image Binning</source>
+            <translation type="finished">Binning de Imagen</translation>
+        </message>
+    </context>
+    <context>
         <name>BlinkComparatorDialog</name>
         <message>
             <source>AutoStretch</source>
@@ -3421,6 +3452,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Guardado automático: El estado del proyecto se conserva automáticamente entre sesiones</translation>
         </message>
         <message>
+            <source>AutoStretch Target:</source>
+            <translation type="finished">Objetivo AutoStretch:</translation>
+        </message>
+        <message>
             <source>Automate complex multi-step image processing workflows</source>
             <translation type="finished">Automatizar flujos de procesamiento de imágenes complejos de múltiples pasos</translation>
         </message>
@@ -3469,6 +3504,14 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Convierte en lote archivos RAW de cámara al formato FITS:</translation>
         </message>
         <message>
+            <source>Bicubic:</source>
+            <translation type="finished">Bicúbica</translation>
+        </message>
+        <message>
+            <source>Bilinear:</source>
+            <translation type="finished">Bilineal:</translation>
+        </message>
+        <message>
             <source>Black Point</source>
             <translation type="finished">Punto Negro</translation>
         </message>
@@ -3491,6 +3534,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Browse and execute built-in processing scripts:</source>
             <translation type="finished">Explorar y ejecutar scripts de procesamiento integrados:</translation>
+        </message>
+        <message>
+            <source>Burn Display:</source>
+            <translation type="finished">Quemar Visualización:</translation>
         </message>
         <message>
             <source>CLAHE</source>
@@ -3523,6 +3570,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Channel Operations</source>
             <translation type="finished">Operazioni Canal</translation>
+        </message>
+        <message>
+            <source>Channel View:</source>
+            <translation type="finished">Vista de Canal:</translation>
         </message>
         <message>
             <source>Check the Console panel for processing messages</source>
@@ -3601,6 +3652,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Gestión Color</translation>
         </message>
         <message>
+            <source>Color Range:</source>
+            <translation type="finished">Rango de Color:</translation>
+        </message>
+        <message>
             <source>Combine Channels</source>
             <translation type="finished">Combinar Canales</translation>
         </message>
@@ -3659,6 +3714,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Contrast Limited Adaptive Histogram Equalization. Enhances local contrast in different regions of the image:</source>
             <translation type="finished">Ecualización Adaptativa del Histograma con Contraste Limitado. Mejora el contraste local en diferentes regiones de la imagen:</translation>
+        </message>
+        <message>
+            <source>Control lower/upper limits, fuzziness, linked limits, inversion, and screening options</source>
+            <translation type="finished">Controla límites inferior/superior, difuminado, límites vinculados, inversión y opciones de enmascaramiento</translation>
         </message>
         <message>
             <source>Control the range of pixels from the top image that are applied using Low/High range and feathering.</source>
@@ -3733,8 +3792,8 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Crear Fotogramas Maestros: Promedia exposiciones bias/dark/flat múltiples por filtro</translation>
         </message>
         <message>
-            <source>Create and apply luminosity masks for selective processing:</source>
-            <translation type="finished">Crea y aplica máscaras de luminosidad para procesamiento selectivo:</translation>
+            <source>Create and apply masks for selective processing:</source>
+            <translation type="finished">Crear y aplicar máscaras para procesamiento selectivo:</translation>
         </message>
         <message>
             <source>Create stunning narrowband composites with full control:</source>
@@ -3757,6 +3816,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Ctrl+Z / Ctrl+Shift+Z</translation>
         </message>
         <message>
+            <source>Cursor-following magnifier for precise local inspection</source>
+            <translation type="finished">Lupa que sigue el cursor para inspección local precisa</translation>
+        </message>
+        <message>
             <source>Curves Transformation</source>
             <translation type="finished">Transformación Curvas</translation>
         </message>
@@ -3777,8 +3840,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Definir variables con nombre para parametrizar la ejecución de scripts</translation>
         </message>
         <message>
+            <source>Diagnostic inverted display toggle</source>
+            <translation type="finished">Alternar visualización invertida de diagnóstico</translation>
+        </message>
+        <message>
             <source>Display Modes</source>
             <translation type="finished">Modos de Visualización</translation>
+        </message>
+        <message>
+            <source>Display Modes:</source>
+            <translation type="finished">Modos de Visualización:</translation>
         </message>
         <message>
             <source>Displays a 3x3 grid of zoomed panels from the corners, edges, and center of your image. Useful for evaluating optical quality, coma, and field curvature across your frame.</source>
@@ -3829,6 +3900,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Mejora detalles de banda estrecha restando luz continua/estelar de banda ancha:</translation>
         </message>
         <message>
+            <source>Enlarge images with selectable interpolation methods:</source>
+            <translation type="finished">Ampliar imágenes con métodos de interpolación seleccionables:</translation>
+        </message>
+        <message>
             <source>Ensures all input images are in the same format (FITS recommended for astrophotography)</source>
             <translation type="finished">Asegura que todas las imágenes de entrada estén en el mismo formato (FITS recomendado para astrofotografía)</translation>
         </message>
@@ -3873,12 +3948,24 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Las palabras clave FITS y las propiedades de imagen se transfieren automáticamente para preservar los datos EXIF</translation>
         </message>
         <message>
+            <source>False Color:</source>
+            <translation type="finished">Falsos Colores:</translation>
+        </message>
+        <message>
+            <source>False-color visualization for tonal/structural inspection</source>
+            <translation type="finished">Visualización en falso color para inspección tonal/estructural</translation>
+        </message>
+        <message>
             <source>Fast Drizzle:</source>
             <translation type="finished">Fast Drizzle:</translation>
         </message>
         <message>
             <source>Fast normalization or K-Sigma-based normalization per frame</source>
             <translation type="finished">Normalización rápida o normalización basada en K-Sigma por fotograma</translation>
+        </message>
+        <message>
+            <source>Fastest method, preserves sharp transitions, suitable for specific use cases</source>
+            <translation type="finished">Método más rápido, preserva transiciones nítidas, adecuado para casos específicos</translation>
         </message>
         <message>
             <source>Feathering:</source>
@@ -3913,12 +4000,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">GHS (Generalized Hyperbolic Stretch)</translation>
         </message>
         <message>
-            <source>Generate mask from image luminosity</source>
-            <translation type="finished">Genera máscara a partir de la luminosidad de la imagen</translation>
+            <source>Generate masks using Binary, Range Selection, Lightness, Chrominance, Star Mask, and Color-based workflows</source>
+            <translation type="finished">Generar máscaras usando Binary, Range Selection, Lightness, Chrominance, Star Mask y flujos basados en color</translation>
         </message>
         <message>
             <source>Getting Started</source>
             <translation type="finished">Primeros Pasos</translation>
+        </message>
+        <message>
+            <source>Good balance between speed and quality</source>
+            <translation type="finished">Buen equilibrio entre velocidad y calidad</translation>
         </message>
         <message>
             <source>GraXpert</source>
@@ -3931,6 +4022,14 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Help &amp; Tutorial</source>
             <translation type="finished">Ayuda y Tutoriales</translation>
+        </message>
+        <message>
+            <source>Higher quality with smooth gradations (recommended for most astrophotography images)</source>
+            <translation type="finished">Mayor calidad con gradaciones suaves (recomendado para la mayoría de imágenes astrofotográficas)</translation>
+        </message>
+        <message>
+            <source>Highest quality interpolation, best for detailed astronomical data (slower)</source>
+            <translation type="finished">Interpolación de mayor calidad, mejor para datos astronómicos detallados (más lento)</translation>
         </message>
         <message>
             <source>Histogram Transformation</source>
@@ -3953,6 +4052,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Ideal para corregir dominantes de color causadas por filtros de contaminación lumínica o condiciones atmosféricas</translation>
         </message>
         <message>
+            <source>Ideal for preprocessing undersampled or noisy data</source>
+            <translation type="finished">Ideal para preprocesamiento de datos submuestreados o ruidosos</translation>
+        </message>
+        <message>
             <source>Identifies bright stars in each image as reference points</source>
             <translation type="finished">Identifica estrellas brillantes en cada imagen como puntos de referencia</translation>
         </message>
@@ -3963,6 +4066,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Image Annotator</source>
             <translation type="finished">Anotador de Imágenes</translation>
+        </message>
+        <message>
+            <source>Image Binning</source>
+            <translation type="finished">Binning de Imagen</translation>
         </message>
         <message>
             <source>Image Blending</source>
@@ -3989,8 +4096,20 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Apilado de Imagen</translation>
         </message>
         <message>
+            <source>Image Upscale</source>
+            <translation type="finished">Upscale de Imagen</translation>
+        </message>
+        <message>
             <source>Image Weighting:</source>
             <translation type="finished">Ponderación de Imagen:</translation>
+        </message>
+        <message>
+            <source>Improves signal-to-noise ratio by coherent data aggregation</source>
+            <translation type="finished">Mejora la relación señal-ruido mediante agregación de datos coherente</translation>
+        </message>
+        <message>
+            <source>Includes dedicated Denoise operation for AI noise cleanup</source>
+            <translation type="finished">Incluye operación Denoise dedicada para limpieza de ruido AI</translation>
         </message>
         <message>
             <source>Increases color saturation specifically for stars.</source>
@@ -4007,6 +4126,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Interactive tool to remove artifacts and blemishes:</source>
             <translation type="finished">Herramienta interactiva para eliminar artefactos e imperfecciones:</translation>
+        </message>
+        <message>
+            <source>Invert Colors:</source>
+            <translation type="finished">Invertir Colores:</translation>
         </message>
         <message>
             <source>Invert Mask:</source>
@@ -4033,6 +4156,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Atajos de Teclado</translation>
         </message>
         <message>
+            <source>Lanczos4:</source>
+            <translation type="finished">Lanczos4</translation>
+        </message>
+        <message>
             <source>Lightroom-style RAW editor for fast global light/color adjustments:</source>
             <translation type="finished">Editor RAW estilo Lightroom para ajustes globales rápidos de luz/color:</translation>
         </message>
@@ -4041,8 +4168,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Ajuste Lineal</translation>
         </message>
         <message>
+            <source>Linear, Auto Stretch, Histogram, ArcSinh, Square Root, and Logarithmic</source>
+            <translation type="finished">Lineal, Auto Stretch, Histograma, ArcSinh, Raíz Cuadrada y Logarítmico</translation>
+        </message>
+        <message>
             <source>Linear:</source>
             <translation type="finished">Lineal:</translation>
+        </message>
+        <message>
+            <source>Link Views:</source>
+            <translation type="finished">Vincular Vistas:</translation>
         </message>
         <message>
             <source>Load Ha, OIII, and SII narrowband star channels</source>
@@ -4067,6 +4202,14 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Magenta Correction</source>
             <translation type="finished">Corrección Magenta</translation>
+        </message>
+        <message>
+            <source>Magnifier Loupe:</source>
+            <translation type="finished">Lupa:</translation>
+        </message>
+        <message>
+            <source>Main Toolbar &amp; View Controls</source>
+            <translation type="finished">Barra de herramientas principal y controles de vista</translation>
         </message>
         <message>
             <source>Maintains fine structures while removing color cast</source>
@@ -4171,6 +4314,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Navigation Controls</source>
             <translation type="finished">Controles de Navegación</translation>
+        </message>
+        <message>
+            <source>Nearest Neighbor:</source>
+            <translation type="finished">Nearest Neighbor:</translation>
         </message>
         <message>
             <source>Neutralizes color casts in the background sky:</source>
@@ -4281,6 +4428,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Selector de Paleta Perfecta</translation>
         </message>
         <message>
+            <source>Permanently apply current display transform to image data</source>
+            <translation type="finished">Aplicar permanentemente la transformación de visualización actual a los datos de la imagen</translation>
+        </message>
+        <message>
             <source>Photometric Color Calibration (PCC)</source>
             <translation type="finished">Calibración de Color Fotométrica (PCC)</translation>
         </message>
@@ -4337,6 +4488,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Protección</translation>
         </message>
         <message>
+            <source>Quick target-median presets for display stretch behavior</source>
+            <translation type="finished">Preajustes rápidos target-mediana para el comportamiento del estiramiento de visualización</translation>
+        </message>
+        <message>
             <source>RAW Editor</source>
             <translation type="finished">Editor RAW</translation>
         </message>
@@ -4349,8 +4504,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">RAW a FITS:</translation>
         </message>
         <message>
+            <source>RGB Link:</source>
+            <translation type="finished">Enlace RGB:</translation>
+        </message>
+        <message>
             <source>Range Masking:</source>
             <translation type="finished">Máscara de Rango:</translation>
+        </message>
+        <message>
+            <source>Range Selection:</source>
+            <translation type="finished">Selección de Rango:</translation>
         </message>
         <message>
             <source>Raw pixel values without stretch</source>
@@ -4367,6 +4530,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Redo</source>
             <translation type="finished">Rehacer</translation>
+        </message>
+        <message>
+            <source>Reduce image dimensions by combining adjacent pixels:</source>
+            <translation type="finished">Reducir dimensiones combinando píxeles adyacentes:</translation>
         </message>
         <message>
             <source>Reduces noise without losing detail</source>
@@ -4545,6 +4712,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Tamaño de los azulejos para procesamiento local. Azulejos más pequeños aumentan el detalle local.</translation>
         </message>
         <message>
+            <source>Smart grid, vertical, and horizontal tiling modes</source>
+            <translation type="finished">Cuadrícula inteligente, modos de mosaico vertical y horizontal</translation>
+        </message>
+        <message>
             <source>Specialized stretch that preserves star colors while increasing contrast.</source>
             <translation type="finished">Estiramiento especializado que preserva los colores de las estrellas mientras aumenta el contraste.</translation>
         </message>
@@ -4637,6 +4808,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Modos Soportados:</translation>
         </message>
         <message>
+            <source>Supported binning factors: 1x1 (no binning), 2x2, 3x3</source>
+            <translation type="finished">Factores de binning soportados: 1x1 (sin binning), 2x2, 3x3</translation>
+        </message>
+        <message>
             <source>Supports ASTAP integration for professional solving and automatic database path handling</source>
             <translation type="finished">Admite integración ASTAP para resolución profesional y gestión automática de rutas de base de datos</translation>
         </message>
@@ -4657,8 +4832,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Soporta traslación, rotación y corrección de escala</translation>
         </message>
         <message>
+            <source>Switch display between RGB, R, G, and B channels</source>
+            <translation type="finished">Cambiar visualización entre canales RGB, R, G y B</translation>
+        </message>
+        <message>
             <source>Symmetry Point</source>
             <translation type="finished">Punto de Simetría</translation>
+        </message>
+        <message>
+            <source>Synchronize zoom/pan across multiple image windows</source>
+            <translation type="finished">Sincronizar zoom/pan entre múltiples ventanas de imagen</translation>
         </message>
         <message>
             <source>TStar - Astrophotography Processing</source>
@@ -4677,12 +4860,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">TStar incluye gestión de color a nivel de espacio de trabajo para mantener consistente el comportamiento de visualización y procesamiento entre herramientas y sesiones.</translation>
         </message>
         <message>
-            <source>TStar supports FITS, XISF, TIFF, and PNG image formats commonly used in astrophotography.</source>
-            <translation type="finished">TStar soporta formatos FITS, XISF, TIFF y PNG comúnmente usados en astrofotografía.</translation>
+            <source>TStar supports FITS/FIT, XISF, TIFF/TIF, PNG, JPG/JPEG, BMP and (when LibRaw support is available) major camera RAW formats such as CR2/CR3/NEF/ARW/DNG/ORF/RW2/RAF and others.</source>
+            <translation type="finished">TStar admite FITS/FIT, XISF, TIFF/TIF, PNG, JPG/JPEG, BMP y (cuando el soporte LibRaw está disponible) los principales formatos RAW de cámaras como CR2/CR3/NEF/ARW/DNG/ORF/RW2/RAF y otros.</translation>
         </message>
         <message>
             <source>TStar supports scripting for automating processing workflows:</source>
             <translation type="finished">TStar admite scripts para automatizar flujos de procesamiento:</translation>
+        </message>
+        <message>
+            <source>Target Red/Orange/Yellow/Green/Cyan/Blue/Violet/Magenta with hue fuzziness</source>
+            <translation type="finished">Objetivo Rojo/Naranja/Amarillo/Verde/Cian/Azul/Violeta/Magenta con difuminado de matiz</translation>
         </message>
         <message>
             <source>Temperature / Tint</source>
@@ -4731,6 +4918,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>To work with an existing project:</source>
             <translation type="finished">Para trabajar con un proyecto existente:</translation>
+        </message>
+        <message>
+            <source>Toggle linked/unlinked channel stretching in preview</source>
+            <translation type="finished">Alternar estiramiento de canales vinculados/no vinculados en vista previa</translation>
         </message>
         <message>
             <source>Toggle mask visualization</source>
@@ -4785,6 +4976,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Use los controles de zoom (+, -, Ajustar) e AutoStretch para una mejor inspección</translation>
         </message>
         <message>
+            <source>Useful for reducing file size while preserving essential data integrity</source>
+            <translation type="finished">Útil para reducir el tamaño del archivo preservando la integridad de los datos</translation>
+        </message>
+        <message>
             <source>Useful for verifying calibration accuracy</source>
             <translation type="finished">Útil para verificar la precisión de la calibración</translation>
         </message>
@@ -4815,6 +5010,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>View Management</source>
             <translation type="finished">Gestión de Vistas</translation>
+        </message>
+        <message>
+            <source>View Tiling:</source>
+            <translation type="finished">Ver Mosaico:</translation>
         </message>
         <message>
             <source>View and edit FITS header metadata.</source>
@@ -5341,6 +5540,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Neutralización Fondo requiere imagen RGB.</translation>
         </message>
         <message>
+            <source>Binning</source>
+            <translation type="finished">Binning</translation>
+        </message>
+        <message>
             <source>Bit Depth:</source>
             <translation type="finished">Profundidad de Bits:</translation>
         </message>
@@ -5781,8 +5984,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Anotador de Imágenes</translation>
         </message>
         <message>
+            <source>Image Binning</source>
+            <translation type="finished">Binning de Imagen</translation>
+        </message>
+        <message>
             <source>Image Blending</source>
             <translation type="finished">Fusión de Imágenes</translation>
+        </message>
+        <message>
+            <source>Image Upscale</source>
+            <translation type="finished">Upscale de Imagen</translation>
         </message>
         <message>
             <source>Image already has multiple channels.</source>
@@ -6033,6 +6244,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Herramienta ABE abierta.</translation>
         </message>
         <message>
+            <source>Opened Binning Tool.</source>
+            <translation type="finished">Herramienta Binning abierta.</translation>
+        </message>
+        <message>
             <source>Opened Curves Tool.</source>
             <translation type="finished">Herramienta Curvas abierta.</translation>
         </message>
@@ -6055,6 +6270,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Opened RAW: %1 (Bayer pattern: %2) – use Debayer to convert to colour.</source>
             <translation type="finished">RAW abierto: %1 (patrón Bayer: %2) – usa Debayer para convertir a color.</translation>
+        </message>
+        <message>
+            <source>Opened Upscale Tool.</source>
+            <translation type="finished">Herramienta Upscale abierta.</translation>
         </message>
         <message>
             <source>Opened Wavescale HDR Tool.</source>
@@ -6712,6 +6931,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Update check failed: %1</source>
             <translation type="finished">Error al buscar actualizaciones: %1</translation>
+        </message>
+        <message>
+            <source>Upscale</source>
+            <translation type="finished">Upscale</translation>
         </message>
         <message>
             <source>Utilities</source>
@@ -8591,8 +8814,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Master Flat cargado (Norm: %1, Patrón: %2)</translation>
         </message>
         <message>
+            <source>Numerical dark optimization found factor K = %1</source>
+            <translation type="finished">Optimización dark numérica encontrado factor K = %1</translation>
+        </message>
+        <message>
             <source>Preprocessing %1 files using %2 threads...</source>
             <translation type="finished">Preprocesando %1 archivos con %2 hilos...</translation>
+        </message>
+        <message>
+            <source>Scaling dark by exposure ratio K = %1 (%2s / %3s)</source>
+            <translation type="finished">Escalado de dark por relación de exposición K = %1 (%2s / %3s)</translation>
         </message>
         <message>
             <source>Skipped %1: Insufficient memory (current usage &gt; 90%)</source>
@@ -8601,6 +8832,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Warning: Auto-detect Bayer Pattern failed (Header: '%1'). Defaulting to RGGB.</source>
             <translation type="finished">Aviso: Auto-detectar Patrón Bayer falló (Cabecera: '%1'). Usando RGGB.</translation>
+        </message>
+        <message>
+            <source>Warning: Missing exposure time metadata. Using scaling factor 1.0.</source>
+            <translation type="finished">Advertencia: Metadatos de tiempo de exposición faltantes. Usando factor de escala 1.0.</translation>
         </message>
     </context>
     <context>
@@ -12281,6 +12516,49 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Would you like to update now?</source>
             <translation type="finished">¿Desea actualizar ahora?</translation>
+        </message>
+    </context>
+    <context>
+        <name>UpscaleDialog</name>
+        <message>
+            <source>Apply</source>
+            <translation type="finished">Aplicar</translation>
+        </message>
+        <message>
+            <source>Bicubic (precise)</source>
+            <translation type="finished">Bicúbico (preciso)</translation>
+        </message>
+        <message>
+            <source>Bilinear (fast)</source>
+            <translation type="finished">Bilineal (rápido)</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="finished">Cerrar</translation>
+        </message>
+        <message>
+            <source>Image Upscale</source>
+            <translation type="finished">Upscale de Imagen</translation>
+        </message>
+        <message>
+            <source>Interpolation:</source>
+            <translation type="finished">Interpolación:</translation>
+        </message>
+        <message>
+            <source>Lanczos4 (best quality)</source>
+            <translation type="finished">Lanczos4 (mejor calidad)</translation>
+        </message>
+        <message>
+            <source>Nearest Neighbor</source>
+            <translation type="finished">Nearest Neighbor</translation>
+        </message>
+        <message>
+            <source>New Height:</source>
+            <translation type="finished">Nueva Altura:</translation>
+        </message>
+        <message>
+            <source>New Width:</source>
+            <translation type="finished">Nueva Anchura:</translation>
         </message>
     </context>
     <context>

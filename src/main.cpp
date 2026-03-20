@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
     
     QStringList searchPaths;
     searchPaths << dir.filePath("images/Logo.png");
+    searchPaths << QDir::cleanPath(dir.absoluteFilePath("../Resources/images/Logo.png"));
     searchPaths << dir.filePath("Logo.png");
     searchPaths << QDir::cleanPath(dir.absoluteFilePath("../src/images/Logo.png"));
     searchPaths << QDir::cleanPath(dir.absoluteFilePath("../../src/images/Logo.png"));
@@ -105,7 +106,8 @@ int main(int argc, char *argv[])
                 loaded = true;
                 break;
             }
-            if (translator->load("tstar_" + langCode, QCoreApplication::applicationDirPath() + "/translations")) {
+            if (translator->load("tstar_" + langCode, QCoreApplication::applicationDirPath() + "/translations") ||
+                translator->load("tstar_" + langCode, QCoreApplication::applicationDirPath() + "/../Resources/translations")) {
                 loaded = true;
                 break;
             }
@@ -113,7 +115,8 @@ int main(int argc, char *argv[])
     } else if (lang != "en") {
         if (translator->load(":/translations/tstar_" + lang)) {
             loaded = true;
-        } else if (translator->load("tstar_" + lang, QCoreApplication::applicationDirPath() + "/translations")) {
+        } else if (translator->load("tstar_" + lang, QCoreApplication::applicationDirPath() + "/translations") ||
+                   translator->load("tstar_" + lang, QCoreApplication::applicationDirPath() + "/../Resources/translations")) {
             loaded = true;
         }
     }

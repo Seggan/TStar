@@ -343,7 +343,7 @@ public:
     static void applyColorModel(float* img_float,
                                 int width, int height,
                                 const CalibrationModel& model,
-                                double pivot_R, double pivot_B);
+                                double pivot_R, double pivot_G, double pivot_B);
 
     // ── Gradient extraction ───────────────────────────────────────────────────
 

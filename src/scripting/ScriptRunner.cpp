@@ -279,7 +279,6 @@ QString ScriptRunner::substituteVariables(const QString& text) const {
 
     // ${variable} syntax
     QRegularExpression bracePattern("\\$\\{([^}]+)\\}");
-    int offset = 0;
     QRegularExpressionMatchIterator it = bracePattern.globalMatch(result);
     while (it.hasNext()) {
         QRegularExpressionMatch match = it.next();

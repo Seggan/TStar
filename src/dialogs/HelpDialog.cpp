@@ -76,7 +76,7 @@ QString HelpDialog::buildHelpContent()
 
     // Getting Started
     html += "<h2>" + tr("Getting Started") + "</h2>";
-    html += "<p>" + tr("TStar supports FITS, XISF, TIFF, and PNG image formats commonly used in astrophotography.") + "</p>";
+    html += "<p>" + tr("TStar supports FITS/FIT, XISF, TIFF/TIF, PNG, JPG/JPEG, BMP and (when LibRaw support is available) major camera RAW formats such as CR2/CR3/NEF/ARW/DNG/ORF/RW2/RAF and others.") + "</p>";
     html += "<ul>";
     html += "<li><b>" + tr("Open Image:") + "</b> " + tr("Click Open or press Ctrl+O") + "</li>";
     html += "<li><b>" + tr("Save Image:") + "</b> " + tr("Click Save or press Ctrl+S") + "</li>";
@@ -281,6 +281,7 @@ QString HelpDialog::buildHelpContent()
     html += "<p>" + tr("AI-based gradient removal:") + "</p>";
     html += "<ul>";
     html += "<li>" + tr("Automatically detects and removes gradients") + "</li>";
+    html += "<li>" + tr("Includes dedicated Denoise operation for AI noise cleanup") + "</li>";
     html += "<li>" + tr("More powerful than traditional ABE") + "</li>";
     html += "<li>" + tr("Requires external GraXpert installation") + "</li>";
     html += "</ul>";
@@ -543,6 +544,24 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Batch Crop: applies the same crop to all currently open images") + "</li>";
     html += "</ul>";
     
+    html += "<h3>" + tr("Image Binning") + "</h3>";
+    html += "<p>" + tr("Reduce image dimensions by combining adjacent pixels:") + "</p>";
+    html += "<ul>";
+    html += "<li>" + tr("Improves signal-to-noise ratio by coherent data aggregation") + "</li>";
+    html += "<li>" + tr("Supported binning factors: 1x1 (no binning), 2x2, 3x3") + "</li>";
+    html += "<li>" + tr("Useful for reducing file size while preserving essential data integrity") + "</li>";
+    html += "<li>" + tr("Ideal for preprocessing undersampled or noisy data") + "</li>";
+    html += "</ul>";
+    
+    html += "<h3>" + tr("Image Upscale") + "</h3>";
+    html += "<p>" + tr("Enlarge images with selectable interpolation methods:") + "</p>";
+    html += "<ul>";
+    html += "<li><b>" + tr("Nearest Neighbor:") + "</b> " + tr("Fastest method, preserves sharp transitions, suitable for specific use cases") + "</li>";
+    html += "<li><b>" + tr("Bilinear:") + "</b> " + tr("Good balance between speed and quality") + "</li>";
+    html += "<li><b>" + tr("Bicubic:") + "</b> " + tr("Higher quality with smooth gradations (recommended for most astrophotography images)") + "</li>";
+    html += "<li><b>" + tr("Lanczos4:") + "</b> " + tr("Highest quality interpolation, best for detailed astronomical data (slower)") + "</li>";
+    html += "</ul>";
+    
     html += "<h3>" + tr("Star Halo Removal") + "</h3>";
     html += "<p>" + tr("Tool to detect and subtract halos around bright stars, improving image clarity and preventing halo overlaps.") + "</p>";
 
@@ -558,12 +577,29 @@ QString HelpDialog::buildHelpContent()
 
     // Masks
     html += "<h2>" + tr("Masks") + "</h2>";
-    html += "<p>" + tr("Create and apply luminosity masks for selective processing:") + "</p>";
+    html += "<p>" + tr("Create and apply masks for selective processing:") + "</p>";
     html += "<ul>";
-    html += "<li><b>" + tr("Create Mask:") + "</b> " + tr("Generate mask from image luminosity") + "</li>";
+    html += "<li><b>" + tr("Create Mask:") + "</b> " + tr("Generate masks using Binary, Range Selection, Lightness, Chrominance, Star Mask, and Color-based workflows") + "</li>";
     html += "<li><b>" + tr("Apply Mask:") + "</b> " + tr("Load and apply existing mask") + "</li>";
     html += "<li><b>" + tr("Invert Mask:") + "</b> " + tr("Invert mask selection") + "</li>";
+    html += "<li><b>" + tr("Range Selection:") + "</b> " + tr("Control lower/upper limits, fuzziness, linked limits, inversion, and screening options") + "</li>";
+    html += "<li><b>" + tr("Color Range:") + "</b> " + tr("Target Red/Orange/Yellow/Green/Cyan/Blue/Violet/Magenta with hue fuzziness") + "</li>";
     html += "<li><b>" + tr("Show Overlay:") + "</b> " + tr("Toggle mask visualization") + "</li>";
+    html += "</ul>";
+
+    // Main Toolbar and View Controls
+    html += "<h2>" + tr("Main Toolbar & View Controls") + "</h2>";
+    html += "<ul>";
+    html += "<li><b>" + tr("Display Modes:") + "</b> " + tr("Linear, Auto Stretch, Histogram, ArcSinh, Square Root, and Logarithmic") + "</li>";
+    html += "<li><b>" + tr("Channel View:") + "</b> " + tr("Switch display between RGB, R, G, and B channels") + "</li>";
+    html += "<li><b>" + tr("RGB Link:") + "</b> " + tr("Toggle linked/unlinked channel stretching in preview") + "</li>";
+    html += "<li><b>" + tr("AutoStretch Target:") + "</b> " + tr("Quick target-median presets for display stretch behavior") + "</li>";
+    html += "<li><b>" + tr("Burn Display:") + "</b> " + tr("Permanently apply current display transform to image data") + "</li>";
+    html += "<li><b>" + tr("Invert Colors:") + "</b> " + tr("Diagnostic inverted display toggle") + "</li>";
+    html += "<li><b>" + tr("False Color:") + "</b> " + tr("False-color visualization for tonal/structural inspection") + "</li>";
+    html += "<li><b>" + tr("Link Views:") + "</b> " + tr("Synchronize zoom/pan across multiple image windows") + "</li>";
+    html += "<li><b>" + tr("View Tiling:") + "</b> " + tr("Smart grid, vertical, and horizontal tiling modes") + "</li>";
+    html += "<li><b>" + tr("Magnifier Loupe:") + "</b> " + tr("Cursor-following magnifier for precise local inspection") + "</li>";
     html += "</ul>";
 
     // Effects

@@ -72,6 +72,8 @@
 #include "dialogs/SPCCDialog.h"
 #include "dialogs/BackgroundNeutralizationDialog.h"
 #include "dialogs/PixelMathDialog.h"
+#include "dialogs/BinningDialog.h"
+#include "dialogs/UpscaleDialog.h"
 
 #include "dialogs/UpdateDialog.h" // [NEW] Auto-updater dialog
 #include "network/UpdateChecker.h" // [NEW] Auto-updater checker
@@ -591,6 +593,8 @@ MainWindow::MainWindow(QWidget *parent)
                     if (m_pccDlg) m_pccDlg->setViewer(v);
                     if (m_spccDlg) m_spccDlg->setViewer(v);
                     if (m_cropDlg) m_cropDlg->setViewer(v);
+
+                    if (m_upscaleDlg) m_upscaleDlg->setViewer(v);
 
                     if (m_pccDlg) m_pccDlg->setViewer(v);
                     if (m_cropDlg) m_cropDlg->setViewer(v);
@@ -1244,6 +1248,12 @@ MainWindow::MainWindow(QWidget *parent)
     });
     addMenuAction(utilMenu, tr("Pixel Math"), "", [this](){
         openPixelMathDialog();
+    });
+    addMenuAction(utilMenu, tr("Binning"), "", [this](){
+        openBinningDialog();
+    });
+    addMenuAction(utilMenu, tr("Upscale"), "", [this](){
+        openUpscaleDialog();
     });
     addMenuAction(utilMenu, tr("Star Analysis"), "", [this](){
         openStarAnalysisDialog(); // Call handles checks
@@ -3324,6 +3334,68 @@ void MainWindow::openGHSDialog() {
     m_ghsDlg->onReset();
     
     log(tr("Opened GHS Tool."), Log_Action, true);
+}
+
+void MainWindow::openBinningDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
+        return;
+    }
+    
+    if (m_binDlg) {
+        if (auto sub = qobject_cast<CustomMdiSubWindow*>(m_binDlg->parentWidget())) {
+            sub->raise();
+            sub->activateWindow();
+        } else {
+            m_binDlg->raise();
+            m_binDlg->activateWindow();
+        }
+        m_binDlg->setViewer(viewer);
+        return;
+    }
+    
+    auto dlg = new BinningDialog(this);
+    m_binDlg = dlg;
+    dlg->setViewer(viewer);
+    
+    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, dlg, tr("Image Binning"));
+    centerToolWindow(sub);
+    
+    connect(dlg, &QObject::destroyed, [this](){ m_binDlg = nullptr; });
+    
+    log(tr("Opened Binning Tool."), Log_Action, true);
+}
+
+void MainWindow::openUpscaleDialog() {
+    ImageViewer* viewer = currentViewer();
+    if (!viewer) {
+        QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
+        return;
+    }
+    
+    if (m_upscaleDlg) {
+        if (auto sub = qobject_cast<CustomMdiSubWindow*>(m_upscaleDlg->parentWidget())) {
+            sub->raise();
+            sub->activateWindow();
+        } else {
+            m_upscaleDlg->raise();
+            m_upscaleDlg->activateWindow();
+        }
+        m_upscaleDlg->setViewer(viewer);
+        return;
+    }
+    
+    auto dlg = new UpscaleDialog(this);
+    m_upscaleDlg = dlg;
+    dlg->setViewer(viewer);
+    
+    CustomMdiSubWindow* sub = setupToolSubwindow(nullptr, dlg, tr("Image Upscale"));
+    centerToolWindow(sub);
+    
+    connect(dlg, &QObject::destroyed, [this](){ m_upscaleDlg = nullptr; });
+    
+    log(tr("Opened Upscale Tool."), Log_Action, true);
 }
 
 void MainWindow::openPlateSolvingDialog() {

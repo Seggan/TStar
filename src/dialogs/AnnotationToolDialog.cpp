@@ -341,6 +341,7 @@ void AnnotationToolDialog::refreshAutomaticAnnotations() {
     QString dataPath;
     QStringList paths = {
         QCoreApplication::applicationDirPath() + "/data",
+        QCoreApplication::applicationDirPath() + "/../Resources/data",
         QCoreApplication::applicationDirPath() + "/../data",
         QCoreApplication::applicationDirPath() + "/../../data",
         QDir::currentPath() + "/data"

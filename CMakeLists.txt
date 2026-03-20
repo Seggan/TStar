@@ -644,6 +644,10 @@ set(TSTAR_SOURCES
     src/dialogs/PerfectPaletteDialog.h
     src/dialogs/BackgroundNeutralizationDialog.cpp
     src/dialogs/BackgroundNeutralizationDialog.h
+    src/dialogs/BinningDialog.cpp
+    src/dialogs/BinningDialog.h
+    src/dialogs/UpscaleDialog.cpp
+    src/dialogs/UpscaleDialog.h
     src/dialogs/PixelMathDialog.cpp
     src/dialogs/PixelMathDialog.h
     src/dialogs/PlateSolvingDialog.cpp

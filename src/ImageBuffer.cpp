@@ -3414,6 +3414,114 @@ void ImageBuffer::mirrorY() {
     }
 }
 
+void ImageBuffer::bin(int factor) {
+    if (factor <= 1 || m_data.empty()) return;
+
+    WriteLock lock(this);
+    int oldW = m_width;
+    int oldH = m_height;
+    int ch = m_channels;
+
+    int newW = oldW / factor;
+    int newH = oldH / factor;
+
+    if (newW <= 0 || newH <= 0) return;
+
+    std::vector<float> newData(static_cast<size_t>(newW) * newH * ch, 0.0f);
+    float scale = 1.0f / (factor * factor);
+
+    #pragma omp parallel for
+    for (int y = 0; y < newH; ++y) {
+        for (int x = 0; x < newW; ++x) {
+            for (int c = 0; c < ch; ++c) {
+                double sum = 0;
+                for (int fy = 0; fy < factor; ++fy) {
+                    for (int fx = 0; fx < factor; ++fx) {
+                        sum += m_data[((static_cast<size_t>(y) * factor + fy) * oldW + (x * factor + fx)) * ch + c];
+                    }
+                }
+                newData[(static_cast<size_t>(y) * newW + x) * ch + c] = static_cast<float>(sum * scale);
+            }
+        }
+    }
+
+    m_width = newW;
+    m_height = newH;
+    m_data = std::move(newData);
+
+    // Update WCS
+    QTransform t;
+    t.scale(1.0 / factor, 1.0 / factor);
+    reframeWCS(t, oldW, oldH);
+
+    if (hasMask()) {
+        ImageBuffer maskBuf;
+        maskBuf.setData(oldW, oldH, 1, m_mask.data);
+        maskBuf.bin(factor);
+        m_mask.data = maskBuf.data();
+        m_mask.width = maskBuf.width();
+        m_mask.height = maskBuf.height();
+    }
+}
+
+void ImageBuffer::resample(int newWidth, int newHeight, InterpolationMethod method) {
+    if (newWidth <= 0 || newHeight <= 0 || m_data.empty()) return;
+
+    WriteLock lock(this);
+    int oldW = m_width;
+    int oldH = m_height;
+    int ch = m_channels;
+
+    int interpolation = cv::INTER_CUBIC;
+    switch (method) {
+        case Interpolation_Nearest: interpolation = cv::INTER_NEAREST; break;
+        case Interpolation_Linear:  interpolation = cv::INTER_LINEAR; break;
+        case Interpolation_Cubic:   interpolation = cv::INTER_CUBIC; break;
+        case Interpolation_Lanczos: interpolation = cv::INTER_LANCZOS4; break;
+    }
+
+    cv::Mat src;
+    if (ch == 1) {
+        src = cv::Mat(oldH, oldW, CV_32FC1, m_data.data());
+    } else if (ch == 3) {
+        src = cv::Mat(oldH, oldW, CV_32FC3, m_data.data());
+    } else {
+        // Fallback for other channel counts
+        return;
+    }
+
+    cv::Mat dst;
+    cv::resize(src, dst, cv::Size(newWidth, newHeight), 0, 0, interpolation);
+
+    m_width = newWidth;
+    m_height = newHeight;
+    
+    // Copy data from cv::Mat to std::vector<float>
+    size_t newSize = static_cast<size_t>(newWidth) * newHeight * ch;
+    if (dst.isContinuous()) {
+        m_data.assign((float*)dst.data, (float*)dst.data + newSize);
+    } else {
+        m_data.resize(newSize);
+        for (int r = 0; r < newHeight; ++r) {
+            std::copy(dst.ptr<float>(r), dst.ptr<float>(r) + newWidth * ch, m_data.begin() + (static_cast<size_t>(r) * newWidth * ch));
+        }
+    }
+
+    // Update WCS
+    QTransform t;
+    t.scale((double)newWidth / oldW, (double)newHeight / oldH);
+    reframeWCS(t, oldW, oldH);
+
+    if (hasMask()) {
+        ImageBuffer maskBuf;
+        maskBuf.setData(oldW, oldH, 1, m_mask.data);
+        maskBuf.resample(newWidth, newHeight, method);
+        m_mask.data = maskBuf.data();
+        m_mask.width = maskBuf.width();
+        m_mask.height = maskBuf.height();
+    }
+}
+
 void ImageBuffer::multiply(float factor) {
     WriteLock lock(this);  // Thread-safe write access
     

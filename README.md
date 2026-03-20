@@ -32,6 +32,14 @@ TStar is a powerful, C++17/Qt6-based image processing platform explicitly design
 
 ## Tools & Functionalities
 
+### 0. File Formats, Bit Depths & I/O
+*   **Open Formats**: FITS/FIT, XISF, TIFF/TIF, PNG, JPG/JPEG, BMP, and camera RAW formats (CR2/CR3/CRW/NEF/NRW/ARW/DNG/ORF/ORI/RW2/RAF/PEF/PTX/RAW/RWL/MRW/SRW/ERF/MEF/MOS/X3F).
+*   **Multi-Image Containers**: FITS multi-extension and XISF multi-image files are supported, with per-extension/image loading.
+*   **Save Formats**: FITS, XISF, TIFF, PNG, JPG with explicit format-aware behavior for scientific data vs display exports.
+*   **Bit-Depth Aware Save**: 8/16/32 integer and 32-bit float workflows for scientific formats; display-oriented export options for PNG/JPG.
+*   **RAW Handling**: Native RAW loading (when LibRaw is available), Bayer pattern metadata tracking, and Debayer conversion pipeline.
+*   **Header/Metadata Preservation**: FITS/XISF metadata propagation, WCS persistence and editing, ICC profile support, and project snapshot persistence.
+
 ### 1. Stretching & Linear to Non-Linear
 Tools to transform raw linear data into viewable images.
 *   **Auto Stretch (Statistical)**: Automatically stretches the image based on statistical analysis. Ideal for quick previews.
@@ -80,6 +88,10 @@ Tools to transform raw linear data into viewable images.
 *   **Mask Generation**: Create masks based on Luminance, Chrominance, Star Detection, or Specific Color Hues.
 *   **Manual Masking**: Draw masks using polygons or shapes.
 *   **Mask Tools**: Invert, Blur, and Overlay visibility controls.
+*   **Range Selection Masks**: Lower/Upper limits with fuzziness and linked-limit controls for selective tonal targeting.
+*   **Color Masks**: Red/Orange/Yellow/Green/Cyan/Blue/Violet/Magenta hue-based masking with optional range inversion.
+*   **Mask Types**: Binary, Range Selection, Lightness, Chrominance, Star Mask, and dedicated color mask workflows.
+*   **Mask Overlay Workflow**: Apply, remove, invert, and visualize mask overlays directly from toolbar menu and preview dialogs.
 
 ### 6. Image Pipeline (Preprocessing)
 *   **Image Calibration**: Calibrate raw light frames using master Bias, Dark, and Flat frames.
@@ -100,6 +112,8 @@ Tools to transform raw linear data into viewable images.
 *   **Blink Comparator**: Fast visual alternation between two views for registration/noise/detail checks.
 *   **Correction Brush**: Interactive artifact removal using Content-Aware AI or standard median sampling.
 *   **Rotate & Crop**: Precision cropping with aspect ratio constraints and batch processing support.
+*   **Image Binning**: Reduce image dimensions by combining adjacent pixels, useful for improving signal-to-noise ratio or reducing file size while preserving data integrity.
+*   **Image Upscale**: Enlarge images with selectable interpolation methods (Nearest Neighbor, Bilinear, Bicubic, Lanczos4) for enhanced resolution.
 *   **RAW to FITS Converter**: Batch convert camera RAW files (Canon, Nikon, Sony, etc.) to FITS.
 *   **FITS Header Editor**: View and modify FITS metadata keywords.
 *   **RAW Editor**: Lightroom-style light/color controls for image development.
@@ -112,6 +126,10 @@ Tools to transform raw linear data into viewable images.
 *   **Collapsed View Previews**: Right panel thumbnails for minimized/shaded windows.
 *   **Hide Minimized Views Toggle**: Keep workspace clean while preserving quick access.
 *   **Cursor Magnifier**: Follow-cursor loupe for precise focus/detail checks.
+*   **Display Transform Modes**: Linear, Auto Stretch, Histogram, ArcSinh, Square Root, and Logarithmic display modes.
+*   **Display Controls in Toolbar**: RGB link/unlink, channel view (RGB/R/G/B), invert colors, false color visualization, and burn-display-to-buffer.
+*   **AutoStretch Target Median**: Quick target median presets for display stretch behavior.
+*   **Linked Views**: Optional linked zoom/pan synchronization across open image windows.
 
 ### 8. Scripting & Automation
 *   **TStar Scripts**: Built-in processing workflows for common tasks.

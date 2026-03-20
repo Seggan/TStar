@@ -2096,6 +2096,7 @@ bool StackingCommands::cmdCrop(const ScriptCommand& cmd) {
 }
 
 bool StackingCommands::cmdStat(const ScriptCommand& cmd) {
+    Q_UNUSED(cmd);
     if (!s_currentImage) return false;
     
     float min = 1.0f, max = 0.0f, sum = 0.0f;

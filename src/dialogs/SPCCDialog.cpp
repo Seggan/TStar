@@ -60,7 +60,12 @@ SPCCDialog::SPCCDialog(ImageViewer* viewer, MainWindow* mw, QWidget* parent)
     m_dataPath = QDir::cleanPath(
         QCoreApplication::applicationDirPath() + "/data");
     if (!QFile::exists(m_dataPath + "/tstar_data.fits")) {
-        // Try one level up (common in build trees)
+        // Try macOS bundle Resources path
+        m_dataPath = QDir::cleanPath(
+            QCoreApplication::applicationDirPath() + "/../Resources/data");
+    }
+    if (!QFile::exists(m_dataPath + "/tstar_data.fits")) {
+        // Try one level up (common in build trees or some linux installs)
         m_dataPath = QDir::cleanPath(
             QCoreApplication::applicationDirPath() + "/../data");
     }

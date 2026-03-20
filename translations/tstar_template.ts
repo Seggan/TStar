@@ -962,6 +962,37 @@
         </message>
     </context>
     <context>
+        <name>BinningDialog</name>
+        <message>
+            <source>1x1 (None)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>2x2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>3x3</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Binning Factor:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Image Binning</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
         <name>BlinkComparatorDialog</name>
         <message>
             <source>AutoStretch</source>
@@ -3419,6 +3450,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>AutoStretch Target:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Automate complex multi-step image processing workflows</source>
             <translation type="unfinished" />
         </message>
@@ -3467,6 +3502,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Bicubic:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Bilinear:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Black Point</source>
             <translation type="unfinished" />
         </message>
@@ -3488,6 +3531,10 @@
         </message>
         <message>
             <source>Browse and execute built-in processing scripts:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Burn Display:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3520,6 +3567,10 @@
         </message>
         <message>
             <source>Channel Operations</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Channel View:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3599,6 +3650,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Color Range:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Combine Channels</source>
             <translation type="unfinished" />
         </message>
@@ -3656,6 +3711,10 @@
         </message>
         <message>
             <source>Contrast Limited Adaptive Histogram Equalization. Enhances local contrast in different regions of the image:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Control lower/upper limits, fuzziness, linked limits, inversion, and screening options</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3731,7 +3790,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Create and apply luminosity masks for selective processing:</source>
+            <source>Create and apply masks for selective processing:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3755,6 +3814,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cursor-following magnifier for precise local inspection</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Curves Transformation</source>
             <translation type="unfinished" />
         </message>
@@ -3775,7 +3838,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Diagnostic inverted display toggle</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Display Modes</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Display Modes:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3827,6 +3898,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Enlarge images with selectable interpolation methods:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Ensures all input images are in the same format (FITS recommended for astrophotography)</source>
             <translation type="unfinished" />
         </message>
@@ -3871,11 +3946,23 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>False Color:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>False-color visualization for tonal/structural inspection</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Fast Drizzle:</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Fast normalization or K-Sigma-based normalization per frame</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Fastest method, preserves sharp transitions, suitable for specific use cases</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3911,11 +3998,15 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Generate mask from image luminosity</source>
+            <source>Generate masks using Binary, Range Selection, Lightness, Chrominance, Star Mask, and Color-based workflows</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Getting Started</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Good balance between speed and quality</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3928,6 +4019,14 @@
         </message>
         <message>
             <source>Help &amp; Tutorial</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Higher quality with smooth gradations (recommended for most astrophotography images)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Highest quality interpolation, best for detailed astronomical data (slower)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3951,6 +4050,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Ideal for preprocessing undersampled or noisy data</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Identifies bright stars in each image as reference points</source>
             <translation type="unfinished" />
         </message>
@@ -3960,6 +4063,10 @@
         </message>
         <message>
             <source>Image Annotator</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Image Binning</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3987,7 +4094,19 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Image Upscale</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Image Weighting:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Improves signal-to-noise ratio by coherent data aggregation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Includes dedicated Denoise operation for AI noise cleanup</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4004,6 +4123,10 @@
         </message>
         <message>
             <source>Interactive tool to remove artifacts and blemishes:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Invert Colors:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4031,6 +4154,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Lanczos4:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Lightroom-style RAW editor for fast global light/color adjustments:</source>
             <translation type="unfinished" />
         </message>
@@ -4039,7 +4166,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Linear, Auto Stretch, Histogram, ArcSinh, Square Root, and Logarithmic</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Linear:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Link Views:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4064,6 +4199,14 @@
         </message>
         <message>
             <source>Magenta Correction</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Magnifier Loupe:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Main Toolbar &amp; View Controls</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4168,6 +4311,10 @@
         </message>
         <message>
             <source>Navigation Controls</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Nearest Neighbor:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4279,6 +4426,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Permanently apply current display transform to image data</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Photometric Color Calibration (PCC)</source>
             <translation type="unfinished" />
         </message>
@@ -4335,6 +4486,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Quick target-median presets for display stretch behavior</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>RAW Editor</source>
             <translation type="unfinished" />
         </message>
@@ -4347,7 +4502,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>RGB Link:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Range Masking:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Range Selection:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4364,6 +4527,10 @@
         </message>
         <message>
             <source>Redo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Reduce image dimensions by combining adjacent pixels:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4543,6 +4710,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Smart grid, vertical, and horizontal tiling modes</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Specialized stretch that preserves star colors while increasing contrast.</source>
             <translation type="unfinished" />
         </message>
@@ -4635,6 +4806,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Supported binning factors: 1x1 (no binning), 2x2, 3x3</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Supports ASTAP integration for professional solving and automatic database path handling</source>
             <translation type="unfinished" />
         </message>
@@ -4655,7 +4830,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Switch display between RGB, R, G, and B channels</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Symmetry Point</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Synchronize zoom/pan across multiple image windows</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4675,11 +4858,15 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>TStar supports FITS, XISF, TIFF, and PNG image formats commonly used in astrophotography.</source>
+            <source>TStar supports FITS/FIT, XISF, TIFF/TIF, PNG, JPG/JPEG, BMP and (when LibRaw support is available) major camera RAW formats such as CR2/CR3/NEF/ARW/DNG/ORF/RW2/RAF and others.</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>TStar supports scripting for automating processing workflows:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Target Red/Orange/Yellow/Green/Cyan/Blue/Violet/Magenta with hue fuzziness</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4728,6 +4915,10 @@
         </message>
         <message>
             <source>To work with an existing project:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Toggle linked/unlinked channel stretching in preview</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4783,6 +4974,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Useful for reducing file size while preserving essential data integrity</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Useful for verifying calibration accuracy</source>
             <translation type="unfinished" />
         </message>
@@ -4812,6 +5007,10 @@
         </message>
         <message>
             <source>View Management</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>View Tiling:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -5339,6 +5538,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Binning</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Bit Depth:</source>
             <translation type="unfinished" />
         </message>
@@ -5779,7 +5982,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Image Binning</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Image Blending</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Image Upscale</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6031,6 +6242,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Opened Binning Tool.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Opened Curves Tool.</source>
             <translation type="unfinished" />
         </message>
@@ -6052,6 +6267,10 @@
         </message>
         <message>
             <source>Opened RAW: %1 (Bayer pattern: %2) – use Debayer to convert to colour.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Opened Upscale Tool.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6708,6 +6927,10 @@
         </message>
         <message>
             <source>Update check failed: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Upscale</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8588,7 +8811,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Numerical dark optimization found factor K = %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Preprocessing %1 files using %2 threads...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Scaling dark by exposure ratio K = %1 (%2s / %3s)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8597,6 +8828,10 @@
         </message>
         <message>
             <source>Warning: Auto-detect Bayer Pattern failed (Header: '%1'). Defaulting to RGGB.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Warning: Missing exposure time metadata. Using scaling factor 1.0.</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -12277,6 +12512,49 @@
         </message>
         <message>
             <source>Would you like to update now?</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>UpscaleDialog</name>
+        <message>
+            <source>Apply</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Bicubic (precise)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Bilinear (fast)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Image Upscale</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Interpolation:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Lanczos4 (best quality)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Nearest Neighbor</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>New Height:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>New Width:</source>
             <translation type="unfinished" />
         </message>
     </context>

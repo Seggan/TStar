@@ -155,6 +155,8 @@ private slots:
     // void openDeconvolutionDialog();
     void openNarrowbandNormalizationDialog();
     void openNBtoRGBStarsDialog();
+    void openBinningDialog();
+    void openUpscaleDialog();
     void openBlinkComparatorDialog();
     
     void openExtractLuminanceDialog();
@@ -334,6 +336,8 @@ private:
     QPointer<class SettingsDialog> m_settingsDlg;
     QPointer<class ColorProfileDialog> m_colorProfileDlg;
     QPointer<class MorphologyDialog> m_morphologyDlg;
+    QPointer<class BinningDialog> m_binDlg;
+    QPointer<class UpscaleDialog> m_upscaleDlg;
     
 public:
     // Persisted annotations across dialog destruction
