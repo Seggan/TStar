@@ -186,7 +186,7 @@ bool SPCC::loadTStarFits(const QString& dataPath, SPCCDataStore& out) {
         fits_read_key(fptr, TSTRING, "CTYPE",   ctype,   nullptr, &status);
         if (status != 0) { status = 0; continue; }
 
-        const QString name  = QString(extname).replace("'","").trimmed();
+        const QString name  = QString(extname).trimmed().remove('\'');
         const QString ctype_up = QString(ctype).replace("'","").trimmed().toUpper();
 
         if (name.isEmpty() || ctype_up.isEmpty()) continue;
@@ -307,8 +307,8 @@ bool SPCC::loadTStarDatabase(const QString& dbPath, SPCCDataStore& out) {
                 if (jobj.isEmpty()) continue;
 
                 SPCCObject obj;
-                obj.name  = jobj.value("name").toString();
-                obj.model = jobj.value("model").toString();
+                obj.name  = jobj.value("name").toString().trimmed().remove('\'');
+                obj.model = jobj.value("model").toString().trimmed().remove('\'');
                 if (obj.name.isEmpty()) continue;
 
                 QString typeStr = jobj.value("type").toString().toUpper();
@@ -455,13 +455,22 @@ void SPCC::buildSystemThroughput(const SPCCDataStore& store,
     auto applyComponent = [&](const std::vector<SPCCObject>& list,
                                const QString& name) {
         if (name == "(None)" || name.isEmpty()) return;
-        const SPCCObject* obj = findCurve(list, name);
-        if (!obj && !channel.isEmpty()) {
-            // Try with channel suffix (e.g. "Sony IMX678 Red")
+        
+        const SPCCObject* obj = nullptr;
+        if (!channel.isEmpty()) {
+            // Priority 1: "Name Red", "Name Green", "Name Blue"
             obj = findCurve(list, name + " " + channel);
+            // Priority 2: "NameRed", "NameGreen", "NameBlue"
+            if (!obj) obj = findCurve(list, name + channel);
         }
+        
+        // Priority 3: Exact match or Mono curve
+        if (!obj) obj = findCurve(list, name);
+
         if (!obj || !obj->arrays_loaded) {
-            qCWarning(lcSPCC) << "Curve not found in database:" << name;
+            if (name != "(None)") {
+                qCWarning(lcSPCC) << "Curve not found in database:" << name << "channel:" << channel;
+            }
             return;
         }
         double curve[WL_GRID_LEN];

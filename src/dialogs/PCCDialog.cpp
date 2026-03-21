@@ -55,6 +55,9 @@ PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, 
     m_catalog = new CatalogClient(this);
     connect(m_catalog, &CatalogClient::catalogReady, this, &PCCDialog::onCatalogReady);
     connect(m_catalog, &CatalogClient::errorOccurred, this, &PCCDialog::onCatalogError);
+    connect(m_catalog, &CatalogClient::mirrorStatus, this, [this](const QString& msg){
+        m_status->setText(msg);
+    });
     
     m_calibrator = new PCCCalibrator();
     

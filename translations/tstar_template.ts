@@ -631,7 +631,7 @@
     <context>
         <name>AstapSolver</name>
         <message>
-            <source>ASTAP Database found at: %1</source>
+            <source>ASTAP Database found: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -699,6 +699,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Note: ASTAP database not explicitly located by TStar; ASTAP will use its internal search paths.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>QProcess start error: %1</source>
             <translation type="unfinished" />
         </message>
@@ -708,10 +712,6 @@
         </message>
         <message>
             <source>Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>WARNING: ASTAP Database not found! Solving may fail.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -1194,6 +1194,18 @@
         </message>
         <message>
             <source>All VizieR mirrors failed for Gaia DR3.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Mirror %1 failed (HTTP %2). Retrying...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Querying APASS on %1...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Querying Gaia DR3 on %1...</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -8235,6 +8247,10 @@
         </message>
         <message>
             <source>Querying Catalog (VizieR)...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Search radius capped to 3.0 deg for Gaia DR3 (online). Use ASTAP for wider searches.</source>
             <translation type="unfinished" />
         </message>
         <message>

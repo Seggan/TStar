@@ -631,8 +631,8 @@
     <context>
         <name>AstapSolver</name>
         <message>
-            <source>ASTAP Database found at: %1</source>
-            <translation type="finished">Base de datos ASTAP encontrada en: %1</translation>
+            <source>ASTAP Database found: %1</source>
+            <translation type="finished">Base de datos ASTAP encontrada: %1</translation>
         </message>
         <message>
             <source>ASTAP attempt: %1</source>
@@ -699,6 +699,10 @@
             <translation type="finished">FOV grande detectado: reduciendo de %1° a %2° para estabilidad de búsqueda</translation>
         </message>
         <message>
+            <source>Note: ASTAP database not explicitly located by TStar; ASTAP will use its internal search paths.</source>
+            <translation type="finished">Nota: base de datos ASTAP no localizada explícitamente por TStar; ASTAP usará sus rutas de búsqueda internas.</translation>
+        </message>
+        <message>
             <source>QProcess start error: %1</source>
             <translation type="finished">Error al iniciar QProcess: %1</translation>
         </message>
@@ -709,10 +713,6 @@
         <message>
             <source>Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg</source>
             <translation type="finished">Iniciando ASTAP Solver. Centro: %1, %2 Radio: %3 grados</translation>
-        </message>
-        <message>
-            <source>WARNING: ASTAP Database not found! Solving may fail.</source>
-            <translation type="finished">ADVERTENCIA: ¡Base de datos ASTAP no encontrada! La resolución puede fallar.</translation>
         </message>
         <message>
             <source>blind solve</source>
@@ -1195,6 +1195,18 @@
         <message>
             <source>All VizieR mirrors failed for Gaia DR3.</source>
             <translation type="finished">Todos los espejos de VizieR fallaron para Gaia DR3.</translation>
+        </message>
+        <message>
+            <source>Mirror %1 failed (HTTP %2). Retrying...</source>
+            <translation type="finished">Mirror %1 fallido (HTTP %2). Reintentando...</translation>
+        </message>
+        <message>
+            <source>Querying APASS on %1...</source>
+            <translation type="finished">Consultando APASS en %1...</translation>
+        </message>
+        <message>
+            <source>Querying Gaia DR3 on %1...</source>
+            <translation type="finished">Consultando Gaia DR3 en %1...</translation>
         </message>
     </context>
     <context>
@@ -8239,6 +8251,10 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
         <message>
             <source>Querying Catalog (VizieR)...</source>
             <translation type="finished">Consultando Catálogo (VizieR)...</translation>
+        </message>
+        <message>
+            <source>Search radius capped to 3.0 deg for Gaia DR3 (online). Use ASTAP for wider searches.</source>
+            <translation type="finished">Radio de búsqueda limitado a 3.0 grados para Gaia DR3 (en línea). Use ASTAP para búsquedas más amplias.</translation>
         </message>
         <message>
             <source>Solved pixel scale: %1 arcsec/px</source>

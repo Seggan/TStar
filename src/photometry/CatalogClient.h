@@ -25,6 +25,7 @@ public:
 signals:
     void catalogReady(const std::vector<CatalogStar>& stars);
     void errorOccurred(const QString& msg);
+    void mirrorStatus(const QString& msg); // For retry transparency
 
 private slots:
     void onReply(QNetworkReply* reply);
@@ -32,7 +33,7 @@ private slots:
 
 private:
     QNetworkAccessManager* m_manager;
-    int m_currentMirrorIndex;
+    static int s_currentMirrorIndex; // SHARED across all instances for consistency
     double m_lastQueryRa, m_lastQueryDec, m_lastQueryRadius;
     QString m_lastQueryType; // "GAIA" or "APASS"
     

@@ -445,17 +445,12 @@ void HistogramStretchDialog::onApply() {
         // 3. Apply MTF
         ImageBuffer buf = m_backup;
         applyMTF(buf, m_shadows, m_midtones, m_highlights, m_doRed, m_doGreen, m_doBlue);
-        // Switch to Linear BEFORE setBuffer so refreshDisplay shows the stretched
-        // data as-is, without a second auto-stretch pass on top of the MTF result.
-        m_viewer->setDisplayState(ImageBuffer::Display_Linear, m_originalDisplayLinked);
         m_viewer->setBuffer(buf, m_viewer->windowTitle(), true);
         
         m_applied = true;
         
         // --- Persistence: Keep dialog open for continued adjustments ---
         // Update backup to the newly applied result so subsequent cancels/closes revert to THIS state
-        // Also update the saved display mode: after apply the image is stretched, so Linear is now correct.
-        m_originalDisplayMode = ImageBuffer::Display_Linear;
         m_backup = buf;
         // We do NOT set m_applied = true because we want destructor/reject to ALWAYS restore m_backup
         // (which now holds the applied state). This handles cases where user applies, then changes sliders, then cancels.
@@ -511,7 +506,6 @@ void HistogramStretchDialog::updatePreview() {
     m_viewer->clearPreviewLUT();
     ImageBuffer temp = m_backup;
     applyMTF(temp, m_shadows, m_midtones, m_highlights, m_doRed, m_doGreen, m_doBlue);
-    m_viewer->setDisplayState(ImageBuffer::Display_Linear, m_originalDisplayLinked);
     m_viewer->setBuffer(temp, m_viewer->windowTitle(), true);
 }
 

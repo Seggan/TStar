@@ -58,7 +58,7 @@ PlateSolvingDialog::PlateSolvingDialog(QWidget* parent) : DialogBase(parent, tr(
     QHBoxLayout* fovBox = new QHBoxLayout();
     fovBox->setContentsMargins(0, 0, 0, 0);
     fovBox->setSpacing(6);
-    m_fov = new QLineEdit("15.0", this); // Default 15 deg radius for hint
+    m_fov = new QLineEdit("3.0", this); // Default 3.0 deg radius for Gaia (online)
     fovBox->addWidget(new QLabel(tr("Search Radius (deg):")));
     fovBox->addWidget(m_fov);
     mainLayout->addLayout(fovBox);

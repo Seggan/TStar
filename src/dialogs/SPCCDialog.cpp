@@ -72,10 +72,9 @@ SPCCDialog::SPCCDialog(ImageViewer* viewer, MainWindow* mw, QWidget* parent)
     }
 
     // Load spectral database eagerly so combo boxes can be populated
-    m_storeLoaded = SPCC::loadTStarFits(m_dataPath, m_store);
-    
-    // Also load the TStar JSON database if it exists
-    SPCC::loadTStarDatabase(m_dataPath + "/TStar-spcc-database", m_store);
+    bool fitsLoaded = SPCC::loadTStarFits(m_dataPath, m_store);
+    bool dbLoaded   = SPCC::loadTStarDatabase(m_dataPath + "/TStar-spcc-database", m_store);
+    m_storeLoaded = fitsLoaded || dbLoaded;
 
     // Background workers
     m_fetchWatcher = new QFutureWatcher<std::vector<StarRecord>>(this);
@@ -299,10 +298,22 @@ void SPCCDialog::buildUI() {
 void SPCCDialog::populateCombosFromFits() {
     const QString none = tr("(None)");
 
-    // White reference: SED names only
+    // 1. White reference: SED names only
     m_whiteRefCombo->clear();
-    for (const SPCCObject& o : m_store.sed_list)
-        m_whiteRefCombo->addItem(o.name);
+    QStringList addedSeds;
+    for (const SPCCObject& o : m_store.sed_list) {
+        bool alreadyAdded = false;
+        for (const QString& s : addedSeds) {
+            if (s.compare(o.name, Qt::CaseInsensitive) == 0) {
+                alreadyAdded = true;
+                break;
+            }
+        }
+        if (!alreadyAdded) addedSeds << o.name;
+    }
+    addedSeds.sort(Qt::CaseInsensitive);
+    m_whiteRefCombo->addItems(addedSeds);
+
     // Try to pre-select G2V or A0V as a sensible default
     {
         int idx = m_whiteRefCombo->findText("G2V");
@@ -310,34 +321,64 @@ void SPCCDialog::populateCombosFromFits() {
         if (idx >= 0) m_whiteRefCombo->setCurrentIndex(idx);
     }
 
-    // Filters (with leading "(None)" entry)
-    auto populateFilter = [&](QComboBox* cb) {
+    // 2. Filters (with leading "(None)" entry)
+    auto populateFilter = [&](QComboBox* cb, const QString& channel = QString()) {
         cb->clear();
         cb->addItem(none);
-        for (const SPCCObject& o : m_store.filter_list)
-            cb->addItem(o.name);
+        QStringList uniqueNames;
+        
+        QRegularExpression channelRe;
+        if (!channel.isEmpty()) {
+             QString initial = channel.left(1); 
+             QString pattern = QString("(%1|\\b%2\\b|\\s%2|[_-]%2)")
+                               .arg(channel, initial);
+             channelRe.setPattern(pattern);
+             channelRe.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+        }
+
+        for (const SPCCObject& o : m_store.filter_list) {
+            bool alreadyAdded = false;
+            for (const QString& s : uniqueNames) {
+                if (s.compare(o.name, Qt::CaseInsensitive) == 0) {
+                    alreadyAdded = true;
+                    break;
+                }
+            }
+            if (alreadyAdded) continue;
+
+            if (channelRe.isValid() && !o.name.contains(channelRe)) continue;
+
+            uniqueNames << o.name;
+        }
+        uniqueNames.sort(Qt::CaseInsensitive);
+        cb->addItems(uniqueNames);
     };
-    populateFilter(m_rFilterCombo);
-    populateFilter(m_gFilterCombo);
-    populateFilter(m_bFilterCombo);
+
+    populateFilter(m_rFilterCombo, "Red");
+    populateFilter(m_gFilterCombo, "Green");
+    populateFilter(m_bFilterCombo, "Blue");
     populateFilter(m_lpFilter1Combo);
     populateFilter(m_lpFilter2Combo);
 
-    // Sensors
+    // 3. Sensors
     m_sensorCombo->clear();
     m_sensorCombo->addItem(none);
-    QStringList added;
+    QStringList uniqueSensors;
     for (const SPCCObject& o : m_store.sensor_list) {
         QString displayName = o.name;
-        if (o.type == OSC_SENSOR) {
-            // Strip channel suffix if present (e.g. "Sony IMX678 Red" -> "Sony IMX678")
-            displayName.remove(QRegularExpression("\\s+(Red|Green|Blue|R|G|B)$"));
+        displayName.remove(QRegularExpression("\\s+(Red|Green|Blue|R|G|B)$", QRegularExpression::CaseInsensitiveOption));
+        
+        bool alreadyAdded = false;
+        for (const QString& s : uniqueSensors) {
+            if (s.compare(displayName, Qt::CaseInsensitive) == 0) {
+                alreadyAdded = true;
+                break;
+            }
         }
-        if (!added.contains(displayName)) {
-            m_sensorCombo->addItem(displayName);
-            added << displayName;
-        }
+        if (!alreadyAdded) uniqueSensors << displayName;
     }
+    uniqueSensors.sort(Qt::CaseInsensitive);
+    m_sensorCombo->addItems(uniqueSensors);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -357,6 +398,9 @@ void SPCCDialog::connectSignals() {
             this, &SPCCDialog::onCalibrationFinished);
     connect(m_catalog, &CatalogClient::catalogReady, this, &SPCCDialog::onCatalogReady);
     connect(m_catalog, &CatalogClient::errorOccurred, this, &SPCCDialog::onCatalogError);
+    connect(m_catalog, &CatalogClient::mirrorStatus, this, [this](const QString& msg){
+        m_statusLabel->setText(msg);
+    });
 
     // Settings persistence
     connect(m_whiteRefCombo,  qOverload<int>(&QComboBox::currentIndexChanged),

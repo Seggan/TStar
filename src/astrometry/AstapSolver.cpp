@@ -50,8 +50,9 @@ static bool containsAstapCatalogs(const QString& path) {
             if (ok) return true;
         }
 
-        // Specific prefixes known to be ASTAP
-        if (f.startsWith("d50_") || f.startsWith("d80_") || f.startsWith("h18_") || f.startsWith("h17_")) {
+        // Specific prefixes known to be ASTAP (D05, D20, D50, D80, H17, H18, Hyperleda, Quasars, Tycho)
+        if (f.startsWith("d05_") || f.startsWith("d20_") || f.startsWith("d50_") || f.startsWith("d80_") || 
+            f.startsWith("h18_") || f.startsWith("h17_") || f.startsWith("g_") || f.startsWith("q_") || f.startsWith("tyc_")) {
             return true;
         }
     }
@@ -336,9 +337,11 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
         QString dbPath = getAstapDatabasePath();
         if (!dbPath.isEmpty()) {
             commonArgs << "-d" << dbPath;
-            emit logMessage(tr("ASTAP Database found at: %1").arg(dbPath));
+            emit logMessage(tr("ASTAP Database found: %1").arg(dbPath));
         } else {
-            emit logMessage(tr("WARNING: ASTAP Database not found! Solving may fail."));
+            // ASTAP has its own internal logic to find databases if not specified.
+            // We only warn if we can't find it to pass specifically, but it's often not fatal.
+            emit logMessage(tr("Note: ASTAP database not explicitly located by TStar; ASTAP will use its internal search paths."));
         }
 
         QStringList hintedArgs;

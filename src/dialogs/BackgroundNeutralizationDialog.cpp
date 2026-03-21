@@ -13,7 +13,7 @@
 #include <numeric>
 
 BackgroundNeutralizationDialog::BackgroundNeutralizationDialog(QWidget* parent)
-    : DialogBase(parent, tr("Background Neutralization"), 350, 150)
+    : DialogBase(parent, tr("Background Neutralization"), 350, 100)
 {
     
     // Interaction Control: Initially disabled until focused

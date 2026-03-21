@@ -7,42 +7,48 @@
 #include <QDebug>
 #include <QTimer>
 
-// VizieR mirror servers (fallback chain for robustness)
+// VizieR mirror servers (diverse global list)
 static const QStringList VIZIER_MIRRORS = {
-    "https://vizier.u-strasbg.fr/viz-bin/votable",     // Primary/Reliable (France)
-    "https://vizier.cds.unistra.fr/viz-bin/votable",   // Main CDS
-    "https://vizier.nao.ac.jp/viz-bin/votable",        // Mirror (Japan)
-    "https://vizier.iucaa.in/viz-bin/votable",         // Mirror (India)
-    "http://vizier.cfa.harvard.edu/viz-bin/votable"    // Mirror (USA, might require http)
+    "https://vizier.u-strasbg.fr/viz-bin/votable",     // Strasbourg (France) - Primary
+    "https://vizier.nao.ac.jp/viz-bin/votable",        // Tokyo (Japan)
+    "https://vizier.iucaa.in/viz-bin/votable",         // Pune (India)
+    "https://vizier.cfa.harvard.edu/viz-bin/votable",  // Harvard (USA)
+    "http://vizier.china-vo.org/viz-bin/votable",      // China-VO (China)
+    "https://vizier.cds.unistra.fr/viz-bin/votable"    // Strasbourg (Backup Alias)
 };
+
+// Initialize shared mirror index
+int CatalogClient::s_currentMirrorIndex = 0;
 
 static double gaiaBpRpToBV(double bprp) {
     // Approximation from Gaia BP-RP to Johnson B-V for main-sequence stars.
     return 0.3930 + 0.4750 * bprp - 0.0548 * bprp * bprp;
 }
 
-CatalogClient::CatalogClient(QObject* parent) : QObject(parent) {
-    m_manager = new QNetworkAccessManager(this);
-    m_currentMirrorIndex = 0;
+CatalogClient::CatalogClient(QObject* parent)
+    : QObject(parent), m_manager(new QNetworkAccessManager(this))
+{
 }
 
 void CatalogClient::queryAPASS(double ra, double dec, double radiusDeg) {
-    m_lastQueryRa = ra;
-    m_lastQueryDec = dec;
-    m_lastQueryRadius = radiusDeg;
+    m_lastQueryRa = ra; m_lastQueryDec = dec; m_lastQueryRadius = radiusDeg;
     m_lastQueryType = "APASS";
-    m_currentMirrorIndex = 0;  // Reset on fresh query
+    
+    // We don't reset s_currentMirrorIndex here to "persist" success from previous calls
+    // But we check bounds just in case
+    if (s_currentMirrorIndex >= VIZIER_MIRRORS.size()) s_currentMirrorIndex = 0;
+    
     sendAPASS();
 }
 
 void CatalogClient::sendAPASS() {
-    if (m_currentMirrorIndex >= VIZIER_MIRRORS.size()) {
+    if (s_currentMirrorIndex >= VIZIER_MIRRORS.size()) {
         emit errorOccurred(tr("All VizieR mirrors failed for APASS."));
         return;
     }
     
-    QString baseUrl = VIZIER_MIRRORS[m_currentMirrorIndex];
-    QUrl url(baseUrl);
+    QUrl url(VIZIER_MIRRORS[s_currentMirrorIndex]);
+    emit mirrorStatus(tr("Querying APASS on %1...").arg(url.host()));
     QUrlQuery query;
     query.addQueryItem("-source", "II/336/apass9"); 
     query.addQueryItem("-c", QString("%1 %2").arg(m_lastQueryRa).arg(m_lastQueryDec));
@@ -58,7 +64,7 @@ void CatalogClient::sendAPASS() {
     // Timeout mechanism - 15 seconds per mirror
     QTimer::singleShot(15000, reply, [this, reply]() {
         if (reply->isRunning()) {
-            qWarning() << "VizieR APASS timeout on mirror" << m_currentMirrorIndex;
+            qWarning() << "VizieR APASS timeout on mirror" << s_currentMirrorIndex;
             reply->abort();
         }
     });
@@ -70,25 +76,26 @@ void CatalogClient::sendAPASS() {
 }
 
 void CatalogClient::queryGaiaDR3(double ra, double dec, double radiusDeg) {
-    m_lastQueryRa = ra;
-    m_lastQueryDec = dec;
-    m_lastQueryRadius = radiusDeg;
+    m_lastQueryRa = ra; m_lastQueryDec = dec; m_lastQueryRadius = radiusDeg;
     m_lastQueryType = "GAIA";
-    m_currentMirrorIndex = 0;  // Reset on fresh query
+    
+    if (s_currentMirrorIndex >= VIZIER_MIRRORS.size()) s_currentMirrorIndex = 0;
+    
     sendGaia();
 }
 
 void CatalogClient::sendGaia() {
-    if (m_currentMirrorIndex >= VIZIER_MIRRORS.size()) {
+    if (s_currentMirrorIndex >= VIZIER_MIRRORS.size()) {
         emit errorOccurred(tr("All VizieR mirrors failed for Gaia DR3."));
         return;
     }
+
+    QUrl url(VIZIER_MIRRORS[s_currentMirrorIndex]);
+    emit mirrorStatus(tr("Querying Gaia DR3 on %1...").arg(url.host()));
     
-    qInfo() << "[CatalogClient] Querying Gaia DR3 on mirror" << m_currentMirrorIndex
-               << VIZIER_MIRRORS[m_currentMirrorIndex];
+    qInfo() << "[CatalogClient] Querying Gaia DR3 on mirror" << s_currentMirrorIndex
+               << VIZIER_MIRRORS[s_currentMirrorIndex];
     
-    QString baseUrl = VIZIER_MIRRORS[m_currentMirrorIndex];
-    QUrl url(baseUrl);
     QUrlQuery query;
     query.addQueryItem("-source", "I/355/gaiadr3"); 
     query.addQueryItem("-c", QString("%1 %2").arg(m_lastQueryRa).arg(m_lastQueryDec));
@@ -96,7 +103,7 @@ void CatalogClient::sendGaia() {
     query.addQueryItem("-out", "RA_ICRS,DE_ICRS,Gmag,BPmag,RPmag,teff_gspphot");
     query.addQueryItem("-out.max", "3000");
     query.addQueryItem("-sort", "Gmag");
-    query.addQueryItem("Gmag", "2..17"); // Explicit range for better filtering
+    query.addQueryItem("Gmag", "<20"); // Allow fainter stars
     
     url.setQuery(query);
     
@@ -107,7 +114,7 @@ void CatalogClient::sendGaia() {
     // Timeout: 15 seconds per mirror attempt
     QTimer::singleShot(15000, reply, [this, reply]() {
         if (reply->isRunning()) {
-            qWarning() << "VizieR Gaia timeout on mirror" << m_currentMirrorIndex;
+            qWarning() << "VizieR Gaia timeout on mirror" << s_currentMirrorIndex;
             reply->abort();
         }
     });
@@ -121,7 +128,13 @@ void CatalogClient::sendGaia() {
 
 void CatalogClient::onReply(QNetworkReply* reply) {
     reply->deleteLater();
-    if (reply->error()) {
+    if (reply->error() != QNetworkReply::NoError) {
+        QString errStr = reply->errorString();
+        int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        
+        qWarning() << "[CatalogClient] Mirror" << s_currentMirrorIndex << "failed:" << errStr << "(HTTP" << httpCode << ")";
+        emit mirrorStatus(tr("Mirror %1 failed (HTTP %2). Retrying...").arg(s_currentMirrorIndex).arg(httpCode));
+        
         retryWithNextMirror();
         return;
     }
@@ -267,15 +280,7 @@ void CatalogClient::onReply(QNetworkReply* reply) {
 }
 
 void CatalogClient::retryWithNextMirror() {
-    m_currentMirrorIndex++;
-    
-    qWarning() << "[CatalogClient] Retry mirror" << m_currentMirrorIndex
-               << "of" << VIZIER_MIRRORS.size();
-    
-    // Call sendGaia/sendAPASS directly (NOT queryGaiaDR3/queryAPASS which reset the index)
-    if (m_lastQueryType == "GAIA") {
-        sendGaia();
-    } else if (m_lastQueryType == "APASS") {
-        sendAPASS();
-    }
+    s_currentMirrorIndex++;
+    if (m_lastQueryType == "GAIA") sendGaia();
+    else if (m_lastQueryType == "APASS") sendAPASS();
 }

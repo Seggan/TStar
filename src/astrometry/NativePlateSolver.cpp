@@ -79,13 +79,24 @@ void NativePlateSolver::fetchCatalog() {
         client->deleteLater();
     });
     
+    connect(client, &CatalogClient::mirrorStatus, this, [this](const QString& msg) {
+        emit logMessage(msg);
+    });
+
     connect(client, &CatalogClient::errorOccurred, this, [this, client](const QString& err) {
         emit logMessage(tr("Catalog Error: %1").arg(err));
         onCatalogError(err);
         client->deleteLater();
     });
 
-    client->queryGaiaDR3(m_raHint, m_decHint, m_radius);
+    // CAP search radius for Gaia DR3 online query to avoid server timeouts.
+    // 15 degrees is too much for VizieR; we recommend ASTAP for wide fields.
+    double cappedRadius = std::min(m_radius, 3.0);
+    if (cappedRadius < m_radius) {
+        emit logMessage(tr("Search radius capped to 3.0 deg for Gaia DR3 (online). Use ASTAP for wider searches."));
+    }
+
+    client->queryGaiaDR3(m_raHint, m_decHint, cappedRadius);
 }
 
 bool NativePlateSolver::checkTransSanity(const GenericTrans& trans) {

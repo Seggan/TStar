@@ -8,7 +8,7 @@
 #include <cmath>
 
 TemperatureTintDialog::TemperatureTintDialog(QWidget* parent, ImageViewer* viewer)
-    : DialogBase(parent, tr("Temperature / Tint"), 420, 180), m_viewer(nullptr), m_buffer(nullptr)
+    : DialogBase(parent, tr("Temperature / Tint"), 420, 120), m_viewer(nullptr), m_buffer(nullptr)
 {
     setupUI();
     if (viewer) {
