@@ -98,6 +98,8 @@ jobs:
           brew link --overwrite openblas || true
           
           echo ">>> Installing compression libraries..."
+          brew install zlib
+          brew link --overwrite zlib || true
           brew install lz4
           brew link --overwrite lz4 || true
           brew install zstd

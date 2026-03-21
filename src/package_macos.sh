@@ -116,8 +116,25 @@ FRAMEWORKS_DIR="$DIST_DIR/Contents/Frameworks"
 ensure_dir "$FRAMEWORKS_DIR"
 
 copy_dylib "libz.1.dylib" "zlib" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || \
-copy_dylib "libz.dylib" "zlib" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || \
-cp "/usr/lib/libz.1.dylib" "$FRAMEWORKS_DIR/libz.1.dylib" 2>/dev/null || true
+copy_dylib "libz.dylib" "zlib" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || {
+    # Fallback: search Homebrew prefixes directly
+    ZLIB_FOUND=0
+    for ZLIB_PREFIX in /opt/homebrew/opt/zlib /usr/local/opt/zlib /opt/homebrew /usr/local; do
+        for ZLIB_LIB in "$ZLIB_PREFIX/lib/libz.1.dylib" "$ZLIB_PREFIX/lib/libz.dylib"; do
+            if [ -f "$ZLIB_LIB" ]; then
+                cp -L "$ZLIB_LIB" "$FRAMEWORKS_DIR/" 2>/dev/null && ZLIB_FOUND=1 && echo "  - ZLIB: OK (from $ZLIB_PREFIX)" && break 2 || true
+            fi
+        done
+    done
+    # Final fallback: system libz (may work on some Macs despite SIP)
+    if [ $ZLIB_FOUND -eq 0 ]; then
+        if [ -f "/usr/lib/libz.1.dylib" ]; then
+            cp "/usr/lib/libz.1.dylib" "$FRAMEWORKS_DIR/libz.1.dylib" 2>/dev/null || true
+        elif [ -f "/usr/lib/libz.dylib" ]; then
+            cp "/usr/lib/libz.dylib" "$FRAMEWORKS_DIR/libz.dylib" 2>/dev/null || true
+        fi
+    fi
+}
 
 copy_dylib "libgsl" "gsl" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
 copy_dylib "libgslcblas" "gsl" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
