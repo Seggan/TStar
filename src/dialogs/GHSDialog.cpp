@@ -1037,13 +1037,17 @@ void GHSDialog::updateHistogram() {
     }
 
     std::vector<std::vector<int>> transformedBins(m_channels, std::vector<int>(histSize, 0));
-    for (int c = 0; c < m_channels && c < (int)m_origBins.size(); ++c) {
-        const auto& chBins = m_origBins[c];
-        auto& outBins = transformedBins[c];
+    int numChannelsToProcess = std::min(m_channels, (int)m_origBins.size());
+    #ifdef _OPENMP
+    #pragma omp parallel for
+    #endif
+    for (int c = 0; c < numChannelsToProcess; ++c) {
+        const int* srcData = m_origBins[c].data();
+        int* dstData = transformedBins[c].data();
         for (int i = 0; i < histSize; ++i) {
-            int count = chBins[i];
+            int count = srcData[i];
             if (count > 0) {
-                outBins[transformLUT[i]] += count;
+                dstData[transformLUT[i]] += count;
             }
         }
     }

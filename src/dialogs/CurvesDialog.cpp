@@ -537,22 +537,25 @@ void CurvesDialog::onCurvesChanged(bool isFinal) {
         int channels = std::min((int)m_origHist.size(), 3);
         std::vector<std::vector<int>> highResTransformed(channels, std::vector<int>(HIST_SIZE, 0));
 
-        for(int c=0; c<channels; ++c) {
+        int numChannelsToProcess = channels;
+        #ifdef _OPENMP
+        #pragma omp parallel for
+        #endif
+        for(int c=0; c<numChannelsToProcess; ++c) {
             if (!ch[c]) {
                 // If channel is unchecked, we just copy original (untouched)
                 highResTransformed[c] = m_origHist[c]; 
                 continue;
             }
             
-            const auto& srcBins = m_origHist[c];
-            auto& dstBins = highResTransformed[c];
+            const int* srcData = m_origHist[c].data();
+            int* dstData = highResTransformed[c].data();
             
             // Scatter accumulation
-            // (Note: Transforming a histogram means moving counts from bin I to transformLUT[I])
             for(int i=0; i<HIST_SIZE; ++i) {
-                int count = (i < (int)srcBins.size()) ? srcBins[i] : 0;
+                int count = srcData[i];
                 if (count > 0) {
-                    dstBins[transformLUT[i]] += count;
+                    dstData[transformLUT[i]] += count;
                 }
             }
         }

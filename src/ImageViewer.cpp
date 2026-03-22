@@ -117,6 +117,14 @@ void ImageViewer::setDisplayState(ImageBuffer::DisplayMode mode, bool linked) {
     refreshDisplay(true);
 }
 
+void ImageViewer::restoreState(const ImageBuffer& buffer, ImageBuffer::DisplayMode mode, bool linked) {
+    m_buffer = buffer;
+    m_displayMode = mode;
+    m_displayLinked = linked;
+    m_previewLUT.clear();
+    refreshDisplay(true);
+}
+
 void ImageViewer::setAutoStretchMedian(float median) {
     if (qFuzzyCompare(m_autoStretchMedian, median)) return;
     m_autoStretchMedian = median;

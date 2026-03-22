@@ -2,6 +2,7 @@
 #define HISTOGRAMWIDGET_H
 
 #include <QWidget>
+#include <QPixmap>
 #include <vector>
 
 class HistogramWidget : public QWidget {
@@ -48,6 +49,10 @@ private:
     double m_cachedMaxVal = 0.0;
     double m_cachedGhostMaxVal = 0.0;
     int m_cachedWidth = -1; // Invalidates cache when width changes
+    int m_cachedHeight = -1;
+    
+    QPixmap m_renderCache;
+    bool m_cacheDirty = true;
 };
 
 #endif // HISTOGRAMWIDGET_H

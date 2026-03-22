@@ -38,26 +38,26 @@ HistogramStretchDialog::HistogramStretchDialog(ImageViewer* viewer, QWidget* par
 
 
 HistogramStretchDialog::~HistogramStretchDialog() {
-    // Always clean up preview and restore backup
     if (m_viewer) {
-        m_viewer->clearPreviewLUT();
         if (m_backup.isValid()) {
-            m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
+            m_viewer->restoreState(m_backup, m_originalDisplayMode, m_originalDisplayLinked);
+        } else {
+            m_viewer->clearPreviewLUT();
         }
-        m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
-        m_viewer->refreshDisplay();
     }
+    if (m_histogram) m_histogram->clear();
 }
 
 void HistogramStretchDialog::reject() {
-    // Always clean up preview and restore backup
     if (m_viewer) {
-        m_viewer->clearPreviewLUT();
         if (m_backup.isValid()) {
-            m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
-            m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
+            m_viewer->restoreState(m_backup, m_originalDisplayMode, m_originalDisplayLinked);
+        } else {
+            m_viewer->clearPreviewLUT();
         }
+        m_viewer = nullptr; // Prevent destructor from doing it again
     }
+    if (m_histogram) m_histogram->clear();
     QDialog::reject();
 }
 
@@ -528,15 +528,22 @@ void HistogramStretchDialog::updateHistogramOnly() {
     std::vector<std::vector<int>> transformedBins(channels, std::vector<int>(numBins, 0));
     bool doChannel[3] = { m_doRed, m_doGreen, m_doBlue };
     
-    for (int c = 0; c < channels && c < 3; ++c) {
+    int numChannelsToProcess = std::min(channels, 3);
+    #ifdef _OPENMP
+    #pragma omp parallel for
+    #endif
+    for (int c = 0; c < numChannelsToProcess; ++c) {
         if (!doChannel[c]) {
             // Keep original histogram for disabled channels
             transformedBins[c] = origBins[c];
             continue;
         }
         
+        const int* srcData = origBins[c].data();
+        int* dstData = transformedBins[c].data();
+        
         for (int i = 0; i < numBins; ++i) {
-            int count = origBins[c][i];
+            int count = srcData[i];
             if (count == 0) continue;
             
             float out = lut[i];
@@ -544,7 +551,7 @@ void HistogramStretchDialog::updateHistogramOnly() {
             if (outBin < 0) outBin = 0;
             if (outBin > numBins - 1) outBin = numBins - 1;
             
-            transformedBins[c][outBin] += count;
+            dstData[outBin] += count;
         }
     }
     

@@ -95,6 +95,10 @@ public:
     void setInverted(bool inverted);
     void setFalseColor(bool falseColor);
     void setChannelView(ImageBuffer::ChannelView cv);
+    
+    // Consolidated restoration to avoid multiple refreshes
+    void restoreState(const ImageBuffer& buffer, ImageBuffer::DisplayMode mode, bool linked);
+
     QImage getCurrentDisplayImage() const { return m_displayImage; }
 
     // Source path tracking (used by workspace project persistence)
