@@ -1,4 +1,5 @@
 #include "WavescaleHDRDialog.h"
+#include "MainWindowCallbacks.h"
 #include "../ImageViewer.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -495,12 +496,15 @@ void WavescaleHDRDialog::onPreviewClicked() {
 void WavescaleHDRDialog::onApplyClicked() {
     if (m_targetViewer && m_previewBuffer.isValid()) {
         // Push undo before making changes
-        m_targetViewer->pushUndo();
+        m_targetViewer->pushUndo(tr("Wavescale HDR"));
 
         // m_previewBuffer is already mask-blended (done in onWorkerFinished).
         // Apply the processed (and mask-blended) buffer to the target viewer.
         m_targetViewer->setBuffer(m_previewBuffer, m_targetViewer->windowTitle(), true);
         m_targetViewer->refreshDisplay();
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Wavescale HDR applied."), 1);
+        }
         
         // Mark internal viewer as not modified to prevent "unsaved changes" prompt
         if (m_viewer) {

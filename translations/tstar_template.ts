@@ -529,6 +529,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Arcsinh Stretch applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Black Point:</source>
             <translation type="unfinished" />
         </message>
@@ -766,6 +770,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>AstroSpike applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Blur</source>
             <translation type="unfinished" />
         </message>
@@ -866,6 +874,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Redo: AstroSpike Star Edit performed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Reset</source>
             <translation type="unfinished" />
         </message>
@@ -915,6 +927,10 @@
         </message>
         <message>
             <source>Undo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo: AstroSpike Star Edit performed.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -988,7 +1004,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Binning</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Binning Factor:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Binning applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -1189,6 +1213,10 @@
     <context>
         <name>CatalogClient</name>
         <message>
+            <source>All Gaia mirrors failed at %1 deg; retrying at %2 deg...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>All VizieR mirrors failed for APASS.</source>
             <translation type="unfinished" />
         </message>
@@ -1197,7 +1225,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Mirror %1 failed (HTTP %2). Retrying...</source>
+            <source>Mirror %1 failed (%2, HTTP %3). Retrying...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -1330,7 +1358,19 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Color Profile</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Color Profile Management</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color Profile assigned.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Color Profile transformation started...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -1885,6 +1925,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Correction Brush applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Feather:</source>
             <translation type="unfinished" />
         </message>
@@ -1913,6 +1957,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Redo: Correction Brush stroke performed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Standard (Median)</source>
             <translation type="unfinished" />
         </message>
@@ -1922,6 +1970,10 @@
         </message>
         <message>
             <source>Undo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo: Correction Brush stroke performed.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2087,7 +2139,19 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Batch Crop applied to %1 images.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Crop</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Crop applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2217,6 +2281,10 @@
         </message>
         <message>
             <source>Debayer</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Debayer applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2364,6 +2432,10 @@
         </message>
         <message>
             <source>Deconvolution</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Deconvolution applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2632,6 +2704,10 @@
         </message>
         <message>
             <source>Undo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo: Deconvolution performed.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -2924,7 +3000,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>GHS</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>GHS Transformation applied to %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>GHS applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -5164,6 +5248,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Histogram Stretch applied</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Histogram Stretch applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Histogram Transformation</source>
             <translation type="unfinished" />
         </message>
@@ -5219,10 +5311,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Blended</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Blending</source>
             <translation type="unfinished" />
         </message>
@@ -5272,6 +5360,10 @@
         </message>
         <message>
             <source>Image Blending</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Image Blending completed: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -5434,6 +5526,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>ABE applied</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>ABE applied.</source>
             <translation type="unfinished" />
         </message>
@@ -5558,6 +5654,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Background Neutralization applied</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Background Neutralization applied.</source>
             <translation type="unfinished" />
         </message>
@@ -5579,6 +5679,10 @@
         </message>
         <message>
             <source>Burn Annotations</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Burn Display</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -5783,6 +5887,10 @@
         </message>
         <message>
             <source>Curves Transformation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Curves applied</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6103,6 +6211,10 @@
         </message>
         <message>
             <source>Magenta Correction</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Magenta Correction applied</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6526,6 +6638,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Pixel Math applied</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>PixelMath Applied</source>
             <translation type="unfinished" />
         </message>
@@ -6539,6 +6655,10 @@
         </message>
         <message>
             <source>Plate Solving</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Plate Solving applied</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6634,6 +6754,22 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Redo performed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Redo: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Redo: %1 (Ctrl+Shift+Z)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Redo: %1 performed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Registration (Star Alignment)...</source>
             <translation type="unfinished" />
         </message>
@@ -6643,6 +6779,10 @@
         </message>
         <message>
             <source>Remove Pedestal (Auto)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Remove Pedestal applied</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6691,6 +6831,10 @@
         </message>
         <message>
             <source>SCNR (Remove Green)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>SCNR applied</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -6939,6 +7083,22 @@
         </message>
         <message>
             <source>Undo (Ctrl+Z)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo performed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo: %1 (Ctrl+Z)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo: %1 performed.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -7422,6 +7582,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Morphology</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>No Image</source>
             <translation type="unfinished" />
         </message>
@@ -7546,6 +7710,14 @@
         </message>
         <message>
             <source>Multiscale Decomposition</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Multiscale Decomposition applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Multiscale Decomposition result created.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8007,6 +8179,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Narrowband Normalization applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Narrowband Normalization result created.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Narrowband channels</source>
             <translation type="unfinished" />
         </message>
@@ -8250,7 +8430,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Search radius capped to 3.0 deg for Gaia DR3 (online). Use ASTAP for wider searches.</source>
+            <source>Search radius %1 deg &gt; 3.0 deg: using Gaia 1.0 deg for online query. Recommend ASTAP for wide fields.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8392,6 +8572,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>PCC applied</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>PCC applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Photometric Color Calibration</source>
             <translation type="unfinished" />
         </message>
@@ -8495,6 +8683,10 @@
         </message>
         <message>
             <source>Perfect Palette Picker</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Perfect Palette completed: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9476,6 +9668,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Raw Editor</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Raw Editor applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>RawEditor (Light and Color)</source>
             <translation type="unfinished" />
         </message>
@@ -9497,6 +9697,10 @@
         </message>
         <message>
             <source>Redo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Redo: Raw Editor parameters.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -9545,6 +9749,10 @@
         </message>
         <message>
             <source>Undo</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Undo: Raw Editor parameters.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10001,6 +10209,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>A second optional filter curve (e.g., combining L-Pro with an IR-cut).</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Applies a single global multiplier per channel. If unchecked, applies a non-linear polynomial warping based on the fitted model.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>B Filter:</source>
             <translation type="unfinished" />
         </message>
@@ -10053,10 +10269,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Gaia XP fallback for stars without Pickles match (slower)</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Gradient Surface Method:</source>
             <translation type="unfinished" />
         </message>
@@ -10082,6 +10294,10 @@
         </message>
         <message>
             <source>Matching %1 catalog stars to image...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Method used to model and subtract the sky background from the image.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10129,11 +10345,23 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Optional Light Pollution or IR/UV cut filter curve.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Options</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Please open and plate-solve an image before fetching stars.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Polynomial degree for fitting chromatic gradients across the field.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Quantum Efficiency curve of the camera sensor. Applies to all channels.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10177,6 +10405,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>SPCC applied</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>SPCC applied.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Scale factors (R, G, B): %1, %2, %3</source>
             <translation type="unfinished" />
         </message>
@@ -10189,7 +10425,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Select at least one of the R, G or B filter curves.</source>
+            <source>Select at least one of the R, G or B filter curves, or a Sensor curve with internal Bayer filters.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10205,6 +10441,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Standard Linear Application (Recommended)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Star Detect Threshold (sigma):</source>
             <translation type="unfinished" />
         </message>
@@ -10213,11 +10453,27 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Stellar Spectral Energy Distribution used as the white point reference (e.g., G2V for Sun-like stars).</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Step 1: Fetch Stars from Active Image</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Step 2: Run Calibration</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Transmission curve for the Blue channel filter.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Transmission curve for the Green channel filter.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Transmission curve for the Red channel filter. Use '(None)' for flat response.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10317,6 +10573,14 @@
         </message>
         <message>
             <source>Reset</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Saturation</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Saturation applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10643,7 +10907,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Selective Color</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Selective Color Correction</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Selective Color applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -12070,6 +12342,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Star mask created: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>StarNet Error</source>
             <translation type="unfinished" />
         </message>
@@ -12091,6 +12367,10 @@
         </message>
         <message>
             <source>StarNet++ Star Removal</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Starless image created: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -12214,6 +12494,10 @@
         </message>
         <message>
             <source>Star Recomposition</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Star Recomposition completed: %1</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -12399,6 +12683,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Stretch applied</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Target Median:</source>
             <translation type="unfinished" />
         </message>
@@ -12442,6 +12730,10 @@
         </message>
         <message>
             <source>Temperature / Tint</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Temperature / Tint applied.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -12597,6 +12889,14 @@
             <source>Select image.</source>
             <translation type="unfinished" />
         </message>
+        <message>
+            <source>Upscale</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Upscale applied.</source>
+            <translation type="unfinished" />
+        </message>
     </context>
     <context>
         <name>WavescaleHDRDialog</name>
@@ -12654,6 +12954,10 @@
         </message>
         <message>
             <source>Wavescale HDR</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Wavescale HDR applied.</source>
             <translation type="unfinished" />
         </message>
         <message>

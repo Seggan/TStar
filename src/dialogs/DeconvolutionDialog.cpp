@@ -6,6 +6,7 @@
 
 /*
 #include "DeconvolutionDialog.h"
+#include "MainWindowCallbacks.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -883,8 +884,11 @@ void DeconvolutionDialog::onApply()
     QApplication::restoreOverrideCursor();
     
     if (result.success) {
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Deconvolution"));
         m_viewer->setBuffer(m_previewBuffer, m_previewBuffer.name(), true);
+        if (auto mw = m_mainWindow) {
+            mw->logMessage(tr("Deconvolution applied."), 1);
+        }
         m_originalBuffer = m_previewBuffer;
         m_previewBtn->setEnabled(false); // disable until change
     } else {
@@ -896,6 +900,9 @@ void DeconvolutionDialog::onUndo()
 {
     if (!m_viewer || !m_originalBuffer.isValid()) return;
     m_viewer->setBuffer(m_originalBuffer, m_originalBuffer.name(), true);
+    if (auto mw = m_mainWindow) {
+        mw->logMessage(tr("Undo: Deconvolution performed."), 1);
+    }
 }
 
 void DeconvolutionDialog::onClose() { close(); }

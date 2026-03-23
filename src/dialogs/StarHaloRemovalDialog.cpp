@@ -362,7 +362,7 @@ void StarHaloRemovalDialog::onApply() {
     if (createNew) {
         m_mainWindow->createResultWindow(output, tr("%1 [Star Halo Removal]").arg(viewer->windowTitle()));
     } else {
-        viewer->pushUndo();
+        viewer->pushUndo(tr("Star Halo Removal"));
         viewer->setBuffer(output, viewer->windowTitle(), true);
         viewer->refreshDisplay();
     }

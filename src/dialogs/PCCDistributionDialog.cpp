@@ -1,6 +1,7 @@
 #include "PCCDistributionDialog.h"
 #include <QPainter>
 #include <QPaintEvent>
+#include <QPainterPath>
 #include <algorithm>
 #include <cmath>
 
@@ -22,8 +23,8 @@ void PCCDistributionDialog::paintEvent([[maybe_unused]] QPaintEvent* event) {
     QRect rectR(0, 0, w, h);
     QRect rectB(w, 0, w, h);
     
-    drawScatterPlot(p, rectR, m_result.CatRG, m_result.ImgRG, m_result.slopeRG, m_result.iceptRG, tr("R/G Distribution"), Qt::red);
-    drawScatterPlot(p, rectB, m_result.CatBG, m_result.ImgBG, m_result.slopeBG, m_result.iceptBG, tr("B/G Distribution"), Qt::blue);
+    drawScatterPlot(p, rectR, m_result.CatRG, m_result.ImgRG, m_result.polyRG, m_result.isQuadratic, tr("R/G Distribution"), Qt::red);
+    drawScatterPlot(p, rectB, m_result.CatBG, m_result.ImgBG, m_result.polyBG, m_result.isQuadratic, tr("B/G Distribution"), Qt::blue);
     
     // Draw Separator
     p.setPen(Qt::gray);
@@ -33,7 +34,7 @@ void PCCDistributionDialog::paintEvent([[maybe_unused]] QPaintEvent* event) {
 void PCCDistributionDialog::drawScatterPlot(QPainter& p, const QRect& rect, 
                                             const std::vector<double>& xData, 
                                             const std::vector<double>& yData, 
-                                            double slope, double intercept,
+                                            const double coeffs[3], bool isQuadratic,
                                             const QString& title, const QColor& color)
 {
     if (xData.empty() || xData.size() != yData.size()) return;
@@ -104,11 +105,23 @@ void PCCDistributionDialog::drawScatterPlot(QPainter& p, const QRect& rect,
         p.drawEllipse(QPoint(px, py), 3, 3);
     }
     
-    // Draw Fit Line
+    // Draw Fit Line / Curve
     p.setPen(QPen(Qt::black, 2, Qt::DashLine));
-    double y1 = slope * minX + intercept;
-    double y2 = slope * maxX + intercept;
-    p.drawLine(QPoint(mapX(minX), mapY(y1)), QPoint(mapX(maxX), mapY(y2)));
+    if (isQuadratic) {
+        QPainterPath path;
+        for (int i = 0; i <= 40; ++i) {
+            double x = minX + (double)i / 40.0 * (maxX - minX);
+            double y = coeffs[0] * x * x + coeffs[1] * x + coeffs[2];
+            QPointF pt(mapX(x), mapY(y));
+            if (i == 0) path.moveTo(pt);
+            else path.lineTo(pt);
+        }
+        p.drawPath(path);
+    } else {
+        double y1 = coeffs[1] * minX + coeffs[2];
+        double y2 = coeffs[1] * maxX + coeffs[2];
+        p.drawLine(QPointF(mapX(minX), mapY(y1)), QPointF(mapX(maxX), mapY(y2)));
+    }
     
     // Draw White Reference Line (Slope 1/Ratio) if we wanted to visualize correction?
     // Actually, fit line represents the current state.

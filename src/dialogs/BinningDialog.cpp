@@ -49,10 +49,14 @@ void BinningDialog::onApply() {
     int factor = m_binCombo->currentData().toInt();
     if (factor <= 1) return;
 
-    v->pushUndo();
+    v->pushUndo(tr("Binning"));
     v->getBuffer().bin(factor);
     v->refreshDisplay(false);
     v->fitToWindow();
+
+    if (cb) {
+        cb->logMessage(tr("Binning applied."), 1);
+    }
 
     // Close dialog after apply (one-time operation)
     accept();

@@ -1,4 +1,5 @@
 #include "CropRotateDialog.h"
+#include "MainWindowCallbacks.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -132,10 +133,16 @@ void CropRotateDialog::onApply() {
         return;
     }
     
-    m_viewer->pushUndo();
+    m_viewer->pushUndo(tr("Crop"));
     m_viewer->getBuffer().cropRotated(cx, cy, w, h, angle);
     m_viewer->refreshDisplay(false); // Resets display mapping if needed
     m_viewer->fitToWindow();
+    
+    // Success log
+    MainWindowCallbacks* cb = getCallbacks();
+    if (cb) {
+        cb->logMessage(tr("Crop applied."), 1, true);
+    }
     
     // Reset angle after apply? Usually yes for crop.
     m_angleSpin->setValue(0);
@@ -192,7 +199,7 @@ void CropRotateDialog::onBatchApply() {
 
     for (auto* csw : targetWindows) {
         if (ImageViewer* v = csw->viewer()) {
-            v->pushUndo();
+            v->pushUndo(tr("Crop"));
             v->getBuffer().cropRotated(cx, cy, w, h, angle);
             v->refreshDisplay(false);
             v->fitToWindow();
@@ -200,6 +207,11 @@ void CropRotateDialog::onBatchApply() {
             // Ensure crop mode is kept off or consistent
             v->setCropMode(false); 
         }
+    }
+    
+    MainWindowCallbacks* cb = getCallbacks();
+    if (cb) {
+        cb->logMessage(tr("Batch Crop applied to %1 images.").arg(targetWindows.size()), 1, true);
     }
     
     m_angleSpin->setValue(0);

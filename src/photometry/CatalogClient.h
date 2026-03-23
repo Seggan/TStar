@@ -6,13 +6,13 @@
 #include <vector>
 
 struct CatalogStar {
-    double ra;
-    double dec;
-    double magB;
-    double magV;
-    double B_V; // Color index
-    double teff; // Effective Temperature (Gaia DR3)
-    double bp_rp; // Gaia BP-RP color index
+    double ra = 0;
+    double dec = 0;
+    double magB = std::numeric_limits<double>::quiet_NaN();
+    double magV = std::numeric_limits<double>::quiet_NaN();
+    double B_V = std::numeric_limits<double>::quiet_NaN(); // Color index
+    double teff = 0; // Effective Temperature (Gaia DR3)
+    double bp_rp = std::numeric_limits<double>::quiet_NaN(); // Gaia BP-RP color index
 };
 
 class CatalogClient : public QObject {

@@ -1,6 +1,6 @@
 #include "NarrowbandNormalizationDialog.h"
-#include "../ImageViewer.h"
 #include "../MainWindowCallbacks.h"
+#include "../ImageViewer.h"
 #include "../widgets/CustomMdiSubWindow.h"
 #include "../io/FitsLoader.h"
 #include "../io/XISFReader.h"
@@ -871,8 +871,9 @@ void NarrowbandNormalizationDialog::onApply() {
 
     if (m_mainWindow) {
         m_mainWindow->startLongProcess();
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Narrowband Normalization"));
         m_viewer->setBuffer(newBuf);
+        m_mainWindow->logMessage(tr("Narrowband Normalization applied."), 1);
         m_mainWindow->endLongProcess();
     }
     accept();
@@ -892,6 +893,7 @@ void NarrowbandNormalizationDialog::onPushNew() {
 
     if (m_mainWindow) {
         m_mainWindow->createResultWindow(newBuf, tr("NB Normalized"));
+        m_mainWindow->logMessage(tr("Narrowband Normalization result created."), 1);
     }
 }
 

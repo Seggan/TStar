@@ -184,30 +184,47 @@ void CatalogClient::onReply(QNetworkReply* reply) {
         
         if (xml.isStartElement()) {
             QString name = xml.name().toString();
+
+            // 0. Reset indices for each table found in VOTable
+            if (name == "TABLE") {
+                currentFieldIndex = 0;
+                idxRA = idxDec = idxB = idxV = idxTeff = idxG = idxBP = idxRP = -1;
+            }
             
             // 1. Parsing Fields to map indices
-            if (name == "FIELD") {
+            else if (name == "FIELD") {
+                // Common aliases - using UCDs for maximum robustness
                 QString fieldName = xml.attributes().value("name").toString();
                 QString fieldID = xml.attributes().value("ID").toString();
-                
-                // Common aliases
-                if (fieldName == "RAJ2000" || fieldID == "RAJ2000" || fieldName == "RA_ICRS" || fieldName.toLower() == "ra") idxRA = currentFieldIndex;
-                else if (fieldName == "DEJ2000" || fieldID == "DEJ2000" || fieldName == "DE_ICRS" || fieldName.toLower() == "dec") idxDec = currentFieldIndex;
-                else if (fieldName == "Bmag" || fieldID == "Bmag" || fieldName.toLower() == "b") idxB = currentFieldIndex;
-                else if (fieldName == "Vmag" || fieldID == "Vmag" || fieldName.toLower() == "v") idxV = currentFieldIndex;
-                else if (fieldName == "Teff" || fieldID == "Teff" || fieldName == "teff_gspphot" || fieldName.toLower().contains("teff")) idxTeff = currentFieldIndex;
-                else if (fieldName == "Gmag" || fieldID == "Gmag" || fieldName.toLower() == "g") idxG = currentFieldIndex;
-                else if (fieldName == "BPmag" || fieldID == "BPmag" || fieldName.toLower() == "bpmag" || fieldName.toLower() == "bp") idxBP = currentFieldIndex;
-                else if (fieldName == "RPmag" || fieldID == "RPmag" || fieldName.toLower() == "rpmag" || fieldName.toLower() == "rp") idxRP = currentFieldIndex;
+                QString fn = fieldName.toLower();
+                QString fi = fieldID.toLower();
+                QString fu = xml.attributes().value("ucd").toString().toLower();
+
+                if (fn == "raj2000" || fi == "raj2000" || fn == "ra_icrs" || fu.contains("pos.eq.ra")) idxRA = currentFieldIndex;
+                else if (fn == "dej2000" || fi == "dej2000" || fn == "de_icrs" || fu.contains("pos.eq.dec")) idxDec = currentFieldIndex;
+                else if ((fn == "bmag" || fi == "bmag") || (fu == "phot.mag;em.opt.b" && !fn.contains("bp") && !fi.contains("bp"))) idxB = currentFieldIndex;
+                else if ((fn == "vmag" || fi == "vmag") || (fu == "phot.mag;em.opt.v" && !fn.contains("rp") && !fi.contains("rp"))) idxV = currentFieldIndex;
+                else if (fn.contains("teff") || fi.contains("teff") || fu.contains("phys.temperature")) idxTeff = currentFieldIndex;
+                else if (fn == "gmag" || fi == "gmag" || fu == "phot.mag;em.opt.g") idxG = currentFieldIndex;
+                else if ((fn.contains("bpmag") || fi.contains("bpmag") || fn.contains("bp-mag")) && !fn.startsWith("e_")) idxBP = currentFieldIndex;
+                else if ((fn.contains("rpmag") || fi.contains("rpmag") || fn.contains("rp-mag")) && !fn.startsWith("e_")) idxRP = currentFieldIndex;
+                // If UCD based matching is needed specifically for Gaia columns when names differ:
+                else if (idxBP == -1 && (fu.contains("em.opt.b") || fu.contains("phot.mag.b")) && fu.contains("phot.mag")) idxBP = currentFieldIndex;
+                else if (idxRP == -1 && (fu.contains("em.opt.r") || fu.contains("phot.mag.r")) && fu.contains("phot.mag")) idxRP = currentFieldIndex;
                 
                 currentFieldIndex++;
             }
             
             // 2. Parsing Data
             else if (name == "TR") {
-                double r=0, d=0, b=0, v=0, teff=0;
-                double g_mag=0, bp_mag=0;
-                [[maybe_unused]] double rp_mag=0;
+                double r=std::numeric_limits<double>::quiet_NaN();
+                double d=std::numeric_limits<double>::quiet_NaN();
+                double b=std::numeric_limits<double>::quiet_NaN();
+                double v=std::numeric_limits<double>::quiet_NaN();
+                double teff=0;
+                double g_mag=std::numeric_limits<double>::quiet_NaN();
+                double bp_mag=std::numeric_limits<double>::quiet_NaN();
+                double rp_mag=std::numeric_limits<double>::quiet_NaN();
                 
                 int colIndex = 0;
                 
@@ -242,31 +259,34 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                     
                     // Logic for Mag/Color
                     // Support Gaia DR3 if APASS missing
-                    if (idxV == -1 && idxG != -1) v = g_mag; // Use G as proxy for V magnitude for solving brightness checks
-                    if (idxB == -1 && idxBP != -1 && idxRP != -1) {
-                         // Populate with available BP/RP for debugging if B is missing
-                         b = bp_mag; 
-                    }
+                    if (std::isnan(v) && std::isfinite(g_mag)) v = g_mag; 
+                    if (std::isnan(b) && std::isfinite(bp_mag) && std::isfinite(rp_mag)) b = bp_mag; 
                     
                     s.magB = b;
                     s.magV = v;
+                    s.bp_rp = std::numeric_limits<double>::quiet_NaN();
 
-                    if (idxB != -1 && idxV != -1 && b > 0.0 && v > 0.0) {
-                        s.B_V = b - v;
-                        s.bp_rp = 0.0;
-                    } else if (idxBP != -1 && idxRP != -1 && bp_mag > 0.0 && rp_mag > 0.0) {
+                    // Prioritize dedicated Gaia BP-RP color index if available
+                    if (std::isfinite(bp_mag) && std::isfinite(rp_mag)) {
                         const double bprp = bp_mag - rp_mag;
-                        s.B_V = gaiaBpRpToBV(bprp);
                         s.bp_rp = bprp;
-                    } else if (idxBP != -1 && idxG != -1 && bp_mag > 0.0 && g_mag > 0.0) {
+                        s.B_V = gaiaBpRpToBV(bprp);
+                    } else if (std::isfinite(b) && std::isfinite(v)) {
+                        // Use Johnson B/V (e.g. from APASS)
+                        const double bv = b - v;
+                        s.B_V = bv;
+                        // Rough inverse conversion: BV = 0.393 + 0.475*BPRP - 0.055*BPRP^2
+                        // BPRP ~= (BV - 0.39) / 0.45
+                        s.bp_rp = (bv - 0.393) / 0.45; 
+                    } else if (std::isfinite(bp_mag) && std::isfinite(g_mag)) {
+                        // Fallback proxy
                         s.B_V = bp_mag - g_mag;
-                        s.bp_rp = 0.0; // Approximation
+                        s.bp_rp = s.B_V / 0.8; 
                     } else {
                         s.B_V = 0.65; // G2V fallback
-                        s.bp_rp = 0.0;
                     }
                     
-                    if ((s.magV > 0 || s.teff > 0)) { // Valid star
+                    if ((std::isfinite(s.magV) || s.teff > 0)) { // Valid star
                         stars.push_back(s);
                     }
                 }

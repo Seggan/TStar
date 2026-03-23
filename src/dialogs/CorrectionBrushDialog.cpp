@@ -582,6 +582,9 @@ void CorrectionBrushDialog::onUndo() {
     m_undoBtn->setEnabled(!m_undoStack.empty());
     m_redoBtn->setEnabled(true);
     updateDisplay();
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("Undo: Correction Brush stroke performed."), 1);
+    }
 }
 
 void CorrectionBrushDialog::onRedo() {
@@ -592,6 +595,9 @@ void CorrectionBrushDialog::onRedo() {
     m_undoBtn->setEnabled(true);
     m_redoBtn->setEnabled(!m_redoStack.empty());
     updateDisplay();
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("Redo: Correction Brush stroke performed."), 1);
+    }
 }
 
 void CorrectionBrushDialog::updateDisplay() {
@@ -626,8 +632,9 @@ void CorrectionBrushDialog::onApply() {
     if (MainWindowCallbacks* mw = getCallbacks()) {
         ImageViewer* v = mw->getCurrentViewer();
         if (v) {
-            v->pushUndo(); // Save undo state before modifying the document
+            v->pushUndo(tr("Correction Brush")); // Save undo state before modifying the document
             v->setBuffer(m_currentImage, v->getBuffer().name(), true);
+            mw->logMessage(tr("Correction Brush applied."), 1);
             accept();
         }
     }

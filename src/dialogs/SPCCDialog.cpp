@@ -26,6 +26,7 @@
 #include "SPCCDialog.h"
 #include "ImageViewer.h"
 #include "MainWindow.h"
+#include "../MainWindowCallbacks.h"
 #include "core/Logger.h"
 #include "../photometry/StarDetector.h"
 #include "../astrometry/WCSUtils.h"
@@ -178,12 +179,25 @@ void SPCCDialog::buildUI() {
     m_lpFilter2Combo->setStyleSheet(s);
 
     formEquip->addRow(tr("White Reference (SED):"), m_whiteRefCombo);
+    m_whiteRefCombo->setToolTip(tr("Stellar Spectral Energy Distribution used as the white point reference (e.g., G2V for Sun-like stars)."));
+    
     formEquip->addRow(tr("R Filter:"),              m_rFilterCombo);
+    m_rFilterCombo->setToolTip(tr("Transmission curve for the Red channel filter. Use '(None)' for flat response."));
+    
     formEquip->addRow(tr("G Filter:"),              m_gFilterCombo);
+    m_gFilterCombo->setToolTip(tr("Transmission curve for the Green channel filter."));
+    
     formEquip->addRow(tr("B Filter:"),              m_bFilterCombo);
+    m_bFilterCombo->setToolTip(tr("Transmission curve for the Blue channel filter."));
+    
     formEquip->addRow(tr("Sensor (QE curve):"),     m_sensorCombo);
+    m_sensorCombo->setToolTip(tr("Quantum Efficiency curve of the camera sensor. Applies to all channels."));
+    
     formEquip->addRow(tr("LP / Cut Filter 1:"),     m_lpFilter1Combo);
+    m_lpFilter1Combo->setToolTip(tr("Optional Light Pollution or IR/UV cut filter curve."));
+    
     formEquip->addRow(tr("LP / Cut Filter 2:"),     m_lpFilter2Combo);
+    m_lpFilter2Combo->setToolTip(tr("A second optional filter curve (e.g., combining L-Pro with an IR-cut)."));
     leftCol->addWidget(grpEquip);
 
     // ── Options group ─────────────────────────────────────────────────────────
@@ -199,24 +213,27 @@ void SPCCDialog::buildUI() {
 
     m_bgMethodCombo = new QComboBox;
     m_bgMethodCombo->addItems({"None", "Simple", "Poly2", "Poly3", "RBF"});
+    m_bgMethodCombo->setToolTip(tr("Method used to model and subtract the sky background from the image."));
     formOpt->addRow(tr("Background Method:"), m_bgMethodCombo);
 
     m_gradMethodCombo = new QComboBox;
     m_gradMethodCombo->addItems({"poly2", "poly3"});
     m_gradMethodCombo->setCurrentText("poly3");
+    m_gradMethodCombo->setToolTip(tr("Polynomial degree for fitting chromatic gradients across the field."));
     formOpt->addRow(tr("Gradient Surface Method:"), m_gradMethodCombo);
 
     optL->addLayout(formOpt);
-
-    m_gaiaFallbackCheck = new QCheckBox(
-        tr("Gaia XP fallback for stars without Pickles match (slower)"));
-    m_gaiaFallbackCheck->setChecked(true);
-    optL->addWidget(m_gaiaFallbackCheck);
 
     m_fullMatrixCheck = new QCheckBox(
         tr("Estimate full 3x3 correction matrix (uncheck for diagonal only)"));
     m_fullMatrixCheck->setChecked(true);
     optL->addWidget(m_fullMatrixCheck);
+
+    m_linearModeCheck = new QCheckBox(
+        tr("Standard Linear Application (Recommended)"));
+    m_linearModeCheck->setChecked(true);
+    m_linearModeCheck->setToolTip(tr("Applies a single global multiplier per channel. If unchecked, applies a non-linear polynomial warping based on the fitted model."));
+    optL->addWidget(m_linearModeCheck);
 
     m_runGradientCheck = new QCheckBox(
         tr("Run chromatic gradient extraction after calibration"));
@@ -421,10 +438,10 @@ void SPCCDialog::connectSignals() {
             this, &SPCCDialog::saveGradMethodSetting);
     connect(m_sepThreshSpin, qOverload<double>(&QDoubleSpinBox::valueChanged),
             this, &SPCCDialog::saveSepThreshSetting);
-    connect(m_gaiaFallbackCheck, &QCheckBox::toggled,
-            this, &SPCCDialog::saveGaiaFallbackSetting);
     connect(m_fullMatrixCheck, &QCheckBox::toggled,
             this, &SPCCDialog::saveFullMatrixSetting);
+    connect(m_linearModeCheck, &QCheckBox::toggled,
+            this, &SPCCDialog::saveLinearModeSetting);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -453,8 +470,8 @@ void SPCCDialog::restoreSettings() {
     restoreCombo(m_gradMethodCombo,"GradMethod");
 
     m_sepThreshSpin->setValue(s.value("SEPThreshold", 5.0).toDouble());
-    m_gaiaFallbackCheck->setChecked(s.value("GaiaFallback", true).toBool());
     m_fullMatrixCheck->setChecked(s.value("FullMatrix", true).toBool());
+    m_linearModeCheck->setChecked(s.value("linearMode", true).toBool());
 
     s.endGroup();
 }
@@ -471,8 +488,8 @@ void SPCCDialog::saveLpFilter1Setting(int) { QSettings s; s.beginGroup(kSettings
 void SPCCDialog::saveLpFilter2Setting(int) { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("LPFilter2",  m_lpFilter2Combo->currentText()); s.endGroup(); }
 void SPCCDialog::saveGradMethodSetting(const QString& v) { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("GradMethod", v); s.endGroup(); }
 void SPCCDialog::saveSepThreshSetting(double v)  { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("SEPThreshold", v); s.endGroup(); }
-void SPCCDialog::saveGaiaFallbackSetting(bool v) { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("GaiaFallback", v); s.endGroup(); }
 void SPCCDialog::saveFullMatrixSetting(bool v)   { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("FullMatrix",   v); s.endGroup(); }
+void SPCCDialog::saveLinearModeSetting(bool v)   { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("linearMode",   v); s.endGroup(); }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // onFetchStars  (Step 1)
@@ -546,8 +563,8 @@ void SPCCDialog::onCatalogReady(const std::vector<CatalogStar>& catalogStars) {
     const ImageBuffer bufCopy = m_viewer->getBuffer();
     const SPCCDataStore& storeRef = m_store;
     const QStringList allSEDs = SPCC::availableSEDs(storeRef);
-    const bool useGaia = m_gaiaFallbackCheck->isChecked();
     const double sepThreshold = m_sepThreshSpin->value();
+    const bool useGaia = true;
 
     QFuture<std::vector<StarRecord>> future = QtConcurrent::run(
         [bufCopy, catalogStars, allSEDs, useGaia, sepThreshold, &storeRef]() -> std::vector<StarRecord>
@@ -602,14 +619,36 @@ void SPCCDialog::onCatalogReady(const std::vector<CatalogStar>& catalogStars) {
                 sr.gaia_bp_rp = bestMatch->bp_rp;
                 sr.gaia_gmag = bestMatch->magV > 0 ? bestMatch->magV : bestMatch->magB;
 
-                // 3. Obtain a Pickles match via Gaia BP-RP Fallback
+                // 3. Obtain a Pickles match for this star.
+                // We prefer continuous Gaia BP-RP for the interpolation model.
+                QString spClass;
                 if (std::isfinite(sr.gaia_bp_rp)) {
-                    sr.sp_clean = SPCC::inferLetterFromBpRp(sr.gaia_bp_rp);
-                    if (!sr.sp_clean.isEmpty()) {
-                        QStringList cands = SPCC::picklesMatchForSimbad(sr.sp_clean, allSEDs);
-                        if (!cands.isEmpty()) {
-                            sr.pickles_match = cands.first();
-                        }
+                    // We already have the best color for interpolation. 
+                    // We still find a string for logging/diagnostics.
+                    spClass = SPCC::inferTypeFromBpRp(sr.gaia_bp_rp);
+                } else if (!sr.sp_type.isEmpty()) {
+                    spClass = sr.sp_type; 
+                    // Map granular SIMBAD type back to bp_rp so interpolation works!
+                    sr.gaia_bp_rp = SPCC::bpRpFromType(spClass);
+                } else if (bestMatch->teff > 0) {
+                    // Map Teff to bp_rp for interpolation
+                    if (bestMatch->teff > 30000)      sr.gaia_bp_rp = -0.4;
+                    else if (bestMatch->teff > 15000) sr.gaia_bp_rp = -0.15;
+                    else if (bestMatch->teff > 9000)  sr.gaia_bp_rp = 0.0;
+                    else if (bestMatch->teff > 7000)  sr.gaia_bp_rp = 0.3;
+                    else if (bestMatch->teff > 6000)  sr.gaia_bp_rp = 0.58;
+                    else if (bestMatch->teff > 5500)  sr.gaia_bp_rp = 0.65;
+                    else if (bestMatch->teff > 5000)  sr.gaia_bp_rp = 0.9;
+                    else if (bestMatch->teff > 4000)  sr.gaia_bp_rp = 1.3;
+                    else                             sr.gaia_bp_rp = 2.0;
+
+                    spClass = SPCC::inferTypeFromBpRp(sr.gaia_bp_rp);
+                }
+
+                if (!spClass.isEmpty()) {
+                    QStringList cands = SPCC::picklesMatchForSimbad(spClass, allSEDs);
+                    if (!cands.isEmpty()) {
+                        sr.pickles_match = cands.first();
                     }
                 }
                 
@@ -669,9 +708,10 @@ void SPCCDialog::onRun() {
     }
     if (m_rFilterCombo->currentText() == tr("(None)") &&
         m_gFilterCombo->currentText() == tr("(None)") &&
-        m_bFilterCombo->currentText() == tr("(None)")) {
+        m_bFilterCombo->currentText() == tr("(None)") &&
+        m_sensorCombo->currentText() == tr("(None)")) {
         QMessageBox::warning(this, tr("Missing Input"),
-            tr("Select at least one of the R, G or B filter curves."));
+            tr("Select at least one of the R, G or B filter curves, or a Sensor curve with internal Bayer filters."));
         return;
     }
     if (m_starList.empty()) {
@@ -723,8 +763,9 @@ SPCCParams SPCCDialog::collectParams() const {
     p.lpFilter2    = m_lpFilter2Combo->currentText();
     p.bgMethod     = m_bgMethodCombo->currentText();
     p.sepThreshold = m_sepThreshSpin->value();
-    p.gaiaFallback = m_gaiaFallbackCheck->isChecked();
+    p.gaiaFallback = true;
     p.useFullMatrix = m_fullMatrixCheck->isChecked();
+    p.linearMode   = m_linearModeCheck->isChecked();
     p.runGradient  = m_runGradientCheck->isChecked();
     p.gradientMethod = m_gradMethodCombo->currentText();
 
@@ -755,8 +796,47 @@ void SPCCDialog::onCalibrationFinished() {
     }
 
     if (r.modifiedBuffer && m_viewer) {
-        m_viewer->pushUndo();
+        // Prepare PCCResult for visualization tool
+        PCCResult pccRes;
+        pccRes.valid = true;
+        pccRes.R_factor = r.scaleR;
+        pccRes.G_factor = r.scaleG;
+        pccRes.B_factor = r.scaleB;
+        
+        // Extract diagnostic data for scatter plots
+        for (const auto& ds : r.diagnostics) {
+            if (ds.is_inlier) {
+                pccRes.CatRG.push_back(ds.exp_RG);
+                pccRes.ImgRG.push_back(ds.meas_RG);
+                pccRes.CatBG.push_back(ds.exp_BG);
+                pccRes.ImgBG.push_back(ds.meas_BG);
+            }
+        }
+        
+        // Map SPCC linear coefficients to PCC slope/intercept for plotting
+        // SPCC model: a*x^2 + b*x + c  => slope=b, icept=c (ignoring quadratic for simple plot)
+        pccRes.slopeRG = r.model.coeff_R[1];
+        pccRes.iceptRG = r.model.coeff_R[2];
+        pccRes.slopeBG = r.model.coeff_B[1];
+        pccRes.iceptBG = r.model.coeff_B[2];
+
+        // New polynomial fields
+        for (int i = 0; i < 3; ++i) {
+            pccRes.polyRG[i] = r.model.coeff_R[i];
+            pccRes.polyBG[i] = r.model.coeff_B[i];
+        }
+        pccRes.isQuadratic = (r.model.kind == MODEL_QUADRATIC);
+
+        // Store in metadata
+        ImageBuffer::Metadata meta = r.modifiedBuffer->metadata();
+        meta.pccResult = pccRes;
+        r.modifiedBuffer->setMetadata(meta);
+
+        m_viewer->pushUndo(tr("SPCC"));
         m_viewer->setBuffer(*r.modifiedBuffer, QString(), true);
+        if (m_mainWindow) {
+            m_mainWindow->log(tr("SPCC applied."), MainWindow::Log_Success, true);
+        }
     }
 
     showResults(r);
@@ -859,7 +939,6 @@ void SPCCDialog::setControlsEnabled(bool en) {
     m_sepThreshSpin ->setEnabled(en);
     m_bgMethodCombo ->setEnabled(en);
     m_gradMethodCombo->setEnabled(en);
-    m_gaiaFallbackCheck->setEnabled(en);
     m_fullMatrixCheck->setEnabled(en);
     m_runGradientCheck->setEnabled(en);
 }

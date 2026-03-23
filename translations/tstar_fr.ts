@@ -529,6 +529,10 @@
             <translation type="finished">Arcsinh Stretch</translation>
         </message>
         <message>
+            <source>Arcsinh Stretch applied.</source>
+            <translation type="finished">Arcsinh Stretch appliqué.</translation>
+        </message>
+        <message>
             <source>Black Point:</source>
             <translation type="finished">Point Noir :</translation>
         </message>
@@ -766,6 +770,10 @@
             <translation type="finished">AstroSpike</translation>
         </message>
         <message>
+            <source>AstroSpike applied.</source>
+            <translation type="finished">AstroSpike appliqué.</translation>
+        </message>
+        <message>
             <source>Blur</source>
             <translation type="finished">Flou</translation>
         </message>
@@ -866,6 +874,10 @@
             <translation type="finished">Refaire</translation>
         </message>
         <message>
+            <source>Redo: AstroSpike Star Edit performed.</source>
+            <translation type="finished">Rétablir : Édition d'étoiles AstroSpike effectuée.</translation>
+        </message>
+        <message>
             <source>Reset</source>
             <translation type="finished">Réinitialiser</translation>
         </message>
@@ -916,6 +928,10 @@
         <message>
             <source>Undo</source>
             <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Undo: AstroSpike Star Edit performed.</source>
+            <translation type="finished">Annuler : Édition d'étoiles AstroSpike effectuée.</translation>
         </message>
         <message>
             <source>Width</source>
@@ -988,8 +1004,16 @@
             <translation type="finished">Appliquer</translation>
         </message>
         <message>
+            <source>Binning</source>
+            <translation type="finished">Binning</translation>
+        </message>
+        <message>
             <source>Binning Factor:</source>
             <translation type="finished">Facteur de Binning :</translation>
+        </message>
+        <message>
+            <source>Binning applied.</source>
+            <translation type="finished">Binning appliqué.</translation>
         </message>
         <message>
             <source>Close</source>
@@ -1189,6 +1213,10 @@
     <context>
         <name>CatalogClient</name>
         <message>
+            <source>All Gaia mirrors failed at %1 deg; retrying at %2 deg...</source>
+            <translation type="finished">Tous les miroirs Gaia ont échoué à %1 deg ; nouvel essai à %2 deg...</translation>
+        </message>
+        <message>
             <source>All VizieR mirrors failed for APASS.</source>
             <translation type="finished">Tous les miroirs VizieR ont échoué pour APASS.</translation>
         </message>
@@ -1197,8 +1225,8 @@
             <translation type="finished">Tous les miroirs VizieR ont échoué pour Gaia DR3.</translation>
         </message>
         <message>
-            <source>Mirror %1 failed (HTTP %2). Retrying...</source>
-            <translation type="finished">Échec du miroir %1 (HTTP %2). Nouvel essai...</translation>
+            <source>Mirror %1 failed (%2, HTTP %3). Retrying...</source>
+            <translation type="finished">Miroir %1 a échoué (%2, HTTP %3). Nouvel essai...</translation>
         </message>
         <message>
             <source>Querying APASS on %1...</source>
@@ -1330,8 +1358,20 @@
             <translation type="finished">Parcourir...</translation>
         </message>
         <message>
+            <source>Color Profile</source>
+            <translation type="finished">Profil couleur</translation>
+        </message>
+        <message>
             <source>Color Profile Management</source>
             <translation type="finished">Gestion du Profil Colorimétrique</translation>
+        </message>
+        <message>
+            <source>Color Profile assigned.</source>
+            <translation type="finished">Profil couleur assigné.</translation>
+        </message>
+        <message>
+            <source>Color Profile transformation started...</source>
+            <translation type="finished">Transformation du profil couleur démarrée...</translation>
         </message>
         <message>
             <source>Convert to Profile (Change pixel values to match visual intent)</source>
@@ -1885,6 +1925,10 @@
             <translation type="finished">Pinceau Correcteur</translation>
         </message>
         <message>
+            <source>Correction Brush applied.</source>
+            <translation type="finished">Pinceau de correction appliqué.</translation>
+        </message>
+        <message>
             <source>Feather:</source>
             <translation type="finished">Contour progressif :</translation>
         </message>
@@ -1913,6 +1957,10 @@
             <translation type="finished">Refaire</translation>
         </message>
         <message>
+            <source>Redo: Correction Brush stroke performed.</source>
+            <translation type="finished">Rétablir : Coup de pinceau de correction effectué.</translation>
+        </message>
+        <message>
             <source>Standard (Median)</source>
             <translation type="finished">Standard (Médiane)</translation>
         </message>
@@ -1923,6 +1971,10 @@
         <message>
             <source>Undo</source>
             <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Undo: Correction Brush stroke performed.</source>
+            <translation type="finished">Annuler : Coup de pinceau de correction effectué.</translation>
         </message>
         <message>
             <source>Zoom In</source>
@@ -2087,8 +2139,20 @@
             <translation type="finished">Recadrage par lot</translation>
         </message>
         <message>
+            <source>Batch Crop applied to %1 images.</source>
+            <translation type="finished">Recadrage par lot appliqué à %1 images.</translation>
+        </message>
+        <message>
             <source>Close</source>
             <translation type="finished">Fermer</translation>
+        </message>
+        <message>
+            <source>Crop</source>
+            <translation type="finished">Recadrer</translation>
+        </message>
+        <message>
+            <source>Crop applied.</source>
+            <translation type="finished">Recadrage appliqué.</translation>
         </message>
         <message>
             <source>Free</source>
@@ -2218,6 +2282,10 @@
         <message>
             <source>Debayer</source>
             <translation type="finished">Debayer</translation>
+        </message>
+        <message>
+            <source>Debayer applied.</source>
+            <translation type="finished">Debayer appliqué.</translation>
         </message>
         <message>
             <source>Debayer failed.</source>
@@ -2365,6 +2433,10 @@
         <message>
             <source>Deconvolution</source>
             <translation type="finished">Déconvolution</translation>
+        </message>
+        <message>
+            <source>Deconvolution applied.</source>
+            <translation type="finished">Déconvolution appliquée.</translation>
         </message>
         <message>
             <source>Deconvolution completed. Saved: %1</source>
@@ -2633,6 +2705,10 @@
         <message>
             <source>Undo</source>
             <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Undo: Deconvolution performed.</source>
+            <translation type="finished">Annuler : Déconvolution effectuée.</translation>
         </message>
         <message>
             <source>Use Star Masks (use_star_masks=)</source>
@@ -2924,8 +3000,16 @@
             <translation type="finished">Luminance pondérée paire</translation>
         </message>
         <message>
+            <source>GHS</source>
+            <translation type="finished">GHS</translation>
+        </message>
+        <message>
             <source>GHS Transformation applied to %1</source>
             <translation type="finished">Transformation GHS appliquée à %1</translation>
+        </message>
+        <message>
+            <source>GHS applied.</source>
+            <translation type="finished">GHS appliqué.</translation>
         </message>
         <message>
             <source>Generalized Hyperbolic Stretch</source>
@@ -5166,6 +5250,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Hautes Lumières :</translation>
         </message>
         <message>
+            <source>Histogram Stretch applied</source>
+            <translation type="finished">Histogram Stretch appliqué.</translation>
+        </message>
+        <message>
+            <source>Histogram Stretch applied.</source>
+            <translation type="finished">Histogram Stretching appliqué.</translation>
+        </message>
+        <message>
             <source>Histogram Transformation</source>
             <translation type="finished">Transformation d'Histogramme</translation>
         </message>
@@ -5221,10 +5313,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Image de Base :</translation>
         </message>
         <message>
-            <source>Blended</source>
-            <translation type="finished">Mélangée</translation>
-        </message>
-        <message>
             <source>Blending</source>
             <translation type="finished">Mélange</translation>
         </message>
@@ -5275,6 +5363,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Image Blending</source>
             <translation type="finished">Mélange d'Images</translation>
+        </message>
+        <message>
+            <source>Image Blending completed: %1</source>
+            <translation type="finished">Mélange d'images terminé : %1</translation>
         </message>
         <message>
             <source>Low Range:</source>
@@ -5436,6 +5528,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">ABE</translation>
         </message>
         <message>
+            <source>ABE applied</source>
+            <translation type="finished">ABE appliqué.</translation>
+        </message>
+        <message>
             <source>ABE applied.</source>
             <translation type="finished">ABE appliqué.</translation>
         </message>
@@ -5560,6 +5656,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Neutralisation du Fond</translation>
         </message>
         <message>
+            <source>Background Neutralization applied</source>
+            <translation type="finished">Neutralisation du fond appliquée.</translation>
+        </message>
+        <message>
             <source>Background Neutralization applied.</source>
             <translation type="finished">Neutralisation du Fond appliquée.</translation>
         </message>
@@ -5582,6 +5682,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Burn Annotations</source>
             <translation type="finished">Graver Annotations</translation>
+        </message>
+        <message>
+            <source>Burn Display</source>
+            <translation type="finished">Burn Display</translation>
         </message>
         <message>
             <source>Burn Display View to Buffer\n(Applies current stretch/display mode permanently)</source>
@@ -5786,6 +5890,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Curves Transformation</source>
             <translation type="finished">Transformation Courbes</translation>
+        </message>
+        <message>
+            <source>Curves applied</source>
+            <translation type="finished">Courbes appliquées.</translation>
         </message>
         <message>
             <source>Curves applied to %1.</source>
@@ -6106,6 +6214,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Magenta Correction</source>
             <translation type="finished">Correction Magenta</translation>
+        </message>
+        <message>
+            <source>Magenta Correction applied</source>
+            <translation type="finished">Correction du magenta appliquée.</translation>
         </message>
         <message>
             <source>Magenta Correction applied.</source>
@@ -6528,6 +6640,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Pixel Math</translation>
         </message>
         <message>
+            <source>Pixel Math applied</source>
+            <translation type="finished">Pixel Math appliqué.</translation>
+        </message>
+        <message>
             <source>PixelMath Applied</source>
             <translation type="finished">PixelMath Appliqué</translation>
         </message>
@@ -6542,6 +6658,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Plate Solving</source>
             <translation type="finished">Plate Solving</translation>
+        </message>
+        <message>
+            <source>Plate Solving applied</source>
+            <translation type="finished">Plate Solving appliqué.</translation>
         </message>
         <message>
             <source>Please open an image first.</source>
@@ -6636,6 +6756,22 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Refaire (Ctrl+Shift+Z)</translation>
         </message>
         <message>
+            <source>Redo performed.</source>
+            <translation type="finished">Rétablir effectué.</translation>
+        </message>
+        <message>
+            <source>Redo: %1</source>
+            <translation type="finished">Rétablir : %1</translation>
+        </message>
+        <message>
+            <source>Redo: %1 (Ctrl+Shift+Z)</source>
+            <translation type="finished">Rétablir : %1 (Ctrl+Maj+Z)</translation>
+        </message>
+        <message>
+            <source>Redo: %1 performed.</source>
+            <translation type="finished">Rétablir : %1 effectué.</translation>
+        </message>
+        <message>
             <source>Registration (Star Alignment)...</source>
             <translation type="finished">Alignement (Étoiles)...</translation>
         </message>
@@ -6646,6 +6782,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Remove Pedestal (Auto)</source>
             <translation type="finished">Supprimer Piédestal (Auto)</translation>
+        </message>
+        <message>
+            <source>Remove Pedestal applied</source>
+            <translation type="finished">Suppression du piédestal appliquée.</translation>
         </message>
         <message>
             <source>Remove Stars (StarNet)</source>
@@ -6694,6 +6834,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>SCNR (Remove Green)</source>
             <translation type="finished">SCNR (Supprimer Vert)</translation>
+        </message>
+        <message>
+            <source>SCNR applied</source>
+            <translation type="finished">SCNR appliqué.</translation>
         </message>
         <message>
             <source>SCNR applied.</source>
@@ -6943,6 +7087,22 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Undo (Ctrl+Z)</source>
             <translation type="finished">Annuler (Ctrl+Z)</translation>
+        </message>
+        <message>
+            <source>Undo performed.</source>
+            <translation type="finished">Annuler effectué.</translation>
+        </message>
+        <message>
+            <source>Undo: %1</source>
+            <translation type="finished">Annuler : %1</translation>
+        </message>
+        <message>
+            <source>Undo: %1 (Ctrl+Z)</source>
+            <translation type="finished">Annuler : %1 (Ctrl+Z)</translation>
+        </message>
+        <message>
+            <source>Undo: %1 performed.</source>
+            <translation type="finished">Annuler : %1 effectué.</translation>
         </message>
         <message>
             <source>Unknown error during snapshot saving.</source>
@@ -7425,6 +7585,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Opérations morphologiques appliquées.</translation>
         </message>
         <message>
+            <source>Morphology</source>
+            <translation type="finished">Morphologie</translation>
+        </message>
+        <message>
             <source>No Image</source>
             <translation type="finished">Aucune Image</translation>
         </message>
@@ -7550,6 +7714,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Multiscale Decomposition</source>
             <translation type="finished">Décomposition multéchelle</translation>
+        </message>
+        <message>
+            <source>Multiscale Decomposition applied.</source>
+            <translation type="finished">Décomposition multi-échelle appliquée.</translation>
+        </message>
+        <message>
+            <source>Multiscale Decomposition result created.</source>
+            <translation type="finished">Résultat de la décomposition multi-échelle créé.</translation>
         </message>
         <message>
             <source>Multiscale Result</source>
@@ -8010,6 +8182,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Normalisation bande étroite</translation>
         </message>
         <message>
+            <source>Narrowband Normalization applied.</source>
+            <translation type="finished">Normalisation à bande étroite appliquée.</translation>
+        </message>
+        <message>
+            <source>Narrowband Normalization result created.</source>
+            <translation type="finished">Résultat de la normalisation à bande étroite créé.</translation>
+        </message>
+        <message>
             <source>Narrowband channels</source>
             <translation type="finished">Canaux bande étroite</translation>
         </message>
@@ -8253,8 +8433,8 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Interrogation Catalogue (VizieR)...</translation>
         </message>
         <message>
-            <source>Search radius capped to 3.0 deg for Gaia DR3 (online). Use ASTAP for wider searches.</source>
-            <translation type="finished">Rayon de recherche limité à 3,0 deg pour Gaia DR3 (en ligne). Utilisez ASTAP pour des recherches plus larges.</translation>
+            <source>Search radius %1 deg &gt; 3.0 deg: using Gaia 1.0 deg for online query. Recommend ASTAP for wide fields.</source>
+            <translation type="finished">Rayon de recherche %1 deg &gt; 3.0 deg : utilisation de Gaia 1.0 deg pour la requête en ligne. ASTAP recommandé pour les champs larges.</translation>
         </message>
         <message>
             <source>Solved pixel scale: %1 arcsec/px</source>
@@ -8395,6 +8575,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Résultat PCC</translation>
         </message>
         <message>
+            <source>PCC applied</source>
+            <translation type="finished">PCC appliqué.</translation>
+        </message>
+        <message>
+            <source>PCC applied.</source>
+            <translation type="finished">PCC appliqué.</translation>
+        </message>
+        <message>
             <source>Photometric Color Calibration</source>
             <translation type="finished">Calibration Photométrique Couleur</translation>
         </message>
@@ -8499,6 +8687,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Perfect Palette Picker</source>
             <translation type="finished">Sélecteur de Palette Parfaite</translation>
+        </message>
+        <message>
+            <source>Perfect Palette completed: %1</source>
+            <translation type="finished">Perfect Palette terminée : %1</translation>
         </message>
         <message>
             <source>Please select an image first.</source>
@@ -9479,6 +9671,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Violet</translation>
         </message>
         <message>
+            <source>Raw Editor</source>
+            <translation type="finished">Éditeur Raw</translation>
+        </message>
+        <message>
+            <source>Raw Editor applied.</source>
+            <translation type="finished">Éditeur Raw appliqué.</translation>
+        </message>
+        <message>
             <source>RawEditor (Light and Color)</source>
             <translation type="finished">RawEditor (Lumière et Couleur)</translation>
         </message>
@@ -9501,6 +9701,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Redo</source>
             <translation type="finished">Refaire</translation>
+        </message>
+        <message>
+            <source>Redo: Raw Editor parameters.</source>
+            <translation type="finished">Rétablir : Paramètres de l'éditeur Raw.</translation>
         </message>
         <message>
             <source>Reset to Defaults</source>
@@ -9549,6 +9753,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Undo</source>
             <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Undo: Raw Editor parameters.</source>
+            <translation type="finished">Annuler : Paramètres de l'éditeur Raw.</translation>
         </message>
         <message>
             <source>Vibrance</source>
@@ -10004,6 +10212,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">(Aucun)</translation>
         </message>
         <message>
+            <source>A second optional filter curve (e.g., combining L-Pro with an IR-cut).</source>
+            <translation type="finished">Une deuxième courbe de filtre optionnelle (par ex. en combinant L-Pro con un filtre IR-cut).</translation>
+        </message>
+        <message>
+            <source>Applies a single global multiplier per channel. If unchecked, applies a non-linear polynomial warping based on the fitted model.</source>
+            <translation type="finished">Applique un multiplicateur global unique par canal. Si désélectionné, applique une déformation polynomiale non linéaire basée sur le modèle ajusté.</translation>
+        </message>
+        <message>
             <source>B Filter:</source>
             <translation type="finished">Filtre B:</translation>
         </message>
@@ -10056,10 +10272,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Filtre G:</translation>
         </message>
         <message>
-            <source>Gaia XP fallback for stars without Pickles match (slower)</source>
-            <translation type="finished">Repli Gaia XP pour les étoiles sans correspondance Pickles (plus lent)</translation>
-        </message>
-        <message>
             <source>Gradient Surface Method:</source>
             <translation type="finished">Méthode de Surface de Gradient :</translation>
         </message>
@@ -10086,6 +10298,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Matching %1 catalog stars to image...</source>
             <translation type="finished">Mise en correspondance de %1 étoiles du catalogue avec l'image...</translation>
+        </message>
+        <message>
+            <source>Method used to model and subtract the sky background from the image.</source>
+            <translation type="finished">Méthode utilisée pour modéliser et soustraire le fond du ciel de l'image.</translation>
         </message>
         <message>
             <source>Missing Input</source>
@@ -10132,12 +10348,24 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Ouvrir le Visualiseur Spectral</translation>
         </message>
         <message>
+            <source>Optional Light Pollution or IR/UV cut filter curve.</source>
+            <translation type="finished">Courbe de filtre optionnelle contre la pollution lumineuse ou filtre IR/UV cut.</translation>
+        </message>
+        <message>
             <source>Options</source>
             <translation type="finished">Options</translation>
         </message>
         <message>
             <source>Please open and plate-solve an image before fetching stars.</source>
             <translation type="finished">Veuillez ouvrir et résoudre astrométriquement une image avant de récupérer les étoiles.</translation>
+        </message>
+        <message>
+            <source>Polynomial degree for fitting chromatic gradients across the field.</source>
+            <translation type="finished">Degré polynomial pour l'ajustement des gradients chromatiques sur le champ.</translation>
+        </message>
+        <message>
+            <source>Quantum Efficiency curve of the camera sensor. Applies to all channels.</source>
+            <translation type="finished">Courbe d'efficacité quantique du capteur de la caméra. S'applique à tous les canaux.</translation>
         </message>
         <message>
             <source>Querying star catalog (Gaia DR3)...</source>
@@ -10180,6 +10408,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Erreur SPCC</translation>
         </message>
         <message>
+            <source>SPCC applied</source>
+            <translation type="finished">SPCC appliqué.</translation>
+        </message>
+        <message>
+            <source>SPCC applied.</source>
+            <translation type="finished">SPCC appliqué.</translation>
+        </message>
+        <message>
             <source>Scale factors (R, G, B): %1, %2, %3</source>
             <translation type="finished">Facteurs d'échelle (R, G, B) : %1, %2, %3</translation>
         </message>
@@ -10192,8 +10428,8 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Sélectionnez un SED de référence blanc (par ex. G2V ou A0V).</translation>
         </message>
         <message>
-            <source>Select at least one of the R, G or B filter curves.</source>
-            <translation type="finished">Sélectionnez au moins une des courbes de filtre R, G ou B.</translation>
+            <source>Select at least one of the R, G or B filter curves, or a Sensor curve with internal Bayer filters.</source>
+            <translation type="finished">Sélectionnez au moins une des courbes de filtre R, V ou B, ou une courbe de capteur avec filtres Bayer internes.</translation>
         </message>
         <message>
             <source>Sensor (QE curve):</source>
@@ -10208,6 +10444,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Étalonnage des couleurs spectrophotométrique</translation>
         </message>
         <message>
+            <source>Standard Linear Application (Recommended)</source>
+            <translation type="finished">Application Linéaire Standard (Recommandée)</translation>
+        </message>
+        <message>
             <source>Star Detect Threshold (sigma):</source>
             <translation type="finished">Seuil de Détection d'Étoiles (sigma) :</translation>
         </message>
@@ -10216,12 +10456,28 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Démarrage de l'étalonnage...</translation>
         </message>
         <message>
+            <source>Stellar Spectral Energy Distribution used as the white point reference (e.g., G2V for Sun-like stars).</source>
+            <translation type="finished">Distribution d'énergie spectrale stellaire utilisée comme référence de point blanc (par ex. G2V pour les étoiles de type solaire).</translation>
+        </message>
+        <message>
             <source>Step 1: Fetch Stars from Active Image</source>
             <translation type="finished">Étape 1 : Récupérer les Étoiles de l'Image Active</translation>
         </message>
         <message>
             <source>Step 2: Run Calibration</source>
             <translation type="finished">Étape 2 : Exécuter l'Étalonnage</translation>
+        </message>
+        <message>
+            <source>Transmission curve for the Blue channel filter.</source>
+            <translation type="finished">Courbe de transmission pour le filtre du canal bleu.</translation>
+        </message>
+        <message>
+            <source>Transmission curve for the Green channel filter.</source>
+            <translation type="finished">Courbe de transmission pour le filtre du canal vert.</translation>
+        </message>
+        <message>
+            <source>Transmission curve for the Red channel filter. Use '(None)' for flat response.</source>
+            <translation type="finished">Courbe de transmission pour le filtre du canal rouge. Utilisez '(None)' pour une réponse plate.</translation>
         </message>
         <message>
             <source>Warning: tstar_data.fits not found — combo boxes will be empty.</source>
@@ -10321,6 +10577,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Reset</source>
             <translation type="finished">Réinitialiser</translation>
+        </message>
+        <message>
+            <source>Saturation</source>
+            <translation type="finished">Saturation</translation>
+        </message>
+        <message>
+            <source>Saturation applied.</source>
+            <translation type="finished">Saturation appliquée.</translation>
         </message>
         <message>
             <source>Yellows</source>
@@ -10646,8 +10910,16 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Saturation :</translation>
         </message>
         <message>
+            <source>Selective Color</source>
+            <translation type="finished">Couleur sélective</translation>
+        </message>
+        <message>
             <source>Selective Color Correction</source>
             <translation type="finished">Correction Sélective des Couleurs</translation>
+        </message>
+        <message>
+            <source>Selective Color applied.</source>
+            <translation type="finished">Couleur sélective appliquée.</translation>
         </message>
         <message>
             <source>Show Mask</source>
@@ -12073,6 +12345,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Exécution StarNet++...</translation>
         </message>
         <message>
+            <source>Star mask created: %1</source>
+            <translation type="finished">Masque d'étoiles créé : %1</translation>
+        </message>
+        <message>
             <source>StarNet Error</source>
             <translation type="finished">Erreur StarNet</translation>
         </message>
@@ -12095,6 +12371,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>StarNet++ Star Removal</source>
             <translation type="finished">Suppression Étoiles StarNet++</translation>
+        </message>
+        <message>
+            <source>Starless image created: %1</source>
+            <translation type="finished">Image sans étoiles créée : %1</translation>
         </message>
         <message>
             <source>Starting StarNet++...</source>
@@ -12218,6 +12498,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Star Recomposition</source>
             <translation type="finished">Recomposition des Étoiles</translation>
+        </message>
+        <message>
+            <source>Star Recomposition completed: %1</source>
+            <translation type="finished">Recomposition d'étoiles terminée : %1</translation>
         </message>
         <message>
             <source>Starless View:</source>
@@ -12402,6 +12686,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Statistical Stretch appliqué (M=%1, BP=%2σ)</translation>
         </message>
         <message>
+            <source>Stretch applied</source>
+            <translation type="finished">Stretch appliqué.</translation>
+        </message>
+        <message>
             <source>Target Median:</source>
             <translation type="finished">Médiane Cible :</translation>
         </message>
@@ -12446,6 +12734,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Temperature / Tint</source>
             <translation type="finished">Température / Teinte</translation>
+        </message>
+        <message>
+            <source>Temperature / Tint applied.</source>
+            <translation type="finished">Température / Teinte appliquée.</translation>
         </message>
         <message>
             <source>Temperature:</source>
@@ -12600,6 +12892,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <source>Select image.</source>
             <translation type="finished">Sélectionner image.</translation>
         </message>
+        <message>
+            <source>Upscale</source>
+            <translation type="finished">Upscale</translation>
+        </message>
+        <message>
+            <source>Upscale applied.</source>
+            <translation type="finished">Mise à l'échelle appliquée.</translation>
+        </message>
     </context>
     <context>
         <name>WavescaleHDRDialog</name>
@@ -12658,6 +12958,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Wavescale HDR</source>
             <translation type="finished">Wavescale HDR</translation>
+        </message>
+        <message>
+            <source>Wavescale HDR applied.</source>
+            <translation type="finished">Wavescale HDR appliqué.</translation>
         </message>
         <message>
             <source>© 2026 SetiAstro</source>

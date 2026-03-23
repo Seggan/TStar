@@ -1,4 +1,5 @@
 #include "DebayerDialog.h"
+#include "MainWindowCallbacks.h"
 #include "../ImageViewer.h"
 #include "../ImageBuffer.h"
 #include "../algos/ChannelOps.h"
@@ -204,12 +205,14 @@ void DebayerDialog::onApply() {
     }
     
     // Apply result
-    m_viewer->pushUndo();
+    m_viewer->pushUndo(tr("Debayer"));
     m_viewer->setBuffer(rgb, m_viewer->windowTitle(), true);
     
     m_progress->setValue(100);
     m_statusLabel->setText(tr("Done."));
-    m_applyBtn->setEnabled(true);
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("Debayer applied."), 1, true);
+    }
     
     accept();
 }

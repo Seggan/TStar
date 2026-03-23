@@ -1,6 +1,6 @@
 #include "MultiscaleDecompDialog.h"
-#include "../ImageViewer.h"
 #include "../MainWindowCallbacks.h"
+#include "../ImageViewer.h"
 #include <QMessageBox>
 #include <QApplication>
 #include <QWheelEvent>
@@ -791,12 +791,15 @@ void MultiscaleDecompDialog::onApplyToImage() {
     // Apply to viewer
     if (m_mainWindow) {
         m_mainWindow->startLongProcess();
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Multiscale Decomposition"));
         m_viewer->setBuffer(result);
         m_mainWindow->endLongProcess();
     }
 
     QApplication::restoreOverrideCursor();
+    if (m_mainWindow) {
+        m_mainWindow->logMessage(tr("Multiscale Decomposition applied."), 1);
+    }
     accept();
 }
 
@@ -846,6 +849,7 @@ void MultiscaleDecompDialog::onSendToNewImage() {
 
     if (m_mainWindow) {
         m_mainWindow->createResultWindow(result, tr("Multiscale Result"));
+        m_mainWindow->logMessage(tr("Multiscale Decomposition result created."), 1);
     }
 
     QApplication::restoreOverrideCursor();

@@ -530,6 +530,11 @@ PCCResult PCCCalibrator::calibrateWithAperture(const ImageBuffer& image,
     res.slopeBG = slopeBG;
     res.iceptBG = iceptBG;
     
+    // Also fill polynomial fields for consistency
+    res.polyRG[0] = 0.0; res.polyRG[1] = slopeRG; res.polyRG[2] = iceptRG;
+    res.polyBG[0] = 0.0; res.polyBG[1] = slopeBG; res.polyBG[2] = iceptBG;
+    res.isQuadratic = false;
+    
     return res;
 
 }

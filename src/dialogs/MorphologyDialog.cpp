@@ -307,7 +307,7 @@ void MorphologyDialog::onApply() {
     if (createNew) {
         m_mainWindow->createResultWindow(output, tr("%1 [Morphology]").arg(viewer->windowTitle()));
     } else {
-        viewer->pushUndo();
+        viewer->pushUndo(tr("Morphology"));
         viewer->setBuffer(output, viewer->windowTitle(), true);
         viewer->refreshDisplay();
     }

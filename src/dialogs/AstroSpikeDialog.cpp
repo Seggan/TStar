@@ -1,4 +1,5 @@
 #include "AstroSpikeDialog.h"
+#include "MainWindowCallbacks.h"
 #include "../ImageViewer.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -1022,6 +1023,9 @@ void AstroSpikeDialog::undo() {
         m_historyIndex--;
         m_canvas->setStars(m_history[m_historyIndex]);
         updateHistoryButtons();
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Undo: AstroSpike Star Edit performed."), 1);
+        }
     }
 }
 
@@ -1030,6 +1034,9 @@ void AstroSpikeDialog::redo() {
         m_historyIndex++;
         m_canvas->setStars(m_history[m_historyIndex]);
         updateHistoryButtons();
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Redo: AstroSpike Star Edit performed."), 1);
+        }
     }
 }
 
@@ -1356,7 +1363,7 @@ void AstroSpikeDialog::applyToDocument() {
     p.drawImage(0, 0, spikeLayer);
     p.end();
 
-    m_viewer->pushUndo();
+    m_viewer->pushUndo(tr("AstroSpike"));
     
     ImageBuffer newBuffer = m_viewer->getBuffer();
     ImageBuffer origBuf = newBuffer; // save original pixels for mask blending
@@ -1396,6 +1403,9 @@ void AstroSpikeDialog::applyToDocument() {
     }
     
     m_viewer->setBuffer(newBuffer, m_viewer->windowTitle(), true);
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("AstroSpike applied."), 1);
+    }
     accept(); 
 }
 

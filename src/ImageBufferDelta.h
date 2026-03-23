@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <cstring>
+#include <QString>
 
 /**
  * @brief Delta-based undo/redo system for ImageBuffer
@@ -41,6 +42,9 @@ struct ImageBufferDelta {
     // Full copy fallback (for CHANGE_FULL_COPY)
     std::shared_ptr<std::vector<float>> fullPixelData;
     
+    // Process description (e.g., "ABE", "PCC", "crop", etc)
+    QString description;
+    
     // Estimated memory size in bytes
     size_t estimatedSize() const;
     
@@ -70,7 +74,11 @@ public:
     ~ImageHistoryManager();
     
     // Push undo state (must call before destructive operation)
-    void pushUndo(const class ImageBuffer& buffer);
+    void pushUndo(const class ImageBuffer& buffer, const QString& description = QString());
+    
+    // Get description of current top of stacks
+    QString getUndoDescription() const;
+    QString getRedoDescription() const;
     
     // Check undo/redo availability
     bool canUndo() const { return !m_undoStack.empty(); }

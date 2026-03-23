@@ -185,6 +185,7 @@ struct SPCCParams {
     int     maxStars        = 300;   ///< Cap on SEP detections
     bool    gaiaFallback    = true;  ///< Use Gaia XP spectra for unmatched stars
     bool    useFullMatrix   = true;  ///< Estimate full 3x3 or diagonal only
+    bool    linearMode      = true;  ///< If true, apply global multipliers. If false, apply non-linear polynomial.
 
     // Optional gradient extraction
     bool    runGradient     = false;
@@ -311,8 +312,9 @@ public:
     static QStringList picklesMatchForSimbad(const QString& simbadSp,
                                              const QStringList& availableSEDs);
 
-    /// Infer a one-letter spectral class from a Gaia BP-RP colour index.
-    static QString inferLetterFromBpRp(double bp_rp);
+    /// Infer a Pickles spectral type (e.g. "G2V") from a Gaia BP-RP colour index.
+    static QString inferTypeFromBpRp(double bp_rp);
+    static double  bpRpFromType(const QString& spec);
 
     // ── Aperture photometry ───────────────────────────────────────────────────
 

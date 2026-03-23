@@ -92,10 +92,11 @@ void UpscaleDialog::onApply() {
     int newH = m_heightSpin->value();
     ImageBuffer::InterpolationMethod method = (ImageBuffer::InterpolationMethod)m_methodCombo->currentData().toInt();
 
-    v->pushUndo();
+    v->pushUndo(tr("Upscale"));
     v->getBuffer().resample(newW, newH, method);
     v->refreshDisplay(false);
     v->fitToWindow();
+    if (cb) cb->logMessage(tr("Upscale applied."), 1);
 
     accept();
 }

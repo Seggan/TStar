@@ -1,5 +1,5 @@
 #include "SelectiveColorDialog.h"
-#include "MainWindowCallbacks.h"
+#include "../MainWindowCallbacks.h"
 #include "DialogBase.h"
 #include "../ImageViewer.h"
 #include <QVBoxLayout>
@@ -470,7 +470,7 @@ void SelectiveColorDialog::onApply() {
     ImageViewer* v = mw->getCurrentViewer();
     if (!v) return;
     
-    v->pushUndo();
+    v->pushUndo(tr("Selective Color"));
     
     ImageBuffer& buffer = v->getBuffer();
     
@@ -488,6 +488,9 @@ void SelectiveColorDialog::onApply() {
     }
     
     v->setBuffer(result, buffer.name(), true);
+    if (mw) {
+        mw->logMessage(tr("Selective Color applied."), 1);
+    }
     
     accept();
 }

@@ -1603,41 +1603,38 @@ void MainWindow::tileImageViewsHorizontal() {
     showConsoleTemporarily(2000);
 }
 
-void MainWindow::pushUndo() {
-
+void MainWindow::pushUndo(const QString& description) {
     if (auto v = currentViewer()) {
-        log("Pushing Undo State...", Log_Info); 
-        v->pushUndo();
+        v->pushUndo(description);
         updateMenus();
-        log(QString("Undo Stack Size: %1").arg(v->canUndo() ? "Active" : "Empty"), Log_Info);
-    } else {
-        log("Push Undo Failed: No Active Viewer", Log_Warning);
     }
 }
 
 void MainWindow::undo() {
-    log("Undo triggered", Log_Action);
     if (auto v = currentViewer()) {
-        log(QString("Undo stack size: %1").arg(v->canUndo() ? "has items" : "empty"), Log_Info);
+        QString desc = v->getUndoDescription();
         v->undo();
         updateMenus();
-        log("Undo performed", Log_Success);
+        if (!desc.isEmpty()) {
+            log(tr("Undo: %1 performed.").arg(desc), Log_Success);
+        } else {
+            log(tr("Undo performed."), Log_Success);
+        }
         showConsoleTemporarily(2000);
-    } else {
-        log("No active viewer for undo", Log_Warning);
     }
 }
 
 void MainWindow::redo() {
-    log("Redo triggered", Log_Action);
     if (auto v = currentViewer()) {
-        log(QString("Redo stack size: %1").arg(v->canRedo() ? "has items" : "empty"), Log_Info);
+        QString desc = v->getRedoDescription();
         v->redo();
         updateMenus();
-        log("Redo performed", Log_Success);
+        if (!desc.isEmpty()) {
+            log(tr("Redo: %1 performed.").arg(desc), Log_Success);
+        } else {
+            log(tr("Redo performed."), Log_Success);
+        }
         showConsoleTemporarily(2000);
-    } else {
-        log("No active viewer for redo", Log_Warning);
     }
 }
 
@@ -1645,7 +1642,7 @@ void MainWindow::onBurnDisplay() {
     // Burn the current display view (with stretch/AutoStretch/etc) to the buffer permanently
     if (auto v = currentViewer()) {
         // Save undo state before modifying
-        v->pushUndo();
+        v->pushUndo(tr("Burn Display"));
         
         ImageBuffer& buffer = v->getBuffer();
         if (!buffer.isValid()) {
@@ -1703,8 +1700,37 @@ void MainWindow::updateMenus() {
     auto v = currentViewer();
     bool canUndo = v && v->canUndo();
     bool canRedo = v && v->canRedo();
+    
     m_undoAction->setEnabled(canUndo);
     m_redoAction->setEnabled(canRedo);
+
+    if (canUndo) {
+        QString desc = v->getUndoDescription();
+        if (!desc.isEmpty()) {
+            m_undoAction->setText(tr("Undo: %1").arg(desc));
+            m_undoAction->setToolTip(tr("Undo: %1 (Ctrl+Z)").arg(desc));
+        } else {
+            m_undoAction->setText(tr("Undo"));
+            m_undoAction->setToolTip(tr("Undo (Ctrl+Z)"));
+        }
+    } else {
+        m_undoAction->setText(tr("Undo"));
+        m_undoAction->setToolTip(tr("Undo (Ctrl+Z)"));
+    }
+
+    if (canRedo) {
+        QString desc = v->getRedoDescription();
+        if (!desc.isEmpty()) {
+            m_redoAction->setText(tr("Redo: %1").arg(desc));
+            m_redoAction->setToolTip(tr("Redo: %1 (Ctrl+Shift+Z)").arg(desc));
+        } else {
+            m_redoAction->setText(tr("Redo"));
+            m_redoAction->setToolTip(tr("Redo (Ctrl+Shift+Z)"));
+        }
+    } else {
+        m_redoAction->setText(tr("Redo"));
+        m_redoAction->setToolTip(tr("Redo (Ctrl+Shift+Z)"));
+    }
 }
 
 ImageViewer* MainWindow::currentViewer() const {
@@ -1718,7 +1744,7 @@ bool MainWindow::hasImage() const {
 
 
 // Helper: strip extension + trailing * from parent title, append suffix
-static QString buildChildTitle(const QString& parentTitle, const QString& suffix) {
+QString buildChildTitle(const QString& parentTitle, const QString& suffix) {
     QString t = parentTitle;
     if (t.endsWith('*')) t.chop(1);
     // Strip known image extensions
@@ -2651,8 +2677,7 @@ void MainWindow::openAbeDialog() {
 
     // When ABE applies, it emits a result buffer
     connect(dlg, &ABEDialog::applyResult, [this, v](const ImageBuffer& res) {
-        if (!v) return;
-        v->pushUndo();
+        v->pushUndo(tr("ABE applied"));
         // Updated: Preserve View!
         v->setBuffer(res, "ABE_Result", true); 
         log(tr("ABE applied."), Log_Success, true);
@@ -2808,7 +2833,7 @@ void MainWindow::openMagentaCorrectionDialog() {
         float threshold = dlg->getThreshold();
         bool starmask = dlg->isWithStarMask();
 
-        v->pushUndo();
+        v->pushUndo(tr("Magenta Correction applied"));
         v->getBuffer().applyMagentaCorrection(mod_b, threshold, starmask);
         v->setBuffer(v->getBuffer(), v->windowTitle(), true);
         log(tr("Magenta Correction applied."), Log_Success, true);
@@ -2874,7 +2899,7 @@ void MainWindow::openSCNRDialog() {
         float amount = dlg->getAmount();
         int method = dlg->getMethod();
         
-        v->pushUndo();
+        v->pushUndo(tr("SCNR applied"));
         v->getBuffer().applySCNR(amount, method);
         // Updated: Preserve View!
         v->setBuffer(v->getBuffer(), v->windowTitle(), true);
@@ -3466,7 +3491,7 @@ void MainWindow::openPlateSolvingDialog() {
                 
                 meta.catalogStars = res.catalogStars;
                 
-                pushUndo(); // Save undo state before modifying metadata
+                pushUndo(tr("Plate Solving applied")); // Save undo state before modifying metadata
                 viewer->getBuffer().setMetadata(meta);
                 log(tr("Plate Solved! Center: RA %1, Dec %2").arg(meta.ra).arg(meta.dec), Log_Success, true);
                 showConsoleTemporarily(2000);
@@ -3505,7 +3530,7 @@ void MainWindow::openPCCDialog() {
     connect(dlg, &QDialog::accepted, [this, dlg, sub, viewer](){
          PCCResult res = dlg->result();
          if (res.valid) {
-             pushUndo();
+             pushUndo(tr("Plate Solving applied"));
              viewer->setBuffer(viewer->getBuffer(), viewer->windowTitle(), true); // Refresh display
              updateDisplay();
              log(tr("PCC Applied: R=%1 G=%2 B=%3 (BG: %4, %5, %6)")
@@ -3650,7 +3675,7 @@ void MainWindow::applyCurvesPreview(const std::vector<std::vector<float>>& lut) 
 void MainWindow::applyCurves(const SplineData& spline, const bool channels[3]) {
     if (m_curvesTarget) {
         ImageBuffer& buf = m_curvesTarget->getBuffer();
-        m_curvesTarget->pushUndo();
+        m_curvesTarget->pushUndo(tr("Curves applied"));
         
         buf.applySpline(spline, channels);
         
@@ -3712,7 +3737,7 @@ void MainWindow::openBackgroundNeutralizationDialog() {
         }
         
         // Capture buffer for undo before processing
-        v->pushUndo();
+        v->pushUndo(tr("Background Neutralization applied"));
         ImageBuffer buf = v->getBuffer();
         BackgroundNeutralizationDialog::neutralizeBackground(buf, rect);
         
@@ -3783,7 +3808,7 @@ void MainWindow::openPixelMathDialog() {
     connect(m_pixelMathDialog, &PixelMathDialog::apply, [this](const QString& expr, bool rescale) {
         ImageViewer* v = currentViewer();
         if (v) {
-            pushUndo();
+            pushUndo(tr("Pixel Math applied"));
             QString err;
             QVector<PMImageRef> imgs = getImageRefsForPixelMath();
             if (PixelMathDialog::evaluateExpression(expr, v->getBuffer(), imgs, rescale, &err)) {
@@ -4721,7 +4746,7 @@ void MainWindow::removePedestal() {
     ImageViewer* v = currentViewer();
     if (!v || !v->getBuffer().isValid()) return;
     
-    pushUndo();
+    pushUndo(tr("Remove Pedestal applied"));
     ChannelOps::removePedestal(v->getBuffer());
     v->refreshDisplay();
     log(tr("Pedestal removed."), Log_Success, true);

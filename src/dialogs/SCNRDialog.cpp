@@ -1,4 +1,5 @@
 #include "SCNRDialog.h"
+#include "MainWindowCallbacks.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>

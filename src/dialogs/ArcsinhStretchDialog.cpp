@@ -1,4 +1,5 @@
 #include "ArcsinhStretchDialog.h"
+#include "MainWindowCallbacks.h"
 #include "ImageViewer.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -232,7 +233,7 @@ void ArcsinhStretchDialog::onApply() {
         m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
 
         // 2. Save the CLEAN state to undo stack
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Arcsinh Stretch"));
 
         // 3. Apply to actual buffer
         ImageBuffer buf = m_originalBuffer;
@@ -240,6 +241,9 @@ void ArcsinhStretchDialog::onApply() {
         
         // 4. Set the final buffer
         m_viewer->setBuffer(buf, m_viewer->windowTitle(), true);
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Arcsinh Stretch applied."), 1);
+        }
         m_applied = true;
     }
     accept();

@@ -21,6 +21,12 @@ struct PCCResult {
     // Fit Parameters (Slope, Intercept) for visualization
     double slopeRG = 1.0, iceptRG = 0.0;
     double slopeBG = 1.0, iceptBG = 0.0;
+
+    // Polynomial coefficients (a, b, c for a*x^2 + b*x + c)
+    // Used by SPCC and newer PCC models
+    double polyRG[3] = {0.0, 1.0, 0.0};
+    double polyBG[3] = {0.0, 1.0, 0.0};
+    bool   isQuadratic = false;
 };
 
 #endif // PCCRESULT_H

@@ -1,4 +1,5 @@
 #include "CurvesDialog.h"
+#include "MainWindowCallbacks.h"
 #include "../ImageBuffer.h"
 #include "widgets/HistogramWidget.h"
 #include <QVBoxLayout>

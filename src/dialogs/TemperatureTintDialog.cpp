@@ -1,4 +1,5 @@
 #include "TemperatureTintDialog.h"
+#include "MainWindowCallbacks.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -143,7 +144,7 @@ void TemperatureTintDialog::handleApply() {
         *m_buffer = m_originalBuffer;
 
         // Push undo
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Temperature / Tint"));
 
         // Apply final values
         float r, g, b;
@@ -156,6 +157,9 @@ void TemperatureTintDialog::handleApply() {
         }
 
         m_viewer->refreshDisplay(true);
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Temperature / Tint applied."), 1);
+        }
         m_applied = true;
     }
     emit applyInternal();

@@ -93,7 +93,7 @@ public:
     CustomMdiSubWindow* createNewImageWindow(const ImageBuffer& buffer, const QString& title,
                               ImageBuffer::DisplayMode mode = static_cast<ImageBuffer::DisplayMode>(-1),
                               float autoStretchMedian = 0.25f, bool displayLinked = true);
-    void pushUndo(); // Call before destructive actions
+    void pushUndo(const QString& description = QString()); // Call before destructive actions
     
     // MainWindowCallbacks Implementation
     ImageBuffer* getCurrentImageBuffer() override;

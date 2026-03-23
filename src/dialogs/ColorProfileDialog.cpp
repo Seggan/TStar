@@ -1,4 +1,5 @@
 #include "ColorProfileDialog.h"
+#include "MainWindowCallbacks.h"
 #include "core/ColorProfileManager.h"
 #include "ImageBuffer.h"
 #include "ImageViewer.h"
@@ -169,7 +170,7 @@ void ColorProfileDialog::applyChanges() {
 
     // Save current state to undo history BEFORE modifying the buffer
     if (m_viewer) {
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Color Profile"));
     }
 
     if (m_radioConvert->isChecked()) {
@@ -177,6 +178,9 @@ void ColorProfileDialog::applyChanges() {
         core::ColorProfileManager::instance().convertProfileAsync(*m_activeBuffer, sourceProfile, targetProfile);
         
         // The manager and MainWindow will handle logging, console opening, and refreshing
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Color Profile transformation started..."), 0);
+        }
         accept(); 
     } else {
         // ASSIGN: Just update the interpretation without changing pixels
@@ -200,6 +204,9 @@ void ColorProfileDialog::applyChanges() {
             m_viewer->refreshDisplay(true);
         }
         
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Color Profile assigned."), 1, true);
+        }
         accept();
     }
 }

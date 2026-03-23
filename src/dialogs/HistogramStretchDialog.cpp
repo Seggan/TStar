@@ -1,5 +1,6 @@
 #include "HistogramStretchDialog.h"
-#include "ImageViewer.h"
+#include "MainWindowCallbacks.h"
+#include "../ImageViewer.h"
 #include "widgets/HistogramWidget.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -440,7 +441,7 @@ void HistogramStretchDialog::onApply() {
         m_viewer->setBuffer(m_backup, m_viewer->windowTitle(), true);
 
         // 2. Push Undo de backup
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Histogram Stretch applied"));
 
         // 3. Apply MTF
         ImageBuffer buf = m_backup;
@@ -448,6 +449,9 @@ void HistogramStretchDialog::onApply() {
         m_viewer->setBuffer(buf, m_viewer->windowTitle(), true);
         
         m_applied = true;
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Histogram Stretch applied."), 1);
+        }
         
         // --- Persistence: Keep dialog open for continued adjustments ---
         // Update backup to the newly applied result so subsequent cancels/closes revert to THIS state

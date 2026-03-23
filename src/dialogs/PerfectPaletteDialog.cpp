@@ -333,7 +333,11 @@ void PerfectPaletteDialog::onApply() {
     ImageBuffer result;
     QString err;
     if (m_runner.run(&m_ha, &m_oiii, &m_sii, result, params, &err)) {
-        if (m_mainWin) m_mainWin->createResultWindow(result, "Palette_" + m_selectedPalette);
+        if (m_mainWin) {
+            QString newName = "Palette_" + m_selectedPalette;
+            m_mainWin->createResultWindow(result, newName);
+            m_mainWin->logMessage(tr("Perfect Palette completed: %1").arg(newName), 1, true);
+        }
         accept();
     } else {
         QMessageBox::critical(this, tr("Error"), err);

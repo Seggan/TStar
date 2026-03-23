@@ -18,7 +18,7 @@ private:
     void drawScatterPlot(QPainter& p, const QRect& rect, 
                          const std::vector<double>& xData, 
                          const std::vector<double>& yData,
-                         double slope, double intercept,
+                         const double coeffs[3], bool isQuadratic,
                          const QString& title, const QColor& color);
 };
 

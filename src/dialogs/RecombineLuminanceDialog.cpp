@@ -113,12 +113,12 @@ void RecombineLuminanceDialog::onApply() {
     ImageBuffer origBuf = target->getBuffer();
 
     if (m_mainWindow) {
-        m_mainWindow->logMessage(tr("Recombining luminance..."), 0); 
+        m_mainWindow->logMessage(tr("Recombining luminance..."), 1); 
         m_mainWindow->startLongProcess();
     }
     
     // Push undo state BEFORE modifying the buffer
-    target->pushUndo();
+    target->pushUndo(tr("Recombine Luminance"));
     
     ChannelOps::ColorSpaceMode csMode = (ChannelOps::ColorSpaceMode)m_colorSpaceCombo->currentData().toInt();
     float blend = m_blendSlider->value() / 100.0f;
@@ -137,7 +137,7 @@ void RecombineLuminanceDialog::onApply() {
     if (ok) {
         target->refresh();
         if (m_mainWindow) {
-            m_mainWindow->logMessage(tr("Luminance recombination completed."), 0);
+            m_mainWindow->logMessage(tr("Luminance recombination completed."), 1);
         }
         accept();
     } else {

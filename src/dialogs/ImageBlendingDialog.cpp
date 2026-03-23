@@ -329,6 +329,7 @@ void ImageBlendingDialog::onApply() {
             const QString blendTitle = MainWindowCallbacks::buildChildTitle(
                 baseV->windowTitle(), "_blended");
             mw->createResultWindow(result, blendTitle, mode, median, linked);
+            mw->logMessage(tr("Image Blending completed: %1").arg(blendTitle), 1, true);
         }
         accept();
     } else {

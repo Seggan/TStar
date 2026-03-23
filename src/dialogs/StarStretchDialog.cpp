@@ -135,7 +135,7 @@ void StarStretchDialog::onApply() {
     m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
 
     // 2. Push undo
-    m_viewer->pushUndo();
+    m_viewer->pushUndo(tr("Star Stretch"));
 
     // 3. Apply final (updatePreview will run the runner and set the buffer)
     updatePreview();

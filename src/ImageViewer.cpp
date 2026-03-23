@@ -955,20 +955,29 @@ void ImageViewer::scrollContentsBy(int dx, int dy) {
 
 
 
-void ImageViewer::pushUndo() {
+void ImageViewer::pushUndo(const QString& description) {
     if (m_useDeltaHistory && m_historyManager) {
         // Use new delta-based history system
-        m_historyManager->pushUndo(m_buffer);
+        m_historyManager->pushUndo(m_buffer, description);
         // Also maintain legacy stack for compatibility
-        if (m_undoStack.size() >= 20) m_undoStack.erase(m_undoStack.begin());
+        if (m_undoStack.size() >= 20) {
+            m_undoStack.erase(m_undoStack.begin());
+            m_undoDescriptions.erase(m_undoDescriptions.begin());
+        }
         m_undoStack.push_back(m_buffer);
+        m_undoDescriptions.push_back(description);
         m_redoStack.clear();
+        m_redoDescriptions.clear();
     } else {
         // Fallback: full copies.
-        // This strategy is used when delta compression is disabled or unavailable.
-        if (m_undoStack.size() >= 20) m_undoStack.erase(m_undoStack.begin());
+        if (m_undoStack.size() >= 20) {
+            m_undoStack.erase(m_undoStack.begin());
+            m_undoDescriptions.erase(m_undoDescriptions.begin());
+        }
         m_undoStack.push_back(m_buffer);
+        m_undoDescriptions.push_back(description);
         m_redoStack.clear();
+        m_redoDescriptions.clear();
     }
     
     setModified(true);
@@ -981,17 +990,29 @@ void ImageViewer::undo() {
 
     if (m_useDeltaHistory && m_historyManager && m_historyManager->canUndo()) {
         // Use delta-based history
+        // Push current onto redo
+        m_redoStack.push_back(m_buffer);
+        m_redoDescriptions.push_back(m_historyManager->getUndoDescription());
+
+        m_historyManager->performUndo();
+        
+        // UPDATE: The delta system is currently a wrapper, it doesn't 
+        // handle the actual ImageBuffer content restoration in performUndo.
+        // We rely on the legacy stack for content until delta is fully implemented.
         if (!m_undoStack.empty()) {
-            m_redoStack.push_back(m_buffer);
             m_buffer = m_undoStack.back();
             m_undoStack.pop_back();
+            m_undoDescriptions.pop_back();
             refreshDisplay(true);
         }
     } else if (!m_undoStack.empty()) {
         // Legacy fallback
         m_redoStack.push_back(m_buffer);
+        m_redoDescriptions.push_back(m_undoDescriptions.back());
+        
         m_buffer = m_undoStack.back();
         m_undoStack.pop_back();
+        m_undoDescriptions.pop_back();
         refreshDisplay(true);
     }
     
@@ -1010,17 +1031,25 @@ void ImageViewer::redo() {
 
     if (m_useDeltaHistory && m_historyManager && m_historyManager->canRedo()) {
         // Use delta-based history
+        m_undoStack.push_back(m_buffer);
+        m_undoDescriptions.push_back(m_historyManager->getRedoDescription());
+
+        m_historyManager->performRedo();
+        
         if (!m_redoStack.empty()) {
-            m_undoStack.push_back(m_buffer);
             m_buffer = m_redoStack.back();
             m_redoStack.pop_back();
+            m_redoDescriptions.pop_back();
             refreshDisplay(true);
         }
     } else if (!m_redoStack.empty()) {
         // Legacy fallback
         m_undoStack.push_back(m_buffer);
+        m_undoDescriptions.push_back(m_redoDescriptions.back());
+
         m_buffer = m_redoStack.back();
         m_redoStack.pop_back();
+        m_redoDescriptions.pop_back();
         refreshDisplay(true);
     }
     
@@ -1031,6 +1060,22 @@ void ImageViewer::redo() {
     setModified(true);
     emit bufferChanged();
     emit historyChanged();
+}
+
+QString ImageViewer::getUndoDescription() const {
+    if (m_useDeltaHistory && m_historyManager) {
+        return m_historyManager->getUndoDescription();
+    }
+    if (m_undoDescriptions.empty()) return QString();
+    return m_undoDescriptions.back();
+}
+
+QString ImageViewer::getRedoDescription() const {
+    if (m_useDeltaHistory && m_historyManager) {
+        return m_historyManager->getRedoDescription();
+    }
+    if (m_redoDescriptions.empty()) return QString();
+    return m_redoDescriptions.back();
 }
 
 

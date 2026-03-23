@@ -311,7 +311,7 @@ void ClaheDialog::onApply() {
             original = buffer;
         }
 
-        viewer->pushUndo(); // Save state before applying
+        viewer->pushUndo(tr("CLAHE")); // Save state before applying
 
         // Re-run logic on full image
         createPreview(buffer, clip, grid);

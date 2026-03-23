@@ -1,4 +1,5 @@
 #include "ABEDialog.h"
+#include "MainWindowCallbacks.h"
 #include "algos/AbeMath.h"
 #include "ImageViewer.h" 
 #include <QVBoxLayout>

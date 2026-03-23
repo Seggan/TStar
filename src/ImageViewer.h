@@ -40,11 +40,13 @@ public:
     void setMaskOverlay(bool show) { m_showMaskOverlay = show; refreshDisplay(true); }
     bool isMaskOverlayEnabled() const { return m_showMaskOverlay; }
 
-    void pushUndo();
+    void pushUndo(const QString& description = QString());
     void undo();
     void redo();
     bool canUndo() const;
     bool canRedo() const;
+    QString getUndoDescription() const;
+    QString getRedoDescription() const;
 
     // Crop Mode
     void setCropMode(bool active);
@@ -177,6 +179,8 @@ private:
     ImageBuffer m_buffer;
     std::vector<ImageBuffer> m_undoStack;  // Backward-compat: stores full copies (legacy mode)
     std::vector<ImageBuffer> m_redoStack;  // Backward-compat: stores full copies (legacy mode)
+    std::vector<QString> m_undoDescriptions; // For legacy stack
+    std::vector<QString> m_redoDescriptions; // For legacy stack
     
     // Delta-based history (new, memory-efficient)
     std::unique_ptr<ImageHistoryManager> m_historyManager;

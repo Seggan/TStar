@@ -1,4 +1,5 @@
 #include "RawEditorDialog.h"
+#include "MainWindowCallbacks.h"
 #include "../ImageViewer.h"
 #include "../ImageBuffer.h"
 
@@ -764,11 +765,15 @@ void RawEditorDialog::onApply() {
     QApplication::setOverrideCursor(Qt::WaitCursor);
 
     // Push undo in the viewer
-    m_viewer->pushUndo();
+    m_viewer->pushUndo(tr("Raw Editor"));
 
     // Apply at full resolution
     RawEditor::Processor::apply(m_viewer->getBuffer(), m_params);
     m_viewer->setBuffer(m_viewer->getBuffer(), m_viewer->windowTitle(), true);
+
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("Raw Editor applied."), 1);
+    }
 
     QApplication::restoreOverrideCursor();
     accept();
@@ -817,6 +822,10 @@ void RawEditorDialog::onUndo() {
     m_params = m_history[m_historyIndex];
     updateControlsFromParams();
     onParamChanged();
+
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("Undo: Raw Editor parameters."), 1);
+    }
     if (m_undoBtn) m_undoBtn->setEnabled(m_historyIndex > 0);
     if (m_redoBtn) m_redoBtn->setEnabled(m_historyIndex < m_history.size() - 1);
 }
@@ -828,6 +837,10 @@ void RawEditorDialog::onRedo() {
     m_params = m_history[m_historyIndex];
     updateControlsFromParams();
     onParamChanged();
+
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("Redo: Raw Editor parameters."), 1);
+    }
     if (m_undoBtn) m_undoBtn->setEnabled(m_historyIndex > 0);
     if (m_redoBtn) m_redoBtn->setEnabled(m_historyIndex < m_history.size() - 1);
 }

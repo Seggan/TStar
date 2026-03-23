@@ -272,7 +272,7 @@ void AlignChannelsDialog::onApply()
         }
 
         // Push undo and update viewer
-        tgtViewer->pushUndo();
+        tgtViewer->pushUndo(tr("Align Channels"));
         tgtViewer->setBuffer(warped, tgtViewer->windowTitle(), true);
 
         const QString okMsg = tr("Image %1: aligned (shift=%2,%3  rot=%4°  %5 stars)")
@@ -289,11 +289,16 @@ void AlignChannelsDialog::onApply()
     if (m_mainWindow) m_mainWindow->endLongProcess();
     m_applyBtn->setEnabled(true);
 
+    QString msg;
     if (successCount == totalCount) {
-        m_statusLabel->setText(tr("Completed: %1/%2 images aligned successfully.")
-                                   .arg(successCount).arg(totalCount));
+        msg = tr("Completed: %1/%2 images aligned successfully.")
+                  .arg(successCount).arg(totalCount);
     } else {
-        m_statusLabel->setText(tr("Completed with errors: %1/%2 images aligned.")
-                                   .arg(successCount).arg(totalCount));
+        msg = tr("Completed with errors: %1/%2 images aligned.")
+                  .arg(successCount).arg(totalCount);
+    }
+    m_statusLabel->setText(msg);
+    if (m_mainWindow) {
+        m_mainWindow->logMessage(msg, successCount == totalCount ? 0 : 1);
     }
 }

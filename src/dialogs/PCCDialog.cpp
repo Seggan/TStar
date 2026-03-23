@@ -1,11 +1,11 @@
 #include "PCCDialog.h"
+#include "../MainWindowCallbacks.h"
 #include <QVBoxLayout>
 #include <QMessageBox>
 #include <QCoreApplication>
 #include "PCCDistributionDialog.h"
 #include "../photometry/StarDetector.h"
 #include "../ImageViewer.h"
-#include "MainWindowCallbacks.h"
 
 
 PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, tr("Photometric Color Calibration"), 0, 0), m_viewer(viewer) {
@@ -224,12 +224,15 @@ void PCCDialog::onCalibrationFinished() {
                       .arg(offset[0], 0, 'e', 5).arg(offset[1], 0, 'e', 5).arg(offset[2], 0, 'e', 5);
         
         // Critical: Push Undo before applying
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("PCC"));
         m_viewer->getBuffer().applyPCC(kw[0], kw[1], kw[2], bg[0], bg[1], bg[2], bg_mean);
         // Refresh display needed? Usually buffer change signals handled, but explicit might be safer
         m_viewer->refreshDisplay(); 
         
-        if (mw) mw->logMessage(msg, 1, true);
+        if (mw) {
+            mw->logMessage(msg, 1, true);
+            mw->logMessage(tr("PCC applied."), 1);
+        }
         
         QMessageBox::information(this, tr("PCC Result"), msg);
         accept(); // Close dialog

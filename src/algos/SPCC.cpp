@@ -608,20 +608,28 @@ QStringList SPCC::picklesMatchForSimbad(const QString& simbadSp,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SPCC::inferLetterFromBpRp
-// Mirrors Python _infer_letter_from_bv() using Gaia BP-RP as a proxy for B-V.
-// Conversion: B-V ~ 0.393 + 0.475*(BP-RP) - 0.055*(BP-RP)^2 (Riello+2021)
+// SPCC::inferTypeFromBpRp
+// Maps Gaia BP-RP to an approximate Pickles Main Sequence (V) type.
+// Conversion to B-V (~proxy): 0.393 + 0.475*(BP-RP) - 0.055*(BP-RP)^2
 // ─────────────────────────────────────────────────────────────────────────────
-QString SPCC::inferLetterFromBpRp(double bp_rp) {
+QString SPCC::inferTypeFromBpRp(double bp_rp) {
     if (!std::isfinite(bp_rp)) return QString();
-    // Convert BP-RP to approximate B-V
-    const double bv = 0.3930 + 0.4750 * bp_rp - 0.0548 * bp_rp * bp_rp;
-    if (bv <  0.00) return "B";
-    if (bv <  0.30) return "A";
-    if (bv <  0.58) return "F";
-    if (bv <  0.81) return "G";
-    if (bv <  1.40) return "K";
-    return "M";
+    
+    // Improved table for more granular matching (Main Sequence V)
+    if (bp_rp < -0.35) return "O5V";
+    if (bp_rp < -0.25) return "B0V";
+    if (bp_rp < -0.10) return "B5V";
+    if (bp_rp <  0.10) return "A0V";
+    if (bp_rp <  0.25) return "A5V";
+    if (bp_rp <  0.40) return "F0V";
+    if (bp_rp <  0.55) return "F5V";
+    if (bp_rp <  0.65) return "G0V";
+    if (bp_rp <  0.75) return "G2V"; // Sun-like
+    if (bp_rp <  0.85) return "G5V";
+    if (bp_rp <  1.00) return "K0V";
+    if (bp_rp <  1.30) return "K5V";
+    if (bp_rp <  1.60) return "M0V";
+    return "M5V";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -770,39 +778,41 @@ CalibrationModel SPCC::fitColorModel(const std::vector<double>& meas_RG,
 
     const double eps = 1e-12;
 
-    // ── Model 0: slope-only (origin-forced) ──────────────────────────────────
-    auto slopeOnly = [&](const std::vector<double>& mx,
-                          const std::vector<double>& ey) -> double {
+    // ── Model 0: slope-only ──────────────────────────────────────────────────
+    // Fit MeasRatio = m * ExpectedRatio
+    auto slopeOnly = [&](const std::vector<double>& ex,
+                          const std::vector<double>& my) -> double {
         double num = 0.0, den = 0.0;
-        for (int i = 0; i < n; ++i) { num += mx[i] * ey[i]; den += mx[i] * mx[i]; }
+        for (int i = 0; i < n; ++i) { num += ex[i] * my[i]; den += ex[i] * ex[i]; }
         return (den > eps) ? num / den : 1.0;
     };
-    const double mR_s = slopeOnly(meas_RG, exp_RG);
-    const double mB_s = slopeOnly(meas_BG, exp_BG);
+    const double mR_s = slopeOnly(exp_RG, meas_RG);
+    const double mB_s = slopeOnly(exp_BG, meas_BG);
 
     std::vector<double> predR_s(n), predB_s(n);
-    for (int i = 0; i < n; ++i) { predR_s[i] = mR_s * meas_RG[i]; predB_s[i] = mB_s * meas_BG[i]; }
-    const double rms_s = rmsFrac(predR_s, exp_RG) + rmsFrac(predB_s, exp_BG);
+    for (int i = 0; i < n; ++i) { predR_s[i] = mR_s * exp_RG[i]; predB_s[i] = mB_s * exp_BG[i]; }
+    const double rms_s = rmsFrac(predR_s, meas_RG) + rmsFrac(predB_s, meas_BG);
 
     // ── Model 1: affine ───────────────────────────────────────────────────────
-    auto affineFit = [&](const std::vector<double>& mx,
-                          const std::vector<double>& ey,
+    // Fit MeasRatio = m * ExpectedRatio + b
+    auto affineFit = [&](const std::vector<double>& ex,
+                          const std::vector<double>& my,
                           double& slope, double& intercept) {
         std::vector<std::vector<double>> A(n, std::vector<double>(2));
-        for (int i = 0; i < n; ++i) { A[i][0] = mx[i]; A[i][1] = 1.0; }
-        std::vector<double> c2 = leastSquares(A, ey);
+        for (int i = 0; i < n; ++i) { A[i][0] = ex[i]; A[i][1] = 1.0; }
+        std::vector<double> c2 = leastSquares(A, my);
         slope = c2[0]; intercept = c2[1];
     };
     double mR_a, bR_a, mB_a, bB_a;
-    affineFit(meas_RG, exp_RG, mR_a, bR_a);
-    affineFit(meas_BG, exp_BG, mB_a, bB_a);
+    affineFit(exp_RG, meas_RG, mR_a, bR_a);
+    affineFit(exp_BG, meas_BG, mB_a, bB_a);
 
     std::vector<double> predR_a(n), predB_a(n);
     for (int i = 0; i < n; ++i) {
-        predR_a[i] = mR_a * meas_RG[i] + bR_a;
-        predB_a[i] = mB_a * meas_BG[i] + bB_a;
+        predR_a[i] = mR_a * exp_RG[i] + bR_a;
+        predB_a[i] = mB_a * exp_BG[i] + bB_a;
     }
-    const double rms_a = rmsFrac(predR_a, exp_RG) + rmsFrac(predB_a, exp_BG);
+    const double rms_a = rmsFrac(predR_a, meas_RG) + rmsFrac(predB_a, meas_BG);
 
     // ── Model 2: quadratic (needs >= 6 data points) ───────────────────────────
     double aR_q = 0.0, bR_q = 1.0, cR_q = 0.0;
@@ -810,15 +820,15 @@ CalibrationModel SPCC::fitColorModel(const std::vector<double>& meas_RG,
     double rms_q = std::numeric_limits<double>::infinity();
 
     if (n >= 6) {
-        bool ok = polyFit2(meas_RG, exp_RG, aR_q, bR_q, cR_q) &&
-                  polyFit2(meas_BG, exp_BG, aB_q, bB_q, cB_q);
+        bool ok = polyFit2(exp_RG, meas_RG, aR_q, bR_q, cR_q) &&
+                  polyFit2(exp_BG, meas_BG, aB_q, bB_q, cB_q);
         if (ok) {
             std::vector<double> predR_q(n), predB_q(n);
             for (int i = 0; i < n; ++i) {
-                predR_q[i] = aR_q * meas_RG[i]*meas_RG[i] + bR_q * meas_RG[i] + cR_q;
-                predB_q[i] = aB_q * meas_BG[i]*meas_BG[i] + bB_q * meas_BG[i] + cB_q;
+                predR_q[i] = aR_q * exp_RG[i]*exp_RG[i] + bR_q * exp_RG[i] + cR_q;
+                predB_q[i] = aB_q * exp_BG[i]*exp_BG[i] + bB_q * exp_BG[i] + cB_q;
             }
-            rms_q = rmsFrac(predR_q, exp_RG) + rmsFrac(predB_q, exp_BG);
+            rms_q = rmsFrac(predR_q, meas_RG) + rmsFrac(predB_q, meas_BG);
         }
     }
 
@@ -830,6 +840,12 @@ CalibrationModel SPCC::fitColorModel(const std::vector<double>& meas_RG,
 
     CalibrationModel model;
     model.rms_total = best_rms;
+
+    // We fit Measured = f(Expected). 
+    // To transform from Measured to Expected, we multiply Measured by (Expected / Measured).
+    // But since applyColorModel anchors to Green, it effectively treats G as having gain 1.
+    // The coefficients stored here are used in applyColorModel to calculate the multipliers.
+    
     if (idx == 0) {
         model.kind       = MODEL_SLOPE_ONLY;
         model.coeff_R[0] = 0.0; model.coeff_R[1] = mR_s; model.coeff_R[2] = 0.0;
@@ -865,26 +881,34 @@ void SPCC::applyColorModel(float* img_float,
     // to remove any pre-existing color tint in the background pixels.
     const double pivot_avg = (pivot_R + pivot_G + pivot_B) / 3.0;
 
+    // Model fits Measured (R/G) = f(Expected R/G).
+    // To correct, we need Expected R/G = f_inv(Measured).
+    // For Linear/Affine, we calculate the multiplier directly.
+    // For simplicity in the poly application, we invert the prediction:
+    // Expected = (Measured - intercept) / slope
+    
+    double predR_for_expected = polyEval(model.coeff_R, 1.0); // Ratio for Expected=1.0
+    double predB_for_expected = polyEval(model.coeff_B, 1.0);
+
+    // Apply corrective multiplier: expected / predicted
+    // Since we fit Measured = f(Expected), a measured ratio RG corresponds 
+    // roughly to Expected = RG / slope (ignoring intercept for a moment).
+    // More accurately, for any measured RG, the multiplier to get back to Exp=1.0 
+    // when measuring predR_for_expected is 1/predR_for_expected.
+    
+    double mR = (std::abs(predR_for_expected) > 1e-9) ? (1.0 / predR_for_expected) : 1.0;
+    double mB = (std::abs(predB_for_expected) > 1e-9) ? (1.0 / predB_for_expected) : 1.0;
+
+    // Clip multipliers
+    mR = std::max(0.25, std::min(4.0, mR));
+    mB = std::max(0.25, std::min(4.0, mB));
+
     for (size_t i = 0; i < n_pixels; ++i) {
         const size_t base = i * 3;
         const double R = img_float[base];
         const double G = img_float[base + 1];
         const double B = img_float[base + 2];
 
-        const double RG = R / std::max(G, eps);
-        const double BG = B / std::max(G, eps);
-
-        double mR = polyEval(model.coeff_R, RG);
-        double mB = polyEval(model.coeff_B, BG);
-
-        // Clip to [0.25, 4.0] — matches Python np.clip
-        mR = std::max(0.25, std::min(4.0, mR));
-        mB = std::max(0.25, std::min(4.0, mB));
-
-        // Scale factors: these transform (R/G) into (Expected_R/G).
-        // If the Expected ratios were normalized by the reference SED,
-        // then kR = mR and kB = mB are the scales to apply to R and B.
-        // We evaluate them relative to the neutral pivot_avg.
         const double R_new = pivot_avg + (R - pivot_R) * mR;
         const double G_new = pivot_avg + (G - pivot_G);
         const double B_new = pivot_avg + (B - pivot_B) * mB;
@@ -1106,6 +1130,16 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     buildSystemThroughput(store, params.gFilter, params.sensor, params.lpFilter1, params.lpFilter2, "Green", T_sys_G);
     buildSystemThroughput(store, params.bFilter, params.sensor, params.lpFilter1, params.lpFilter2, "Blue",  T_sys_B);
 
+    QString log = "Built system throughput:\n";
+    auto logChan = [&](const QString& name, const QString& f, const QString& s, const QString& lp1, const QString& lp2) {
+        log += QString(" - %1: Filter=%2, Sensor=%3, LP=%4/%5\n").arg(name, f, s, lp1, lp2);
+    };
+    logChan("Red",   params.rFilter, params.sensor, params.lpFilter1, params.lpFilter2);
+    logChan("Green", params.gFilter, params.sensor, params.lpFilter1, params.lpFilter2);
+    logChan("Blue",  params.bFilter, params.sensor, params.lpFilter1, params.lpFilter2);
+    result.log_msg += log;
+    qCInfo(lcSPCC).noquote() << log;
+
     // ─────────────────────────────────────────────────────────────────────────
     // 3. Integrate the reference SED against each channel's T_sys
     // ─────────────────────────────────────────────────────────────────────────
@@ -1130,23 +1164,49 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
 
     const QStringList allSEDNames = availableSEDs(store);
 
-    // Map: SED EXTNAME -> (S_R, S_G, S_B)
-    std::unordered_map<std::string, std::array<double,3>> templateIntegrals;
+    // ── Build Anchor Table for interpolation ──────────────────────────────────
+    struct AnchorPoint {
+        QString type;
+        double bp_rp;
+        double sumR, sumG, sumB;
+    };
+    std::vector<AnchorPoint> anchors = {
+        {"O5V", -0.33, 0,0,0}, {"B0V", -0.24, 0,0,0}, {"B5V", -0.11, 0,0,0},
+        {"A0V",  0.00, 0,0,0}, {"A5V",  0.14, 0,0,0}, {"F0V",  0.31, 0,0,0},
+        {"F5V",  0.44, 0,0,0}, {"G0V",  0.59, 0,0,0}, {"G2V",  0.64, 0,0,0},
+        {"G5V",  0.76, 0,0,0}, {"K0V",  0.93, 0,0,0}, {"K5V",  1.15, 0,0,0},
+        {"M0V",  1.45, 0,0,0}, {"M5V",  1.84, 0,0,0}
+    };
 
-    for (const StarRecord& sr : starRecords) {
-        if (sr.pickles_match.isEmpty()) continue;
-        const std::string key = sr.pickles_match.toStdString();
-        if (templateIntegrals.count(key)) continue;
+    auto findSedByPattern = [&](const QString& p) -> const SPCCObject* {
+        for (const auto& s : store.sed_list) {
+            if (s.name.contains(p, Qt::CaseInsensitive)) return &s;
+        }
+        return nullptr;
+    };
 
-        const SPCCObject* sed = findCurve(store.sed_list, sr.pickles_match);
-        if (!sed) continue;
-
-        double grid[WL_GRID_LEN];
-        interpolateToGrid(sed->x, sed->y, grid);
-        templateIntegrals[key] = {trapz(grid, T_sys_R),
-                                   trapz(grid, T_sys_G),
-                                   trapz(grid, T_sys_B)};
+    for (auto& a : anchors) {
+        const SPCCObject* sed = findSedByPattern(a.type);
+        if (sed && sed->arrays_loaded) {
+            double grid[WL_GRID_LEN];
+            interpolateToGrid(sed->x, sed->y, grid);
+            a.sumR = trapz(grid, T_sys_R);
+            a.sumG = trapz(grid, T_sys_G);
+            a.sumB = trapz(grid, T_sys_B);
+        } else {
+            const SPCCObject* fallback = findSedByPattern("G2V");
+            if (fallback) {
+                double grid[WL_GRID_LEN];
+                interpolateToGrid(fallback->x, fallback->y, grid);
+                a.sumR = trapz(grid, T_sys_R);
+                a.sumG = trapz(grid, T_sys_G);
+                a.sumB = trapz(grid, T_sys_B);
+            }
+        }
     }
+    std::sort(anchors.begin(), anchors.end(), [](const AnchorPoint& a, const AnchorPoint& b){
+        return a.bp_rp < b.bp_rp;
+    });
 
     // ─────────────────────────────────────────────────────────────────────────
     // 5. Extract pixel data as float32 RGB in [0,1]
@@ -1174,6 +1234,12 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     std::vector<double> meas_RG, meas_BG, exp_RG, exp_BG;
     std::vector<EnrichedMatch> enriched;
 
+    int logCount = 0;
+    int validColorCount = 0;
+    int fallbackColorCount = 0;
+    double minExpRG = 1e9, maxExpRG = -1e9;
+    double minExpBG = 1e9, maxExpBG = -1e9;
+
     for (const StarRecord& sr : starRecords) {
         // Determine aperture geometry mirroring Python:
         //   r  = clip(2.5 * a, 2.0, 12.0)
@@ -1189,18 +1255,31 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
                                                     r, rin, rout);
         if (!phot.valid) continue;
 
-        // Decide which SED integrals to use (Pickles primary, Gaia fallback if
-        // gaia_source_id is nonzero and no Pickles match).  The Gaia XP
-        // integration itself is performed by the dialog before calling this
-        // function and stored in starRecords (or passed as auxiliary data).
-        // Here we only use pre-computed Pickles integrals.
-        const std::string key = sr.pickles_match.toStdString();
-        auto it = templateIntegrals.find(key);
-        if (it == templateIntegrals.end()) continue;
+        // ── Catalog (Expected) ───────────────────────────────────────────────
+        double bprp = sr.gaia_bp_rp;
+        if (!std::isfinite(bprp)) {
+            bprp = 0.64; // Default to G2V (Solar type)
+            fallbackColorCount++;
+        } else {
+            validColorCount++;
+        }
 
-        const double S_sr = it->second[0];
-        const double S_sg = it->second[1];
-        const double S_sb = it->second[2];
+        double S_sr = 0, S_sg = 0, S_sb = 0;
+        if (bprp <= anchors.front().bp_rp) {
+            S_sr = anchors.front().sumR; S_sg = anchors.front().sumG; S_sb = anchors.front().sumB;
+        } else if (bprp >= anchors.back().bp_rp) {
+            S_sr = anchors.back().sumR; S_sg = anchors.back().sumG; S_sb = anchors.back().sumB;
+        } else {
+            for (size_t i = 0; i < anchors.size() - 1; ++i) {
+                if (bprp >= anchors[i].bp_rp && bprp < anchors[i+1].bp_rp) {
+                    double t = (bprp - anchors[i].bp_rp) / (anchors[i+1].bp_rp - anchors[i].bp_rp);
+                    S_sr = anchors[i].sumR * (1.0 - t) + anchors[i+1].sumR * t;
+                    S_sg = anchors[i].sumG * (1.0 - t) + anchors[i+1].sumG * t;
+                    S_sb = anchors[i].sumB * (1.0 - t) + anchors[i+1].sumB * t;
+                    break;
+                }
+            }
+        }
 
         if (!std::isfinite(S_sr) || !std::isfinite(S_sg) || !std::isfinite(S_sb)) continue;
         if (S_sg <= 0.0 || S_sr <= 0.0 || S_sb <= 0.0) continue;
@@ -1219,6 +1298,16 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
         meas_RG.push_back(mRG); meas_BG.push_back(mBG);
         exp_RG .push_back(eRG); exp_BG .push_back(eBG);
 
+        minExpRG = std::min(minExpRG, eRG); maxExpRG = std::max(maxExpRG, eRG);
+        minExpBG = std::min(minExpBG, eBG); maxExpBG = std::max(maxExpBG, eBG);
+
+        if (logCount < 20) {
+            qCInfo(lcSPCC) << "[SPCC Diag] Star match:" << sr.pickles_match 
+                           << "eRG:" << eRG << "eBG:" << eBG 
+                           << "mRG:" << mRG << "mBG:" << mBG;
+            logCount++;
+        }
+
         EnrichedMatch em;
         em.x_img   = sr.x_img;  em.y_img = sr.y_img;
         em.R_meas  = phot.R_star; em.G_meas = phot.G_star; em.B_meas = phot.B_star;
@@ -1228,6 +1317,10 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
         em.r_ap    = r;    em.r_in    = rin;   em.r_out   = rout;
         enriched.push_back(em);
     }
+
+    qCInfo(lcSPCC) << "[SPCC] Color data quality: " << validColorCount << "stars with catalog BP-RP, " 
+                   << fallbackColorCount << "stars using default G2V.";
+    qCInfo(lcSPCC) << "[SPCC] Expected Ratio Spread: RG [" << minExpRG << "," << maxExpRG << "], BG [" << minExpBG << "," << maxExpBG << "]";
 
     result.stars_used = (int)meas_RG.size();
 
@@ -1247,19 +1340,48 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     result.model    = model;
     result.residual = model.rms_total;
 
-    // Populate corrMatrix for dialog display (diagonal for now)
-    const double scaleR_diag = polyEval(model.coeff_R, 1.0);
-    const double scaleG_diag = 1.0;
-    const double scaleB_diag = polyEval(model.coeff_B, 1.0);
-    result.scaleR = scaleR_diag;
-    result.scaleG = scaleG_diag;
-    result.scaleB = scaleB_diag;
-    result.corrMatrix[0][0] = scaleR_diag;
-    result.corrMatrix[1][1] = scaleG_diag;
-    result.corrMatrix[2][2] = scaleB_diag;
-    result.white_balance_k[0] = scaleR_diag;
-    result.white_balance_k[1] = scaleG_diag;
-    result.white_balance_k[2] = scaleB_diag;
+    // Evaluate global multipliers (Linear Mode)
+    // We fit Measured = k * Expected, so k = Measured/Expected.
+    // The multiplier to get back to Expected from Measured is 1.0 / k.
+    
+    double mR_slope = 1.0, mB_slope = 1.0;
+    if (!meas_RG.empty()) {
+        double sum_m_e_R = 0, sum_e_e_R = 0;
+        double sum_m_e_B = 0, sum_e_e_B = 0;
+        for (size_t i = 0; i < meas_RG.size(); ++i) {
+            sum_m_e_R += meas_RG[i] * exp_RG[i]; sum_e_e_R += exp_RG[i] * exp_RG[i];
+            sum_m_e_B += meas_BG[i] * exp_BG[i]; sum_e_e_B += exp_BG[i] * exp_BG[i];
+        }
+        if (sum_e_e_R > 0) mR_slope = sum_m_e_R / sum_e_e_R; // k = sum(m*e)/sum(e^2)
+        if (sum_e_e_B > 0) mB_slope = sum_m_e_B / sum_e_e_B;
+    }
+
+    // Factors for display and apply: multiplier = 1/k
+    float kR = (mR_slope > 1e-9) ? (1.0f / (float)mR_slope) : 1.0f;
+    float kB = (mB_slope > 1e-9) ? (1.0f / (float)mB_slope) : 1.0f;
+
+    result.white_balance_k[0] = kR;
+    result.white_balance_k[1] = 1.0;
+    result.white_balance_k[2] = kB;
+    
+    result.scaleR = kR;
+    result.scaleG = 1.0;
+    result.scaleB = kB;
+
+    result.corrMatrix[0][0] = kR;
+    result.corrMatrix[1][1] = 1.0;
+    result.corrMatrix[2][2] = kB;
+    
+    // If NOT linear mode, the displayed scale factors are just an approximation (at Ref point)
+    if (!params.linearMode) {
+        // Here we could evaluate the model at Exp=1.0 for display.
+        // Since Meas = f(Exp), for Exp=1.0, Meas = f(1.0).
+        // Gain factor = Exp/Meas = 1.0 / f(1.0).
+        double pR = polyEval(model.coeff_R, 1.0);
+        double pB = polyEval(model.coeff_B, 1.0);
+        result.scaleR = (std::abs(pR) > 1e-9) ? (1.0 / pR) : 1.0;
+        result.scaleB = (std::abs(pB) > 1e-9) ? (1.0 / pB) : 1.0;
+    }
 
     // Populate diagnostics
     for (const EnrichedMatch& em : enriched) {
@@ -1277,7 +1399,6 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     progress(75, "Applying colour calibration...");
 
     // Compute pivot values (median of each channel over the whole image)
-    // Compute pivot values (median of each channel over the whole image)
     std::vector<double> chanR(n_pixels), chanG(n_pixels), chanB(n_pixels);
     for (size_t i = 0; i < n_pixels; ++i) {
         chanR[i] = img_f32[i*3];
@@ -1288,7 +1409,27 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     const double pivot_G = vectorMedianImpl(chanG);
     const double pivot_B = vectorMedianImpl(chanB);
 
-    applyColorModel(img_f32.data(), W, H, model, pivot_R, pivot_G, pivot_B);
+    if (params.linearMode) {
+        // Linear Application: simple per-channel multiplication
+        // Note: we subtract background pivot then re-add a neutral pivot?
+        // PCC formula: P' = (P - Bg) * K + Bg_Mean
+        const float kr = (float)kR;
+        const float kb = (float)kB;
+        const float offsetR = (float)(pivot_G - pivot_R * kr);
+        const float offsetB = (float)(pivot_G - pivot_B * kb);
+
+        #pragma omp parallel for
+        for (long i = 0; i < (long)n_pixels; ++i) {
+            float r = img_f32[i*3 + 0];
+            float g = img_f32[i*3 + 1];
+            float b = img_f32[i*3 + 2];
+            img_f32[i*3 + 0] = std::clamp(r * kr + offsetR, 0.0f, 1.0f);
+            img_f32[i*3 + 1] = std::clamp(g, 0.0f, 1.0f);
+            img_f32[i*3 + 2] = std::clamp(b * kb + offsetB, 0.0f, 1.0f);
+        }
+    } else {
+        applyColorModel(img_f32.data(), W, H, model, pivot_R, pivot_G, pivot_B);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // 9. Optional: chromatic gradient removal
@@ -1327,10 +1468,32 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SPCC::calibrateWithCatalog  (legacy compatibility shim)
-// The dialog currently passes CatalogStar objects; convert them to StarRecords.
-// ─────────────────────────────────────────────────────────────────────────────
+double SPCC::bpRpFromType(const QString& spec) {
+    QString s = spec.toUpper();
+    if (s.startsWith("O")) return -0.4;
+    if (s.startsWith("B0")) return -0.3;
+    if (s.startsWith("B5")) return -0.14;
+    if (s.startsWith("B"))  return -0.2;
+    if (s.startsWith("A0")) return 0.0;
+    if (s.startsWith("A5")) return 0.15;
+    if (s.startsWith("A"))  return 0.1;
+    if (s.startsWith("F0")) return 0.3;
+    if (s.startsWith("F5")) return 0.46;
+    if (s.startsWith("F"))  return 0.4;
+    if (s.startsWith("G0")) return 0.58;
+    if (s.startsWith("G2")) return 0.64;
+    if (s.startsWith("G5")) return 0.78;
+    if (s.startsWith("G"))  return 0.65;
+    if (s.startsWith("K0")) return 0.96;
+    if (s.startsWith("K5")) return 1.41;
+    if (s.startsWith("K"))  return 1.1;
+    if (s.startsWith("M0")) return 1.84;
+    if (s.startsWith("M5")) return 2.80;
+    if (s.startsWith("M"))  return 2.2;
+    return 0.64; // Default G2V
+}
+
+
 SPCCResult SPCC::calibrateWithCatalog(const ImageBuffer& buf,
                                        const SPCCParams&  params,
                                        const std::vector<CatalogStar>& stars) {
@@ -1352,6 +1515,8 @@ SPCCResult SPCC::calibrateWithCatalog(const ImageBuffer& buf,
         sr.y_img = 0.0;
         sr.semi_a = 2.0;         // default when not provided
         sr.sp_type.clear();
+        sr.gaia_bp_rp = cs.bp_rp;
+        sr.gaia_gmag  = cs.magV > 0 ? cs.magV : cs.magB;
 
         if (!sr.sp_type.isEmpty()) {
             // Extract single-letter class for fallback matching
@@ -1361,6 +1526,19 @@ SPCCResult SPCC::calibrateWithCatalog(const ImageBuffer& buf,
             QStringList candidates = picklesMatchForSimbad(sr.sp_type, allSEDs);
             if (!candidates.isEmpty())
                 sr.pickles_match = candidates.first();
+        } else if (cs.teff > 1000.0) {
+             // Map Teff to bp_rp for interpolation if direct bp_rp missing
+             if (std::isnan(sr.gaia_bp_rp)) {
+                 if (cs.teff > 30000)      sr.gaia_bp_rp = -0.4;
+                 else if (cs.teff > 15000) sr.gaia_bp_rp = -0.15;
+                 else if (cs.teff > 9000)  sr.gaia_bp_rp = 0.0;
+                 else if (cs.teff > 7000)  sr.gaia_bp_rp = 0.3;
+                 else if (cs.teff > 6000)  sr.gaia_bp_rp = 0.58;
+                 else if (cs.teff > 5500)  sr.gaia_bp_rp = 0.65;
+                 else if (cs.teff > 5000)  sr.gaia_bp_rp = 0.9;
+                 else if (cs.teff > 4000)  sr.gaia_bp_rp = 1.3;
+                 else                      sr.gaia_bp_rp = 2.0;
+             }
         }
         records.push_back(sr);
     }

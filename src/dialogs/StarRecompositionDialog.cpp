@@ -351,6 +351,7 @@ void StarRecompositionDialog::onApply() {
         if (mw) {
             QString newName = m_cmbStarless->currentText() + "_recomposed";
             mw->createResultWindow(result, newName);
+            mw->logMessage(tr("Star Recomposition completed: %1").arg(newName), 1, true);
         }
         accept();
     } else {

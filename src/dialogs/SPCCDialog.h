@@ -83,8 +83,8 @@ private slots:
     void saveLpFilter2Setting(int);
     void saveGradMethodSetting(const QString&);
     void saveSepThreshSetting(double);
-    void saveGaiaFallbackSetting(bool);
     void saveFullMatrixSetting(bool);
+    void saveLinearModeSetting(bool);
 
 private:
     // ── UI construction ───────────────────────────────────────────────────────
@@ -94,17 +94,6 @@ private:
     void restoreSettings();
     void showResults(const SPCCResult& r);
     void setControlsEnabled(bool en);
-
-    // ── Star fetch helpers ────────────────────────────────────────────────────
-    /// Build a StarRecord list from the current SIMBAD query results.
-    /// Matches each SIMBAD star to the nearest SEP detection (within 3 px).
-    void matchSimbadToSEP(const std::vector<StarRecord>& simbadStars,
-                          std::vector<StarRecord>& matched);
-
-    /// For stars without a Pickles match, try to assign sp_clean from
-    /// Gaia BP-RP colour and re-run picklesMatchForSimbad().
-    void applyGaiaFallbackToStarList(std::vector<StarRecord>& starList,
-                                      const SPCCDataStore& store);
 
     // ── Calibration launch ────────────────────────────────────────────────────
     void startCalibration();
@@ -130,8 +119,8 @@ private:
     QDoubleSpinBox* m_sepThreshSpin    = nullptr;   ///< SEP detection sigma
     QComboBox*      m_bgMethodCombo    = nullptr;   ///< Background subtraction method
     QComboBox*      m_gradMethodCombo  = nullptr;   ///< Gradient surface method
-    QCheckBox*      m_gaiaFallbackCheck= nullptr;
     QCheckBox*      m_fullMatrixCheck  = nullptr;
+    QCheckBox*      m_linearModeCheck  = nullptr;
     QCheckBox*      m_runGradientCheck = nullptr;   ///< Enable gradient extraction
 
     // ─────────────────────────────────────────────────────────────────────────

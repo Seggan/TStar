@@ -333,7 +333,7 @@ void StretchDialog::onApply() {
         if (!overlay) overlay = m_viewer->findChild<QWidget*>();
         if (overlay) overlay->setProperty("isProcessing", true);
         
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Stretch applied"));
         m_viewer->clearPreviewLUT(); 
         
         m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);

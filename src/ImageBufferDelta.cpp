@@ -63,7 +63,7 @@ ImageHistoryManager::~ImageHistoryManager() {
     clear();
 }
 
-void ImageHistoryManager::pushUndo(const ImageBuffer& buffer) {
+void ImageHistoryManager::pushUndo(const ImageBuffer& buffer, const QString& description) {
     // Take a full snapshot every N operations to enable faster reconstruction
     bool shouldSnapshot = (m_snapshotCounter % SNAPSHOT_INTERVAL) == 0;
     
@@ -141,6 +141,8 @@ void ImageHistoryManager::pushUndo(const ImageBuffer& buffer) {
         m_baseline = std::make_shared<ImageBuffer>(buffer);
     }
     
+    delta.description = description;
+    
     // Clear redo stack on new operation
     m_redoStack.clear();
     
@@ -156,11 +158,18 @@ void ImageHistoryManager::performUndo() {
     if (m_undoStack.empty()) return;
     
     // Move current state to redo stack
-    // Note: In actual use, caller provides current buffer
-    // This is a simplified version - in practice, ImageViewer would manage this
-    
     m_redoStack.push_back(m_undoStack.back());
     m_undoStack.pop_back();
+}
+
+QString ImageHistoryManager::getUndoDescription() const {
+    if (m_undoStack.empty()) return QString();
+    return m_undoStack.back().description;
+}
+
+QString ImageHistoryManager::getRedoDescription() const {
+    if (m_redoStack.empty()) return QString();
+    return m_redoStack.back().description;
 }
 
 void ImageHistoryManager::performRedo() {

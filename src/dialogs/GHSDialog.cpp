@@ -1,6 +1,7 @@
 #include "GHSDialog.h"
 #include "widgets/HistogramWidget.h"
 #include "algos/GHSAlgo.h"
+#include "MainWindowCallbacks.h"
 #include "../ImageViewer.h"
 #include <QDebug> 
 #include <QVBoxLayout>
@@ -655,7 +656,7 @@ void GHSDialog::onApply() {
     m_activeViewer->setBuffer(m_originalBuffer, m_activeViewer->windowTitle(), true);
     
     // 2. Push history of the CLEAN state
-    m_activeViewer->pushUndo();
+    m_activeViewer->pushUndo(tr("GHS"));
     
     // 3. Apply the stretch to our base buffer
     m_originalBuffer.applyGHS(params); 
@@ -671,6 +672,10 @@ void GHSDialog::onApply() {
     
     // Re-compute Histogram
     setHistogramData(m_originalBuffer.computeHistogram(65536), m_originalBuffer.channels());
+    
+    if (auto mw = getCallbacks()) {
+        mw->logMessage(tr("GHS applied."), 1);
+    }
     
     emit applied(tr("GHS Transformation applied to %1").arg(m_activeViewer->windowTitle()));
 }

@@ -1,6 +1,7 @@
 #include "SaturationDialog.h"
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include "../MainWindowCallbacks.h"
 #include "../ImageViewer.h"
 #include <algorithm>
 #include <cmath>
@@ -189,13 +190,16 @@ void SaturationDialog::handleApply() {
         *m_buffer = m_originalBuffer;
 
         // 2. Push undo
-        m_viewer->pushUndo();
+        m_viewer->pushUndo(tr("Saturation"));
 
         // 3. Re-apply final to buffer (since we restored it)
         m_buffer->applySaturation(getParams());
 
         // 4. Update display
         m_viewer->refreshDisplay(true);
+        if (auto mw = getCallbacks()) {
+            mw->logMessage(tr("Saturation applied."), 1);
+        }
         
         m_applied = true;
         m_originalBuffer = *m_buffer; 
