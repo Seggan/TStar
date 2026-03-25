@@ -4180,4 +4180,5 @@ TRANSLATIONS = {
     "PCC applied": {'it': 'PCC applicato.', 'es': 'PCC aplicado.', 'fr': 'PCC appliqué.', 'de': 'PCC angewendet.'},
     "SPCC applied": {'it': 'SPCC applicato.', 'es': 'SPCC aplicado.', 'fr': 'SPCC appliqué.', 'de': 'SPCC angewendet.'},
     "Stretch applied": {'it': 'Stretch applicato.', 'es': 'Stretch aplicado.', 'fr': 'Stretch appliqué.', 'de': 'Stretch angewendet.'},
+    "Compass": {'it': 'Bussola', 'es': 'Brújula', 'fr': 'Boussole', 'de': 'Kompass'},
 }

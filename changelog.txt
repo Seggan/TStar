@@ -1,6 +1,12 @@
 TStar Changelog
 ===============
 
+Version 1.8.1
+-------------
+- Added compass to the annotation tool
+- Fixed a small bug in the CBE tool
+- Fixed a bug in the native plate solver
+
 Version 1.8.0
 -------------
 - Implemented RawEditor (Lightroom style light and color editor)

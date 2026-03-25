@@ -117,6 +117,13 @@ void AnnotationOverlay::setWCSGridVisible(bool visible) {
     }
 }
 
+void AnnotationOverlay::setCompassVisible(bool visible) {
+    if (m_compassVisible != visible) {
+        m_compassVisible = visible;
+        update();
+    }
+}
+
 void AnnotationOverlay::drawWCSGrid(QPainter& painter) {
     if (!m_viewer) return;
     auto meta = m_viewer->getBuffer().metadata();
@@ -297,6 +304,11 @@ void AnnotationOverlay::paintEvent(QPaintEvent* event) {
 
     if (m_wcsGridVisible && WCSUtils::hasValidWCS(m_viewer->getBuffer().metadata())) {
         drawWCSGrid(painter);
+    }
+    
+    // Draw compass if visible
+    if (m_compassVisible && WCSUtils::hasValidWCS(m_viewer->getBuffer().metadata())) {
+        drawCompass(painter);
     }
     
     // Draw WCS objects if visible
@@ -734,7 +746,10 @@ void AnnotationOverlay::renderToPainter(QPainter& painter, const QRectF& imageRe
         }
     }
     
-
+    // Draw compass if visible
+    if (m_compassVisible) {
+        drawCompassToImage(painter, imageRect, scaleM);
+    }
 
     // --- DRAW MANUAL ANNOTATIONS ---
     for (const auto& ann : m_annotations) {
@@ -845,6 +860,169 @@ void AnnotationOverlay::drawWCSGridToImage(QPainter& painter, const QRectF& imag
     QFont gFont = painter.font(); gFont.setPointSizeF(8.0 * scaleM); painter.setFont(gFont);
     for (double ra = std::floor(minRa/stepRA)*stepRA; ra <= maxRa; ra += stepRA) drawPath(true, std::fmod(ra+360.0, 360.0), minDec, maxDec);
     for (double dec = std::floor(minDec/step)*step; dec <= maxDec; dec += step) drawPath(false, dec, minRa, maxRa);
+    painter.restore();
+}
+
+void AnnotationOverlay::drawCompass(QPainter& painter) {
+    if (!m_viewer) return;
+    auto meta = m_viewer->getBuffer().metadata();
+    if (!WCSUtils::hasValidWCS(meta)) return;
+    
+    int w = m_viewer->getBuffer().width();
+    int h = m_viewer->getBuffer().height();
+    
+    double centerRa, centerDec;
+    if (!WCSUtils::pixelToWorld(meta, w/2.0, h/2.0, centerRa, centerDec)) return;
+    
+    if (90.0 - std::abs(centerDec) < 2.78e-3) return; // center is too close to a pole
+    
+    double northPixX, northPixY, eastPixX, eastPixY;
+    if (!WCSUtils::worldToPixel(meta, centerRa, centerDec + 0.1, northPixX, northPixY)) return;
+    if (!WCSUtils::worldToPixel(meta, centerRa + 0.1, centerDec, eastPixX, eastPixY)) return;
+    
+    QPointF centerWidgetPos = mapFromImage(QPointF(w/2.0, h/2.0));
+    QPointF northWidgetPos = mapFromImage(QPointF(northPixX, northPixY));
+    QPointF eastWidgetPos = mapFromImage(QPointF(eastPixX, eastPixY));
+    
+    double angleN = std::atan2(northWidgetPos.y() - centerWidgetPos.y(), 
+                               northWidgetPos.x() - centerWidgetPos.x());
+                               
+    double angleE = std::atan2(eastWidgetPos.y() - centerWidgetPos.y(), 
+                               eastWidgetPos.x() - centerWidgetPos.x());
+                               
+    double len_scaled = ((double)h / 20.0) * m_viewer->zoomFactor();
+    
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(Qt::red, 3.0));
+    painter.setBrush(Qt::red);
+    
+    QFont font = painter.font();
+    font.setPointSizeF(len_scaled / 3.0);
+    painter.setFont(font);
+    
+    // Draw North
+    painter.save();
+    painter.translate(centerWidgetPos);
+    painter.rotate(angleN * 180.0 / M_PI);
+    
+    painter.drawLine(QPointF(0, 0), QPointF(len_scaled, 0));
+    
+    QPainterPath northArrow;
+    northArrow.moveTo(len_scaled, 0);
+    northArrow.lineTo(0.75 * len_scaled, -0.15 * len_scaled);
+    northArrow.lineTo(0.75 * len_scaled, 0.15 * len_scaled);
+    northArrow.closeSubpath();
+    painter.drawPath(northArrow);
+    
+    painter.translate(len_scaled * 1.3, 0.1 * len_scaled);
+    painter.rotate(-angleN * 180.0 / M_PI);
+    
+    QFontMetricsF fm(font);
+    QRectF textBoundsN = fm.boundingRect("N");
+    painter.drawText(QRectF(-textBoundsN.width()/2, -textBoundsN.height()/2, textBoundsN.width(), textBoundsN.height()), Qt::AlignCenter, "N");
+    painter.restore();
+    
+    // Draw East
+    painter.save();
+    painter.translate(centerWidgetPos);
+    painter.rotate(angleE * 180.0 / M_PI);
+    
+    painter.setPen(QPen(Qt::white, 3.0));
+    painter.setBrush(Qt::white);
+    
+    painter.drawLine(QPointF(0, 0), QPointF(len_scaled / 2.0, 0));
+    
+    painter.translate(len_scaled, -0.1 * len_scaled); // siril positions "E" at len distance
+    painter.rotate(-angleE * 180.0 / M_PI);
+    
+    QRectF textBoundsE = fm.boundingRect("E");
+    painter.drawText(QRectF(-textBoundsE.width()/2, -textBoundsE.height()/2, textBoundsE.width(), textBoundsE.height()), Qt::AlignCenter, "E");
+    painter.restore();
+    
+    painter.restore();
+}
+
+void AnnotationOverlay::drawCompassToImage(QPainter& painter, const QRectF& imageRect, double scaleM) {
+    if (!m_viewer) return;
+    auto meta = m_viewer->getBuffer().metadata();
+    if (!WCSUtils::hasValidWCS(meta)) return;
+    
+    int w = m_viewer->getBuffer().width();
+    int h = m_viewer->getBuffer().height();
+    
+    double centerRa, centerDec;
+    if (!WCSUtils::pixelToWorld(meta, w/2.0, h/2.0, centerRa, centerDec)) return;
+    
+    if (90.0 - std::abs(centerDec) < 2.78e-3) return; // center is too close to a pole
+    
+    double northPixX, northPixY, eastPixX, eastPixY;
+    if (!WCSUtils::worldToPixel(meta, centerRa, centerDec + 0.1, northPixX, northPixY)) return;
+    if (!WCSUtils::worldToPixel(meta, centerRa + 0.1, centerDec, eastPixX, eastPixY)) return;
+    
+    // When drawing directly to image, scaleM compensates for painter zoom.
+    // The image pixel coordinates act as the base geometry.
+    QPointF centerImagePos(w/2.0, h/2.0);
+    QPointF northImagePos(northPixX, northPixY);
+    QPointF eastImagePos(eastPixX, eastPixY);
+    
+    double angleN = std::atan2(northImagePos.y() - centerImagePos.y(), 
+                               northImagePos.x() - centerImagePos.x());
+                               
+    double angleE = std::atan2(eastImagePos.y() - centerImagePos.y(), 
+                               eastImagePos.x() - centerImagePos.x());
+                               
+    double len = (double)h / 20.0;
+    
+    painter.save();
+    painter.setClipRect(imageRect);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(Qt::red, 3.0 * scaleM));
+    painter.setBrush(Qt::red);
+    
+    QFont font = painter.font();
+    font.setPointSizeF((len / 3.0) * scaleM);
+    painter.setFont(font);
+    
+    // Draw North
+    painter.save();
+    painter.translate(centerImagePos);
+    painter.rotate(angleN * 180.0 / M_PI);
+    
+    painter.drawLine(QPointF(0, 0), QPointF(len, 0));
+    
+    QPainterPath northArrow;
+    northArrow.moveTo(len, 0);
+    northArrow.lineTo(0.75 * len, -0.15 * len);
+    northArrow.lineTo(0.75 * len, 0.15 * len);
+    northArrow.closeSubpath();
+    painter.drawPath(northArrow);
+    
+    painter.translate(len * 1.3, 0.1 * len);
+    painter.rotate(-angleN * 180.0 / M_PI);
+    
+    QFontMetricsF fm(font);
+    QRectF textBoundsN = fm.boundingRect("N");
+    painter.drawText(QRectF(-textBoundsN.width()/2, -textBoundsN.height()/2, textBoundsN.width(), textBoundsN.height()), Qt::AlignCenter, "N");
+    painter.restore();
+    
+    // Draw East
+    painter.save();
+    painter.translate(centerImagePos);
+    painter.rotate(angleE * 180.0 / M_PI);
+    
+    painter.setPen(QPen(Qt::white, 3.0 * scaleM));
+    painter.setBrush(Qt::white);
+    
+    painter.drawLine(QPointF(0, 0), QPointF(len / 2.0, 0));
+    
+    painter.translate(len, -0.1 * len);
+    painter.rotate(-angleE * 180.0 / M_PI);
+    
+    QRectF textBoundsE = fm.boundingRect("E");
+    painter.drawText(QRectF(-textBoundsE.width()/2, -textBoundsE.height()/2, textBoundsE.width(), textBoundsE.height()), Qt::AlignCenter, "E");
+    painter.restore();
+    
     painter.restore();
 }
 

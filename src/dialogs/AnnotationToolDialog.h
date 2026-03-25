@@ -91,8 +91,9 @@ private:
     QCheckBox* m_chkConstellations;
     QPushButton* m_btnAnnotate;
     
-    // WCS Grid Filter
+    // WCS Grid and Compass Filter
     QCheckBox* m_chkWcsGrid;
+    QCheckBox* m_chkCompass;
 
     // Options
     QComboBox* m_colorCombo;

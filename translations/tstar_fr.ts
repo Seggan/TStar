@@ -339,6 +339,10 @@
             <translation type="finished">Couleur :</translation>
         </message>
         <message>
+            <source>Compass</source>
+            <translation type="finished">Boussole</translation>
+        </message>
+        <message>
             <source>Constellations</source>
             <translation type="finished">Constellations</translation>
         </message>
@@ -8567,16 +8571,16 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">L'image doit d'abord être résolue astrométriquement.</translation>
         </message>
         <message>
+            <source>PCC</source>
+            <translation type="finished">PCC</translation>
+        </message>
+        <message>
             <source>PCC Failed</source>
             <translation type="finished">Échec PCC</translation>
         </message>
         <message>
             <source>PCC Result</source>
             <translation type="finished">Résultat PCC</translation>
-        </message>
-        <message>
-            <source>PCC applied</source>
-            <translation type="finished">PCC appliqué.</translation>
         </message>
         <message>
             <source>PCC applied.</source>
@@ -10400,16 +10404,16 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Seuil d'extraction de source SEP en unités de sigma de fond.</translation>
         </message>
         <message>
+            <source>SPCC</source>
+            <translation type="finished">SPCC</translation>
+        </message>
+        <message>
             <source>SPCC Complete</source>
             <translation type="finished">SPCC Terminé</translation>
         </message>
         <message>
             <source>SPCC Error</source>
             <translation type="finished">Erreur SPCC</translation>
-        </message>
-        <message>
-            <source>SPCC applied</source>
-            <translation type="finished">SPCC appliqué.</translation>
         </message>
         <message>
             <source>SPCC applied.</source>

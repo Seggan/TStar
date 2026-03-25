@@ -339,6 +339,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Compass</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Constellations</source>
             <translation type="unfinished" />
         </message>
@@ -8564,15 +8568,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>PCC</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>PCC Failed</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>PCC Result</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>PCC applied</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10397,15 +10401,15 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>SPCC</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>SPCC Complete</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>SPCC Error</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>SPCC applied</source>
             <translation type="unfinished" />
         </message>
         <message>

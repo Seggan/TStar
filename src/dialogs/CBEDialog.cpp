@@ -218,46 +218,81 @@ void CBEDialog::onHiPSImageReady(const ImageBuffer& refImg) {
     ImageBuffer target = m_originalBuffer;
     ImageBuffer ref    = refImg;
 
-    // FitsLoader reads FITS rows in FITS order (row 0 = sky-South = displayed at top in TStar).
-    // hips2fits however delivers its FITS output starting from sky-North (top-down), so when
-    // loaded the same way the reference ends up V-flipped relative to the target. Always flip
-    // the reference vertically so it matches the target's pixel coordinate system.
-    if (ref.isValid()) {
-        const int cols = ref.width();
-        const int rows = ref.height();
-        const int ch   = ref.channels();
-        std::vector<float>& px = ref.data();
-        for (int y = 0; y < rows / 2; ++y) {
-            int yy = rows - 1 - y;
-            for (int x = 0; x < cols; ++x) {
-                const int top = (y * cols + x) * ch;
-                const int bot = (yy * cols + x) * ch;
-                for (int c = 0; c < ch; ++c)
-                    std::swap(px[top + c], px[bot + c]);
+    // -------------------------------------------------------------------------
+    // WCS REPROJECTION (Perfect alignment from downloaded HiPS WCS to Target WCS)
+    // -------------------------------------------------------------------------
+    if (ref.isValid() && WCSUtils::hasValidWCS(ref.metadata()) && WCSUtils::hasValidWCS(target.metadata())) {
+        if (auto cb = getCallbacks())
+            cb->logMessage(tr("Aligning reference image exactly to target WCS..."), 0);
+
+        // Map to a tractable maximum resolution to save RAM & CPU (final gradient map is heavily smoothed anyway)
+        static const int MAX_ALIGN_DIM = 2048;
+        int W = target.width();
+        int H = target.height();
+        if (W > MAX_ALIGN_DIM || H > MAX_ALIGN_DIM) {
+            double scale = std::min((double)MAX_ALIGN_DIM / W, (double)MAX_ALIGN_DIM / H);
+            W = std::max(1, (int)std::round(W * scale));
+            H = std::max(1, (int)std::round(H * scale));
+        }
+
+        ImageBuffer aligned(W, H, ref.channels());
+        aligned.setMetadata(target.metadata()); // It now has the exact same coordinate frame
+
+        double scaleX = (double)target.width() / W;
+        double scaleY = (double)target.height() / H;
+
+        int Ws = ref.width();
+        int Hs = ref.height();
+        int ch = ref.channels();
+
+        const auto& tgtMeta = target.metadata();
+        const auto& refMeta = ref.metadata();
+        const float* srcPtr = ref.data().data();
+        float* dstPtr = aligned.data().data();
+
+        #pragma omp parallel for
+        for (int y = 0; y < H; ++y) {
+            double targetY = y * scaleY;
+            for (int x = 0; x < W; ++x) {
+                double targetX = x * scaleX;
+                double ra = 0, dec = 0;
+                int dstIdx = (y * W + x) * ch;
+
+                if (WCSUtils::pixelToWorld(tgtMeta, targetX, targetY, ra, dec)) {
+                    double srcX = 0, srcY = 0;
+                    if (WCSUtils::worldToPixel(refMeta, ra, dec, srcX, srcY)) {
+                        int ix = (int)std::floor(srcX);
+                        int iy = (int)std::floor(srcY);
+
+                        if (ix >= 0 && ix < Ws - 1 && iy >= 0 && iy < Hs - 1) {
+                            double fx = srcX - ix;
+                            double fy = srcY - iy;
+                            double w00 = (1 - fx) * (1 - fy);
+                            double w10 = fx * (1 - fy);
+                            double w01 = (1 - fx) * fy;
+                            double w11 = fx * fy;
+
+                            for (int c = 0; c < ch; ++c) {
+                                double v00 = srcPtr[(iy * Ws + ix) * ch + c];
+                                double v10 = srcPtr[(iy * Ws + ix + 1) * ch + c];
+                                double v01 = srcPtr[((iy + 1) * Ws + ix) * ch + c];
+                                double v11 = srcPtr[((iy + 1) * Ws + ix + 1) * ch + c];
+                                dstPtr[dstIdx + c] = (float)(v00 * w00 + v10 * w10 + v01 * w01 + v11 * w11);
+                            }
+                            continue;
+                        }
+                    }
+                }
+                for (int c = 0; c < ch; ++c) {
+                    dstPtr[dstIdx + c] = 0.0f;
+                }
             }
         }
+        ref = aligned;
     }
 
-    // If the target has mirrored parity (det(CD) > 0, East-right), hips2fits always
-    // returns standard orientation (East-left). Horizontally flip the reference so every
-    // pixel corresponds to the same sky position as in the target.
-    if (m_parityFlipped && ref.isValid()) {
-        const int cols = ref.width();
-        const int rows = ref.height();
-        const int ch   = ref.channels();
-        std::vector<float>& px = ref.data();
-        for (int y = 0; y < rows; ++y) {
-            for (int x = 0; x < cols / 2; ++x) {
-                const int left  = (y * cols + x) * ch;
-                const int right = (y * cols + (cols - 1 - x)) * ch;
-                for (int c = 0; c < ch; ++c)
-                    std::swap(px[left + c], px[right + c]);
-            }
-        }
-    }
-
-    // Launch interactive alignment dialog
-    ReferenceAlignDialog alignDlg(this, ref, target, m_paddingFactor);
+    // Launch interactive alignment dialog. Since it's exactly reprojected now, padding factor is 1.0
+    ReferenceAlignDialog alignDlg(this, ref, target, 1.0);
     if (alignDlg.exec() != QDialog::Accepted) {
         if (auto cb = getCallbacks())
             cb->logMessage(tr("Reference alignment cancelled. Background extraction aborted."), 2);

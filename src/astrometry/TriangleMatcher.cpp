@@ -705,10 +705,19 @@ bool TriangleMatcher::solve(const std::vector<MatchStar>& imgStars,
     // === Step 10: Output matched pairs for the convergence loop ===
     // matchedA contains original (untransformed) image star coords
     // matchedB contains catalog star projected coords
-    outMatchedA = matchedA;
-    outMatchedB = matchedB;
+    
+    // Cull the arrays to contain only the valid pairs selected by iterTrans
+    std::vector<MatchStar> finalA(resultTrans.nr);
+    std::vector<MatchStar> finalB(resultTrans.nr);
+    for (int i = 0; i < resultTrans.nr; i++) {
+        finalA[i] = matchedA[recalcIdxA[i]];
+        finalB[i] = matchedB[recalcIdxB[i]];
+    }
+    
+    outMatchedA = finalA;
+    outMatchedB = finalB;
 
     m_lastFailStage  = 8; // success
-    m_lastNmatched   = (int)matchedA.size();
+    m_lastNmatched   = resultTrans.nr;
     return true;
 }

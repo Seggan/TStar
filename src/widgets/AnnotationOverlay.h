@@ -83,6 +83,10 @@ public:
     bool wcsObjectsVisible() const { return m_wcsObjectsVisible; }
     void setWCSGridVisible(bool visible);
     bool wcsGridVisible() const { return m_wcsGridVisible; }
+    
+    // Compass Annotations
+    void setCompassVisible(bool visible);
+    bool compassVisible() const { return m_compassVisible; }
 
     // Save/Restore states
     void setWCSObjects(const QVector<CatalogObject>& objects);
@@ -117,6 +121,8 @@ private:
     void drawWCSObjects(QPainter& painter);
     void drawWCSGrid(QPainter& painter);
     void drawWCSGridToImage(QPainter& painter, const QRectF& imageRect, double scaleM);
+    void drawCompass(QPainter& painter);
+    void drawCompassToImage(QPainter& painter, const QRectF& imageRect, double scaleM);
     QPointF mapToImage(const QPointF& widgetPos) const;
     QPointF mapFromImage(const QPointF& imagePos) const;
 
@@ -137,6 +143,7 @@ private:
     QVector<CatalogObject> m_wcsObjects;
     bool m_wcsObjectsVisible = false;
     bool m_wcsGridVisible = false;
+    bool m_compassVisible = false;
 
     // Interaction state;
 };

@@ -405,6 +405,16 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
             break;
         }
 
+        // Cull arrays to prevent accumulation of rejected outliers that will induce NaN mappings downstream
+        std::vector<MatchStar> culledImg(newTrans.nr);
+        std::vector<MatchStar> culledCat(newTrans.nr);
+        for (int i = 0; i < newTrans.nr; i++) {
+            culledImg[i] = matchedImgStars[idxA[i]];
+            culledCat[i] = matchedCatStars[idxB[i]];
+        }
+        matchedImgStars = culledImg;
+        matchedCatStars = culledCat;
+
         transOut = newTrans;
         // Update numMatched to survivors after sigma clipping
         numMatched = transOut.nr;

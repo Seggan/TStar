@@ -283,6 +283,32 @@ void PlateSolvingDialog::onSolverFinished(const NativeSolveResult& res) {
         meta.cd1_2 = res.cd[0][1];
         meta.cd2_1 = res.cd[1][0];
         meta.cd2_2 = res.cd[1][1];
+        
+        // --- NEW: Clear existing SIP coefficients and old WCS from rawHeaders to avoid conflicts ---
+        meta.sipOrderA = 0;
+        meta.sipOrderB = 0;
+        meta.sipOrderAP = 0;
+        meta.sipOrderBP = 0;
+        meta.sipCoeffs.clear();
+        
+        QRegularExpression sipRegex("^(A|B|AP|BP|_?PV|_?PROJP)_\\d+_\\d+$");
+        auto it = meta.rawHeaders.begin();
+        while (it != meta.rawHeaders.end()) {
+            QString k = it->key.toUpper();
+            if (k.startsWith("CTYPE") || k.startsWith("CRVAL") || k.startsWith("CRPIX") ||
+                k.startsWith("CD1_") || k.startsWith("CD2_") || k.startsWith("PC1_") || k.startsWith("PC2_") ||
+                k.startsWith("CDELT") || k.startsWith("CROTA") || k.startsWith("CUNIT") ||
+                k.startsWith("PV1_") || k.startsWith("PV2_") || k.startsWith("PROJP") ||
+                k == "A_ORDER" || k == "B_ORDER" || k == "AP_ORDER" || k == "BP_ORDER" ||
+                sipRegex.match(k).hasMatch()) {
+                it = meta.rawHeaders.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        meta.ctype1 = "RA---TAN"; // Ensure purely linear identifier
+        meta.ctype2 = "DEC--TAN";
+        
         meta.catalogStars = res.catalogStars; // Cache for PCC
         m_image.setMetadata(meta);
         

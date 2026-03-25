@@ -339,6 +339,10 @@
             <translation type="finished">Color:</translation>
         </message>
         <message>
+            <source>Compass</source>
+            <translation type="finished">Brújula</translation>
+        </message>
+        <message>
             <source>Constellations</source>
             <translation type="finished">Constelaciones</translation>
         </message>
@@ -8567,16 +8571,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">La imagen debe ser resuelta astrométricamente primero.</translation>
         </message>
         <message>
+            <source>PCC</source>
+            <translation type="finished">PCC</translation>
+        </message>
+        <message>
             <source>PCC Failed</source>
             <translation type="finished">PCC Fallida</translation>
         </message>
         <message>
             <source>PCC Result</source>
             <translation type="finished">Resultado PCC</translation>
-        </message>
-        <message>
-            <source>PCC applied</source>
-            <translation type="finished">PCC aplicado.</translation>
         </message>
         <message>
             <source>PCC applied.</source>
@@ -10400,16 +10404,16 @@ Elija No para aplicar solo a la memoria (puede Guardar Como más tarde).</transl
             <translation type="finished">Umbral de extracción de origen SEP en unidades de sigma de fondo.</translation>
         </message>
         <message>
+            <source>SPCC</source>
+            <translation type="finished">SPCC</translation>
+        </message>
+        <message>
             <source>SPCC Complete</source>
             <translation type="finished">SPCC Completado</translation>
         </message>
         <message>
             <source>SPCC Error</source>
             <translation type="finished">Error SPCC</translation>
-        </message>
-        <message>
-            <source>SPCC applied</source>
-            <translation type="finished">SPCC aplicado.</translation>
         </message>
         <message>
             <source>SPCC applied.</source>

@@ -339,6 +339,10 @@
             <translation type="finished">Colore:</translation>
         </message>
         <message>
+            <source>Compass</source>
+            <translation type="finished">Bussola</translation>
+        </message>
+        <message>
             <source>Constellations</source>
             <translation type="finished">Costellazioni</translation>
         </message>
@@ -8567,16 +8571,16 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">L'immagine deve essere prima risolta astrometricamente.</translation>
         </message>
         <message>
+            <source>PCC</source>
+            <translation type="finished">PCC</translation>
+        </message>
+        <message>
             <source>PCC Failed</source>
             <translation type="finished">PCC Fallita</translation>
         </message>
         <message>
             <source>PCC Result</source>
             <translation type="finished">Risultato PCC</translation>
-        </message>
-        <message>
-            <source>PCC applied</source>
-            <translation type="finished">PCC applicato.</translation>
         </message>
         <message>
             <source>PCC applied.</source>
@@ -10400,16 +10404,16 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Soglia estrazione sorgente SEP in unità di sigma di fondo.</translation>
         </message>
         <message>
+            <source>SPCC</source>
+            <translation type="finished">SPCC</translation>
+        </message>
+        <message>
             <source>SPCC Complete</source>
             <translation type="finished">SPCC Completata</translation>
         </message>
         <message>
             <source>SPCC Error</source>
             <translation type="finished">Errore SPCC</translation>
-        </message>
-        <message>
-            <source>SPCC applied</source>
-            <translation type="finished">SPCC applicato.</translation>
         </message>
         <message>
             <source>SPCC applied.</source>

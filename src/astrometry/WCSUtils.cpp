@@ -71,24 +71,33 @@ double WCSUtils::imageRotation(const Metadata& meta) {
 
 double WCSUtils::positionAngle(const Metadata& meta) {
     if (!hasValidWCS(meta)) return 0.0;
-    // PA of image Y-axis from North, measured East of North (CCW positive).
-    // Moving in +Y (increasing row) shifts RA by CD1_2 and Dec by CD2_2.
-    // The angle of that direction from North (pure Dec increase) toward East:  atan2(ΔRA, ΔDec)
-    // Normalized to (-180, 180].
-    double pa = std::atan2(meta.cd1_2, meta.cd2_2) * RAD_TO_DEG;
+    
+    // AstapSolver negates the Y-axis CD terms (CD1_2 and CD2_2) to handle
+    // the top-down memory layout of the raw image. We must restore their
+    // standard FITS signs to compute the correct East-of-North rotation
+    // angle expected by external services like hips2fits.
+    double std_cd1_2 = -meta.cd1_2;
+    double std_cd2_2 = -meta.cd2_2;
+    
+    double pa = std::atan2(std_cd1_2, std_cd2_2) * RAD_TO_DEG;
+    
     // Normalize to (-180, 180]
     while (pa >  180.0) pa -= 360.0;
     while (pa <= -180.0) pa += 360.0;
+    
     return pa;
 }
 
 bool WCSUtils::isParityFlipped(const Metadata& meta) {
     if (!hasValidWCS(meta)) return false;
-    // Determinant of the CD matrix.
-    // Standard astronomical orientation: East-left → det < 0.
-    // Mirrored (East-right, odd number of reflections): det > 0.
+    
     double det = meta.cd1_1 * meta.cd2_2 - meta.cd1_2 * meta.cd2_1;
-    return det > 0.0;
+    
+    // Standard astronomical orientation (East-left) normally has det < 0.
+    // However, because our internal CD matrix has its Y-axis terms negated
+    // (for top-down image memory), the determinant's mathematical sign is inverted.
+    // Therefore, in our system: det > 0 is NORMAL, and det < 0 means MIRRORED.
+    return det < 0.0;
 }
 
 bool WCSUtils::tanProject(double ra, double dec, double ra0, double dec0,

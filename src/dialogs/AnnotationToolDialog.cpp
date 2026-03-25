@@ -155,6 +155,7 @@ AnnotationToolDialog::AnnotationToolDialog(QWidget* parent)
     m_chkStars = new QCheckBox(tr("Stars"));
     m_chkConstellations = new QCheckBox(tr("Constellations"));
     m_chkWcsGrid = new QCheckBox(tr("WCS Grid (RA/Dec)"));
+    m_chkCompass = new QCheckBox(tr("Compass"));
     
     m_chkMessier->setChecked(true);
     m_chkNGC->setChecked(true);
@@ -164,6 +165,7 @@ AnnotationToolDialog::AnnotationToolDialog(QWidget* parent)
     m_chkStars->setChecked(true);
     m_chkConstellations->setChecked(false);
     m_chkWcsGrid->setChecked(true);
+    m_chkCompass->setChecked(true);
     
     // Add checkboxes to grid
     catLayout->addWidget(m_chkMessier, 0, 0);
@@ -173,15 +175,17 @@ AnnotationToolDialog::AnnotationToolDialog(QWidget* parent)
     catLayout->addWidget(m_chkSh2, 1, 1);
     catLayout->addWidget(m_chkStars, 1, 2);
     catLayout->addWidget(m_chkConstellations, 2, 0, 1, 2);
-    catLayout->addWidget(m_chkWcsGrid, 2, 2, 1, 1);
+    catLayout->addWidget(m_chkWcsGrid, 3, 0, 1, 1);
+    catLayout->addWidget(m_chkCompass, 3, 1, 1, 1);
     
     m_btnAnnotate = new QPushButton(tr("Annotate Image"));
-    catLayout->addWidget(m_btnAnnotate, 3, 0, 1, 3);
+    catLayout->addWidget(m_btnAnnotate, 4, 0, 1, 3);
     
     mainLayout->addWidget(m_catGroup);
     
     connect(m_btnAnnotate, &QPushButton::clicked, this, &AnnotationToolDialog::refreshAutomaticAnnotations);
     connect(m_chkWcsGrid, &QCheckBox::toggled, this, &AnnotationToolDialog::refreshAutomaticAnnotations);
+    connect(m_chkCompass, &QCheckBox::toggled, this, &AnnotationToolDialog::refreshAutomaticAnnotations);
 
     // Instruction for saving
     QLabel* tipLabel = new QLabel(tr("Tip: Annotations are saved as overlay. If you close the tool, annotations will disappear, and then reappear when you open this tool again. Open this tool to continue editing with full undo/redo support. To burn annotations into the image, use File > Save while the tool is open."));
@@ -406,6 +410,9 @@ void AnnotationToolDialog::refreshAutomaticAnnotations() {
 
     // Pass WCS Grid check state to overlay
     m_overlay->setWCSGridVisible(m_chkWcsGrid->isChecked());
+    
+    // Pass Compass check state to overlay
+    m_overlay->setCompassVisible(m_chkCompass->isChecked());
 
     m_overlay->setWCSObjects(objects);
     m_overlay->setWCSObjectsVisible(true);
