@@ -307,7 +307,23 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Bottom Left</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Bottom Right</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Catalogs &amp;&amp; Grid</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Center</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Choose where the compass is placed on the image</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -340,6 +356,10 @@
         </message>
         <message>
             <source>Compass</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Compass position</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -460,6 +480,14 @@
         </message>
         <message>
             <source>Tip: Annotations are saved as overlay. If you close the tool, annotations will disappear, and then reappear when you open this tool again. Open this tool to continue editing with full undo/redo support. To burn annotations into the image, use File &gt; Save while the tool is open.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Top Left</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Top Right</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -1087,6 +1115,10 @@
         </message>
         <message>
             <source> px</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Aligning reference image exactly to target WCS...</source>
             <translation type="unfinished" />
         </message>
         <message>

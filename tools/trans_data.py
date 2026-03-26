@@ -4181,4 +4181,11 @@ TRANSLATIONS = {
     "SPCC applied": {'it': 'SPCC applicato.', 'es': 'SPCC aplicado.', 'fr': 'SPCC appliqué.', 'de': 'SPCC angewendet.'},
     "Stretch applied": {'it': 'Stretch applicato.', 'es': 'Stretch aplicado.', 'fr': 'Stretch appliqué.', 'de': 'Stretch angewendet.'},
     "Compass": {'it': 'Bussola', 'es': 'Brújula', 'fr': 'Boussole', 'de': 'Kompass'},
+    "Bottom Left": {'it': 'In basso a sinistra', 'es': 'Abajo a la izquierda', 'fr': 'En bas à gauche', 'de': 'Unten links'},
+    "Bottom Right": {'it': 'In basso a destra', 'es': 'Abajo a la derecha', 'fr': 'En bas à droite', 'de': 'Unten rechts'},
+    "Top Left": {'it': 'In alto a sinistra', 'es': 'Arriba a la izquierda', 'fr': 'En haut à gauche', 'de': 'Oben links'},
+    "Top Right": {'it': 'In alto a destra', 'es': 'Arriba a la derecha', 'fr': 'En haut à droite', 'de': 'Oben rechts'},
+    "Choose where the compass is placed on the image": {'it': 'Scegli dove posizionare la bussola sull\'immagine', 'es': 'Elige dónde colocar la brújula en la imagen', 'fr': 'Choisissez où placer la boussole sur l\'image', 'de': 'Wählen Sie, wo der Kompass auf dem Bild platziert wird'},
+    "Compass position": {'it': 'Posizione della bussola', 'es': 'Posición de la brújula', 'fr': 'Position de la boussole', 'de': 'Kompassposition'},
+    "Aligning reference image exactly to target WCS...": {'it': 'Allineamento dell\'immagine di riferimento esattamente al WCS di destinazione...', 'es': 'Alineando la imagen de referencia exactamente al WCS de destino...', 'fr': 'Alignement de l\'image de référence exactement sur le WCS cible...', 'de': 'Referenzbild genau auf Ziel-WCS ausrichten...'},
 }

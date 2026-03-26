@@ -1009,7 +1009,7 @@ void AnnotationOverlay::drawCompassToImage(QPainter& painter, const QRectF& imag
     painter.setBrush(Qt::red);
     
     QFont font = painter.font();
-    font.setPointSizeF((len / 3.0) * scaleM);
+    font.setPointSizeF(len / 3.0);
     painter.setFont(font);
     
     // Draw North

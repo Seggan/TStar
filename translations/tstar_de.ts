@@ -307,8 +307,24 @@
             <translation type="finished">Pfeil</translation>
         </message>
         <message>
+            <source>Bottom Left</source>
+            <translation type="finished">Unten links</translation>
+        </message>
+        <message>
+            <source>Bottom Right</source>
+            <translation type="finished">Unten rechts</translation>
+        </message>
+        <message>
             <source>Catalogs &amp;&amp; Grid</source>
             <translation type="finished">Kataloge &amp; Raster</translation>
+        </message>
+        <message>
+            <source>Center</source>
+            <translation type="finished">Mitte</translation>
+        </message>
+        <message>
+            <source>Choose where the compass is placed on the image</source>
+            <translation type="finished">Wählen Sie, wo der Kompass auf dem Bild platziert wird</translation>
         </message>
         <message>
             <source>Circle</source>
@@ -341,6 +357,10 @@
         <message>
             <source>Compass</source>
             <translation type="finished">Kompass</translation>
+        </message>
+        <message>
+            <source>Compass position</source>
+            <translation type="finished">Kompassposition</translation>
         </message>
         <message>
             <source>Constellations</source>
@@ -461,6 +481,14 @@
         <message>
             <source>Tip: Annotations are saved as overlay. If you close the tool, annotations will disappear, and then reappear when you open this tool again. Open this tool to continue editing with full undo/redo support. To burn annotations into the image, use File &gt; Save while the tool is open.</source>
             <translation type="finished">Tipp: Annotationen werden als Overlay gespeichert. Wenn Sie das Tool schließen, verschwinden die Annotationen und erscheinen erneut, wenn Sie dieses Tool erneut öffnen. Öffnen Sie dieses Tool, um mit vollständiger Unterstützung für Rückgängig/Wiederherstellen zu bearbeiten. Zum Brennen von Anmerkungen in das Bild verwenden Sie Datei &gt; Speichern, während das Tool geöffnet ist.</translation>
+        </message>
+        <message>
+            <source>Top Left</source>
+            <translation type="finished">Oben links</translation>
+        </message>
+        <message>
+            <source>Top Right</source>
+            <translation type="finished">Oben rechts</translation>
         </message>
         <message>
             <source>Undo</source>
@@ -1088,6 +1116,10 @@
         <message>
             <source> px</source>
             <translation type="finished"> px</translation>
+        </message>
+        <message>
+            <source>Aligning reference image exactly to target WCS...</source>
+            <translation type="finished">Referenzbild genau auf Ziel-WCS ausrichten...</translation>
         </message>
         <message>
             <source>Apply</source>

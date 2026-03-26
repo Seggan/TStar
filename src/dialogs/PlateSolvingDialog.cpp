@@ -315,12 +315,14 @@ void PlateSolvingDialog::onSolverFinished(const NativeSolveResult& res) {
         if (mw) {
             // Apply to the TARGET viewer we started with, if valid
             if (m_jobTarget) {
+                 m_jobTarget->pushUndo(tr("Plate Solving"));
                  ImageBuffer& liveBuf = m_jobTarget->getBuffer();
                  liveBuf.setMetadata(meta);
                  liveBuf.syncWcsToHeaders();
                  mw->logMessage(tr("WCS applied to %1.").arg(m_jobTarget->windowTitle()), 1, true);
             } else if (m_viewer) {
                  // Fallback if job target closed but m_viewer replaced? Less likely but safe
+                 m_viewer->pushUndo(tr("Plate Solving"));
                  m_viewer->getBuffer().setMetadata(meta);
                  m_viewer->getBuffer().syncWcsToHeaders();
                  mw->logMessage(tr("WCS applied to active image."), 1, true);

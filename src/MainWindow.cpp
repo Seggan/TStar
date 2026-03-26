@@ -3530,7 +3530,6 @@ void MainWindow::openPCCDialog() {
     connect(dlg, &QDialog::accepted, [this, dlg, sub, viewer](){
          PCCResult res = dlg->result();
          if (res.valid) {
-             pushUndo(tr("Plate Solving applied"));
              viewer->setBuffer(viewer->getBuffer(), viewer->windowTitle(), true); // Refresh display
              updateDisplay();
              log(tr("PCC Applied: R=%1 G=%2 B=%3 (BG: %4, %5, %6)")

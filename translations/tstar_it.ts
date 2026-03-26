@@ -307,8 +307,24 @@
             <translation type="finished">Freccia</translation>
         </message>
         <message>
+            <source>Bottom Left</source>
+            <translation type="finished">In basso a sinistra</translation>
+        </message>
+        <message>
+            <source>Bottom Right</source>
+            <translation type="finished">In basso a destra</translation>
+        </message>
+        <message>
             <source>Catalogs &amp;&amp; Grid</source>
             <translation type="finished">Cataloghi e Griglia</translation>
+        </message>
+        <message>
+            <source>Center</source>
+            <translation type="finished">Centro</translation>
+        </message>
+        <message>
+            <source>Choose where the compass is placed on the image</source>
+            <translation type="finished">Scegli dove posizionare la bussola sull'immagine</translation>
         </message>
         <message>
             <source>Circle</source>
@@ -341,6 +357,10 @@
         <message>
             <source>Compass</source>
             <translation type="finished">Bussola</translation>
+        </message>
+        <message>
+            <source>Compass position</source>
+            <translation type="finished">Posizione della bussola</translation>
         </message>
         <message>
             <source>Constellations</source>
@@ -461,6 +481,14 @@
         <message>
             <source>Tip: Annotations are saved as overlay. If you close the tool, annotations will disappear, and then reappear when you open this tool again. Open this tool to continue editing with full undo/redo support. To burn annotations into the image, use File &gt; Save while the tool is open.</source>
             <translation type="finished">Suggerimento: Le annotazioni sono salvate come overlay. Se chiudi lo strumento, le annotazioni scompariranno e poi riappariranno quando riapri questo strumento. Apri questo strumento per continuare la modifica con supporto completo di annulla/ripeti. Per incidere le annotazioni nell'immagine, usa File &gt; Salva mentre lo strumento è aperto.</translation>
+        </message>
+        <message>
+            <source>Top Left</source>
+            <translation type="finished">In alto a sinistra</translation>
+        </message>
+        <message>
+            <source>Top Right</source>
+            <translation type="finished">In alto a destra</translation>
         </message>
         <message>
             <source>Undo</source>
@@ -1088,6 +1116,10 @@
         <message>
             <source> px</source>
             <translation type="finished"> px</translation>
+        </message>
+        <message>
+            <source>Aligning reference image exactly to target WCS...</source>
+            <translation type="finished">Allineamento dell'immagine di riferimento esattamente al WCS di destinazione...</translation>
         </message>
         <message>
             <source>Apply</source>
