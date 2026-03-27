@@ -694,12 +694,8 @@ void GHSDialog::setTarget(ImageViewer* viewer) {
 
         // Restore previous viewer to its clean state (remove preview)
         m_selfUpdating = true;
-        qDebug() << "[GHSDialog::setTarget] Restoring buffer on Old Viewer. Visible?" << m_activeViewer->isVisible();
-        if (m_activeViewer->isVisible()) { // Tentative fix/check
-            m_activeViewer->setBuffer(m_originalBuffer, m_activeViewer->windowTitle(), true);
-        } else {
-             qDebug() << "[GHSDialog::setTarget] Skipping restore because viewer is not visible.";
-        }
+        qDebug() << "[GHSDialog::setTarget] Restoring buffer on Old Viewer.";
+        m_activeViewer->setBuffer(m_originalBuffer, m_activeViewer->windowTitle(), true);
         
         // Reset Interaction Mode
         m_activeViewer->setInteractionMode(ImageViewer::Mode_PanZoom);

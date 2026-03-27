@@ -67,7 +67,11 @@ void HistogramStretchDialog::setViewer(ImageViewer* v) {
     
     // Clear old viewer
     if (m_viewer) {
-        m_viewer->clearPreviewLUT();
+        if (m_backup.isValid()) {
+            m_viewer->restoreState(m_backup, m_originalDisplayMode, m_originalDisplayLinked);
+        } else {
+            m_viewer->clearPreviewLUT();
+        }
     }
     
     m_viewer = v;
@@ -673,11 +677,11 @@ void HistogramStretchDialog::applyMTF(ImageBuffer& buffer, float shadows, float 
 void HistogramStretchDialog::computeAutostretch(const ImageBuffer& buffer,
                                                   float& shadows, float& midtones, float& highlights) {
     if (!buffer.isValid()) return;
-    // Delegate entirely to ImageBuffer::computeAutoStretchParams, which uses the exact same
-    // internal computeStats() code as getDisplayImage(Display_AutoStretch). This is the only
-    // way to guarantee that Auto Stretch in the dialog produces bit-identical results to the display.
+    
+    std::vector<bool> activeChannels = { m_doRed, m_doGreen, m_doBlue };
     float targetMedian = (m_viewer) ? m_viewer->getAutoStretchMedian() : AS_DEFAULT_TARGET_BACKGROUND;
-    auto p = buffer.computeAutoStretchParams(true, targetMedian);
+    auto p = buffer.computeAutoStretchParams(true, targetMedian, activeChannels);
+    
     shadows    = p.shadows;
     midtones   = p.midtones;
     highlights = p.highlights;

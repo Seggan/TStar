@@ -312,7 +312,7 @@ def unstretch_image_unlinked_rgb(image_rgb, orig_meds, orig_min, was_mono):
     channels = 1 if y.ndim == 2 else y.shape[2]
     
     for ch in range(channels):  # FIX: renamed from 'c' to avoid shadowing global 'c'
-        m0 = float(orig_meds[ch])
+        m0 = float(orig_meds[min(ch, len(orig_meds) - 1)])
         
         if m0 != 0.0:
             if y.ndim == 2:

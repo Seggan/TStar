@@ -6,12 +6,6 @@
 
 **Author:** Fabio Tempera
 
-**License:** MIT License
-
-**Contributors:**
-* [Tim Dicke](https://github.com/dickett): testing of the MacOS versions
-* Miroslav Bakoš: testing of the Windows version
-
 ### Live TStar website:
 https://ft2801.github.io/TStar-Astronomy-Website/
 

@@ -401,6 +401,13 @@ void CurvesDialog::setInputHistogram(const std::vector<std::vector<int>>& hist) 
     onCurvesChanged(false); 
 }
 
+void CurvesDialog::reject() {
+    if (m_viewer) {
+        m_viewer->clearPreviewLUT();
+    }
+    QDialog::reject();
+}
+
 void CurvesDialog::setViewer(ImageViewer* viewer) {
     if (m_viewer == viewer) return;
     

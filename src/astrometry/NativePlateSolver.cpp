@@ -2,6 +2,8 @@
 #include "../photometry/CatalogClient.h"
 #include <cmath>
 #include <QtConcurrent/QtConcurrent>
+#include <QPointer>
+#include <unordered_map>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -198,14 +200,21 @@ void NativePlateSolver::updateStarPositions(std::vector<MatchStar>& matchedCatSt
                                              int numMatched,
                                              const std::vector<MatchStar>& newProjectedCat)
 {
-    // For each matched catalog star, find its counterpart in newProjectedCat by ID
+    if (numMatched <= 0 || newProjectedCat.empty()) return;
+
+    // Build a map for O(1) lookup of new positions by star ID
+    std::unordered_map<int, const MatchStar*> idMap;
+    idMap.reserve(newProjectedCat.size());
+    for (const auto& np : newProjectedCat) {
+        idMap[np.id] = &np;
+    }
+
+    // For each matched catalog star, update its coordinates using the map
     for (int i = 0; i < numMatched; i++) {
-        for (const auto& np : newProjectedCat) {
-            if (np.id == matchedCatStars[i].id) {
-                matchedCatStars[i].x = np.x;
-                matchedCatStars[i].y = np.y;
-                break;
-            }
+        auto it = idMap.find(matchedCatStars[i].id);
+        if (it != idMap.end()) {
+            matchedCatStars[i].x = it->second->x;
+            matchedCatStars[i].y = it->second->y;
         }
     }
 }
@@ -229,6 +238,7 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
                                      double scale, double ra0, double dec0,
                                      GenericTrans& transOut, double& raOut, double& decOut)
 {
+    QPointer<NativePlateSolver> safeThis(this);
     (void)nbImgStars; // Unused but kept for API consistency
 
     double minScale = -1.0, maxScale = -1.0;
@@ -245,8 +255,10 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
 
     // === Step 1: Project catalog at initial center ===
     std::vector<MatchStar> projCat = projectCatalog(catStarsRaw, ra0, dec0);
-    emit logMessage(tr("Projected %1 catalog stars at RA=%2 Dec=%3")
-                    .arg(projCat.size()).arg(ra0, 0, 'f', 4).arg(dec0, 0, 'f', 4));
+    if (safeThis) {
+        emit logMessage(tr("Projected %1 catalog stars at RA=%2 Dec=%3")
+                        .arg(projCat.size()).arg(ra0, 0, 'f', 4).arg(dec0, 0, 'f', 4));
+    }
 
     if ((int)projCat.size() < 10) return -1;
 
@@ -270,12 +282,14 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
     bool parityFlipped = false; // set true if attempt 5 (image-Y flip) was used
 
     auto logMatcherDiag = [&](int attempt) {
-        emit logMessage(tr("    [Attempt %1 diag] maxVote=%2 validPairs=%3 nMatched=%4 stage=%5")
-                        .arg(attempt)
-                        .arg(matcher.lastMaxVote())
-                        .arg(matcher.lastValidPairs())
-                        .arg(matcher.lastNmatched())
-                        .arg(matcher.lastFailStage()));
+        if (safeThis) {
+            emit logMessage(tr("    [Attempt %1 diag] maxVote=%2 validPairs=%3 nMatched=%4 stage=%5")
+                            .arg(attempt)
+                            .arg(matcher.lastMaxVote())
+                            .arg(matcher.lastValidPairs())
+                            .arg(matcher.lastNmatched())
+                            .arg(matcher.lastFailStage()));
+        }
     };
 
     // Attempt 1: standard (60 stars, ±30% scale filter, default radius 0.002)
@@ -340,16 +354,20 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
         return -1;
     }
 
-    emit logMessage(tr("Initial match: %1 pairs, offset=(%2, %3) arcsec")
-                    .arg(matchedImgStars.size()).arg(transOut.x00, 0, 'f', 2).arg(transOut.y00, 0, 'f', 2));
+    if (safeThis) {
+        emit logMessage(tr("Initial match: %1 pairs, offset=(%2, %3) arcsec")
+                        .arg(matchedImgStars.size()).arg(transOut.x00, 0, 'f', 2).arg(transOut.y00, 0, 'f', 2));
+    }
 
     // === Step 3: TRANS sanity and scale checks (port of check_affine_TRANS_sanity/scale) ===
     if (!checkTransSanity(transOut)) {
-        emit logMessage(tr("Transform sanity check failed (|cos|≠|sin| by >%.1f arcsec/px).").arg(TRANS_SANITY_CHECK));
+        if (safeThis) {
+            emit logMessage(tr("Transform sanity check failed (|cos|≠|sin| by >%.1f arcsec/px).").arg(TRANS_SANITY_CHECK));
+        }
         return -1;
     }
     if (!checkTransScale(transOut, minScale, maxScale)) {
-        emit logMessage(tr("Transform scale check failed."));
+        if (safeThis) emit logMessage(tr("Transform scale check failed."));
         return -1;
     }
 
@@ -369,8 +387,10 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
     // We keep the ORIGINAL matched pairs and just update catalog side positions.
     //
     double conv = std::sqrt(transOut.x00 * transOut.x00 + transOut.y00 * transOut.y00);
-    emit logMessage(tr("  Initial: offset=%1 arcsec, nr=%2")
-                    .arg(conv, 0, 'f', 3).arg(transOut.nr));
+    if (safeThis) {
+        emit logMessage(tr("  Initial: offset=%1 arcsec, nr=%2")
+                        .arg(conv, 0, 'f', 3).arg(transOut.nr));
+    }
 
     for (int trial = 0; trial < MAX_CONVERGENCE_TRIALS && conv > CONV_TOLERANCE; trial++) {
 
@@ -383,7 +403,7 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
         // 4b: Re-project catalog at new center
         std::vector<MatchStar> newProjCat = projectCatalog(catStarsRaw, ra0, dec0);
         if ((int)newProjCat.size() < AT_MATCH_STARTN_LINEAR) {
-            emit logMessage(tr("  Not enough stars after reprojection (%1).").arg(newProjCat.size()));
+            if (safeThis) emit logMessage(tr("  Not enough stars after reprojection (%1).").arg(newProjCat.size()));
             break;
         }
 
@@ -401,7 +421,7 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
         newTrans.order = 1;
         if (!matcher.iterTrans(numMatched, matchedImgStars, matchedCatStars,
                                idxA, idxB, true /* RECALC_YES */, newTrans)) {
-            emit logMessage(tr("  Recalculation failed at trial %1.").arg(trial + 1));
+            if (safeThis) emit logMessage(tr("  Recalculation failed at trial %1.").arg(trial + 1));
             break;
         }
 
@@ -420,15 +440,19 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
         numMatched = transOut.nr;
         conv = std::sqrt(transOut.x00 * transOut.x00 + transOut.y00 * transOut.y00);
 
-        emit logMessage(tr("  Trial %1: RA=%2 Dec=%3, offset=%4 arcsec, nr=%5")
-                        .arg(trial + 1).arg(ra0, 0, 'f', 6).arg(dec0, 0, 'f', 6)
-                        .arg(conv, 0, 'f', 3).arg(transOut.nr));
+        if (safeThis) {
+            emit logMessage(tr("  Trial %1: RA=%2 Dec=%3, offset=%4 arcsec, nr=%5")
+                            .arg(trial + 1).arg(ra0, 0, 'f', 6).arg(dec0, 0, 'f', 6)
+                            .arg(conv, 0, 'f', 3).arg(transOut.nr));
+        }
     }
 
-    if (conv <= CONV_TOLERANCE)
-        emit logMessage(tr("  Converged: offset=%1 arcsec").arg(conv, 0, 'f', 4));
-    else
-        emit logMessage(tr("  No full convergence (offset=%1 arcsec), using best solution").arg(conv, 0, 'f', 4));
+    if (safeThis) {
+        if (conv <= CONV_TOLERANCE)
+            emit logMessage(tr("  Converged: offset=%1 arcsec").arg(conv, 0, 'f', 4));
+        else
+            emit logMessage(tr("  No full convergence (offset=%1 arcsec), using best solution").arg(conv, 0, 'f', 4));
+    }
 
     // If parity-flip was used (image Y was negated), convert TRANS back to original
     // image coordinates by negating the x01 and y01 terms.
@@ -438,7 +462,7 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
     if (parityFlipped) {
         transOut.x01 = -transOut.x01;
         transOut.y01 = -transOut.y01;
-        emit logMessage(tr("  Parity un-flip applied to TRANS (x01, y01 negated)."));
+        if (safeThis) emit logMessage(tr("  Parity un-flip applied to TRANS (x01, y01 negated)."));
     }
 
     raOut  = ra0;
@@ -458,20 +482,22 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
     if (catStars.size() < 10) {
         NativeSolveResult res;
         res.errorMsg = tr("Not enough catalog stars found (%1).").arg(catStars.size());
-        emit finished(res);
+        QPointer<NativePlateSolver> safeThis(this);
+        if (safeThis) emit finished(res);
         return;
     }
 
-    emit logMessage(tr("Detecting Image Stars..."));
+    QPointer<NativePlateSolver> safeThis(this);
+    if (safeThis) emit logMessage(tr("Detecting Image Stars..."));
     StarDetector detector;
     detector.setMaxStars(500);
     std::vector<DetectedStar> detected = detector.detect(image);
-    emit logMessage(tr("Detected %1 stars in image.").arg(detected.size()));
+    if (safeThis) emit logMessage(tr("Detected %1 stars in image.").arg(detected.size()));
 
     if (detected.size() < 5) {
         NativeSolveResult res;
         res.errorMsg = tr("Not enough image stars detected (%1).").arg(detected.size());
-        emit finished(res);
+        if (safeThis) emit finished(res);
         return;
     }
 
@@ -497,9 +523,11 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
             magMin = std::min(magMin, s.mag);
             magMax = std::max(magMax, s.mag);
         }
-        emit logMessage(tr("Catalog mag range: %1 – %2 (%3 stars, %4 with bad mag)")
-                        .arg(magMin, 0, 'f', 1).arg(magMax, 0, 'f', 1)
-                        .arg((int)catStars.size()).arg(nBadMag));
+        if (safeThis) {
+            emit logMessage(tr("Catalog mag range: %1 – %2 (%3 stars, %4 with bad mag)")
+                            .arg(magMin, 0, 'f', 1).arg(magMax, 0, 'f', 1)
+                            .arg((int)catStars.size()).arg(nBadMag));
+        }
     }
 
     // Run matchCatalog
@@ -516,19 +544,21 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
     res.transform = bestTrans;
     
     if (res.success) {
-        emit logMessage(tr("Match Success! Computing WCS..."));
+        if (safeThis) emit logMessage(tr("Match Success! Computing WCS..."));
 
         // WCS: After convergence, CRVAL = converged center, CD = trans coeffs
         if (WcsSolver::computeWcs(bestTrans, finalRA, finalDec,
                                   image.width(), image.height(),
                                   res.crpix1, res.crpix2,
                                   res.crval1, res.crval2, res.cd)) {
-            emit logMessage(tr("WCS computed: CRPIX=(%1, %2) CRVAL=(%3, %4)")
-                           .arg(res.crpix1).arg(res.crpix2)
-                           .arg(res.crval1).arg(res.crval2));
-            
-            double solvedScale = std::sqrt(res.cd[0][0]*res.cd[0][0] + res.cd[1][0]*res.cd[1][0]) * 3600.0;
-            emit logMessage(tr("Solved pixel scale: %1 arcsec/px").arg(solvedScale, 0, 'f', 3));
+            if (safeThis) {
+                emit logMessage(tr("WCS computed: CRPIX=(%1, %2) CRVAL=(%3, %4)")
+                               .arg(res.crpix1).arg(res.crpix2)
+                               .arg(res.crval1).arg(res.crval2));
+                
+                double solvedScale = std::sqrt(res.cd[0][0]*res.cd[0][0] + res.cd[1][0]*res.cd[1][0]) * 3600.0;
+                emit logMessage(tr("Solved pixel scale: %1 arcsec/px").arg(solvedScale, 0, 'f', 3));
+            }
         } else {
              res.errorMsg = tr("WCS Computation failed (Singular Matrix)");
              res.success = false;
@@ -538,7 +568,7 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
     }
 
     res.catalogStars = catalogStars;
-    emit finished(res);
+    if (safeThis) emit finished(res);
 }
 
 void NativePlateSolver::onCatalogReceived(const std::vector<MatchStar>& catalogStars) {
@@ -553,14 +583,18 @@ void NativePlateSolver::onCatalogReceived(const std::vector<MatchStar>& catalogS
     double                   decHint         = m_decHint;
     std::vector<CatalogStar> rawCatalogStars = m_catalogStars;
 
-    (void)QtConcurrent::run([this,
+    QPointer<NativePlateSolver> safeThis(this);
+
+    (void)QtConcurrent::run([safeThis,
                               catalogStars,
                               imageSnapshot   = std::move(imageSnapshot),
                               rawCatalogStars = std::move(rawCatalogStars),
                               pixelScale,
                               raHint,
                               decHint]() mutable {
-        processSolving(catalogStars, imageSnapshot, rawCatalogStars, raHint, decHint, pixelScale);
+        if (safeThis) {
+            safeThis->processSolving(catalogStars, imageSnapshot, rawCatalogStars, raHint, decHint, pixelScale);
+        }
     });
 }
 

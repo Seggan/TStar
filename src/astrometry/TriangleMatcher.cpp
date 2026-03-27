@@ -239,19 +239,27 @@ std::vector<std::vector<int>> TriangleMatcher::computeVotes(
                 if (ratio < minScale || ratio > maxScale) continue;
             }
 
-            // Vote for each vertex pair — with bounds checks to prevent
-            // out-of-bounds writes that caused SIGBUS crash
+            // Vote for each vertex pair — with refined bounds checks 
             if (it->a_index >= 0 && it->a_index < numStarsA &&
-                tb.a_index >= 0 && tb.a_index < numStarsB)
-                votes[it->a_index][tb.a_index]++;
+                tb.a_index >= 0 && tb.a_index < numStarsB) {
+                if (it->a_index < (int)votes.size() && tb.a_index < (int)votes[it->a_index].size()) {
+                    votes[it->a_index][tb.a_index]++;
+                }
+            }
 
             if (it->b_index >= 0 && it->b_index < numStarsA &&
-                tb.b_index >= 0 && tb.b_index < numStarsB)
-                votes[it->b_index][tb.b_index]++;
+                tb.b_index >= 0 && tb.b_index < numStarsB) {
+                if (it->b_index < (int)votes.size() && tb.b_index < (int)votes[it->b_index].size()) {
+                    votes[it->b_index][tb.b_index]++;
+                }
+            }
 
             if (it->c_index >= 0 && it->c_index < numStarsA &&
-                tb.c_index >= 0 && tb.c_index < numStarsB)
-                votes[it->c_index][tb.c_index]++;
+                tb.c_index >= 0 && tb.c_index < numStarsB) {
+                if (it->c_index < (int)votes.size() && tb.c_index < (int)votes[it->c_index].size()) {
+                    votes[it->c_index][tb.c_index]++;
+                }
+            }
         }
     }
 
@@ -625,8 +633,14 @@ bool TriangleMatcher::solve(const std::vector<MatchStar>& imgStars,
         winnerIndexB[k] = max_j;
 
         // Zero out row and column (star already used)
-        for (int j = 0; j < nB; j++) votes[max_i][j] = 0;
-        for (int i = 0; i < nA; i++) votes[i][max_j] = 0;
+        if (max_i >= 0 && max_i < (int)votes.size()) {
+            for (int j = 0; j < (int)votes[max_i].size(); j++) votes[max_i][j] = 0;
+        }
+        if (max_j >= 0) {
+            for (int i = 0; i < (int)votes.size(); i++) {
+                if (max_j < (int)votes[i].size()) votes[i][max_j] = 0;
+            }
+        }
     }
 
     // === Step 5: Disqualify pairs with < AT_MATCH_MINVOTES ===
@@ -700,15 +714,23 @@ bool TriangleMatcher::solve(const std::vector<MatchStar>& imgStars,
 
     // === Step 10: Output matched pairs for the convergence loop ===
     // Cull the arrays to contain only the valid pairs selected by iterTrans
-    std::vector<MatchStar> finalA(resultTrans.nr);
-    std::vector<MatchStar> finalB(resultTrans.nr);
-    for (int i = 0; i < resultTrans.nr; i++) {
-        finalA[i] = matchedA[recalcIdxA[i]];
-        finalB[i] = matchedB[recalcIdxB[i]];
+    int resultCount = std::min((int)resultTrans.nr, (int)recalcIdxA.size());
+    std::vector<MatchStar> finalA; finalA.reserve(resultCount);
+    std::vector<MatchStar> finalB; finalB.reserve(resultCount);
+
+    for (int i = 0; i < resultCount; i++) {
+        int iA = recalcIdxA[i];
+        int iB = recalcIdxB[i];
+        if (iA >= 0 && iA < (int)matchedA.size() && 
+            iB >= 0 && iB < (int)matchedB.size()) {
+            finalA.push_back(matchedA[iA]);
+            finalB.push_back(matchedB[iB]);
+        }
     }
 
     outMatchedA = finalA;
     outMatchedB = finalB;
+    resultTrans.nr = (int)outMatchedA.size();
 
     m_lastFailStage = 8; // success
     m_lastNmatched  = resultTrans.nr;

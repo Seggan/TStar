@@ -85,7 +85,7 @@ public:
     // Auto-stretch parameters computed with the exact same statistics as getDisplayImage(Display_AutoStretch).
     // Use this to guarantee that dialogs produce results identical to the display.
     struct STFParams { float shadows = 0.0f; float midtones = 0.25f; float highlights = 1.0f; };
-    STFParams computeAutoStretchParams(bool linked = true, float targetMedian = 0.25f) const;
+    STFParams computeAutoStretchParams(bool linked = true, float targetMedian = 0.25f, const std::vector<bool>& activeChannels = {}) const;
 
     // Mask Support
     void setMask(const MaskLayer& mask);

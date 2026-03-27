@@ -875,7 +875,6 @@ void SPCC::applyColorModel(float* img_float,
                             const CalibrationModel& model,
                             double pivot_R, double pivot_G, double pivot_B) {
     const size_t n_pixels = (size_t)width * height;
-    const double eps = 1e-8;
 
     // Neutralize background: anchor everyone to the average background level
     // to remove any pre-existing color tint in the background pixels.

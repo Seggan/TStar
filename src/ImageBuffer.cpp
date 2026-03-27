@@ -802,7 +802,7 @@ struct StandardSTFParams {
     return result;
 }
 
-ImageBuffer::STFParams ImageBuffer::computeAutoStretchParams(bool linked, float targetMedian) const {
+ImageBuffer::STFParams ImageBuffer::computeAutoStretchParams(bool linked, float targetMedian, const std::vector<bool>& activeChannels) const {
     ReadLock lock(this);
     STFParams result;
     if (m_data.empty()) return result;
@@ -812,10 +812,36 @@ ImageBuffer::STFParams ImageBuffer::computeAutoStretchParams(bool linked, float 
     for (int c = 0; c < m_channels; ++c)
         stats[c] = computeStats(m_data, m_width, m_height, m_channels, c);
 
-    if (linked && m_channels >= 3) {
+    // Filter stats based on activeChannels mask
+    std::vector<ChStats> activeStats;
+    for (int c = 0; c < m_channels; ++c) {
+        if (c < (int)activeChannels.size() && activeChannels[c]) {
+            // Also apply the "non-zero" heuristic to ensure we don't average empty channels
+            if (stats[c].median > 1e-9f || stats[c].mad > 1e-9f) {
+                activeStats.push_back(stats[c]);
+            }
+        }
+    }
+
+    // If no channels were explicitly active or all were empty, fall back to all non-empty channels
+    if (activeStats.empty()) {
+        for (int c = 0; c < m_channels; ++c) {
+            if (stats[c].median > 1e-9f || stats[c].mad > 1e-9f) {
+                activeStats.push_back(stats[c]);
+            }
+        }
+    }
+    
+    // Final fallback: use all channels if everything is zero
+    if (activeStats.empty()) {
+        for (int c = 0; c < m_channels; ++c) activeStats.push_back(stats[c]);
+    }
+
+    if (linked) {
         float avgMed = 0.0f, avgMad = 0.0f;
-        for (int c = 0; c < m_channels; ++c) { avgMed += stats[c].median; avgMad += stats[c].mad; }
-        avgMed /= m_channels; avgMad /= m_channels;
+        for (const auto& s : activeStats) { avgMed += s.median; avgMad += s.mad; }
+        avgMed /= activeStats.size(); avgMad /= activeStats.size();
+
         float shadow = std::max(0.0f, avgMed + shadowClip * avgMad);
         if (shadow >= avgMed) shadow = std::max(0.0f, avgMed - 0.001f);
         float mid = avgMed - shadow;
@@ -824,18 +850,16 @@ ImageBuffer::STFParams ImageBuffer::computeAutoStretchParams(bool linked, float 
         result.midtones   = mtf_func(targetMedian, mid);
         result.highlights = 1.0f;
     } else {
-        for (int c = 0; c < m_channels; ++c) {
-            float shadow = std::max(0.0f, stats[c].median + shadowClip * stats[c].mad);
-            if (shadow >= stats[c].median) shadow = std::max(0.0f, stats[c].median - 0.001f);
-            float mid = stats[c].median - shadow;
+        for (const auto& s : activeStats) {
+            float shadow = std::max(0.0f, s.median + shadowClip * s.mad);
+            if (shadow >= s.median) shadow = std::max(0.0f, s.median - 0.001f);
+            float mid = s.median - shadow;
             if (mid <= 0.0f) mid = 0.5f;
-            // For mono or unlinked: return blended params (same as display unlinked path uses per-channel,
-            // but for the dialog we return averaged since it applies a single MTF to all enabled channels)
             result.shadows    += shadow;
             result.midtones   += mtf_func(targetMedian, mid);
         }
-        result.shadows   /= m_channels;
-        result.midtones  /= m_channels;
+        result.shadows   /= activeStats.size();
+        result.midtones  /= activeStats.size();
         result.highlights = 1.0f;
     }
     return result;
@@ -902,8 +926,22 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
         const float shadowClip = -2.8f; 
 
         if (linked && m_channels == 3) {
-            float avgMed = (stats[0].median + stats[1].median + stats[2].median) / 3.0f;
-            float avgMad = (stats[0].mad + stats[1].mad + stats[2].mad) / 3.0f;
+            float avgMed = 0.0f, avgMad = 0.0f;
+            int activeChannels = 0;
+            for (int c = 0; c < 3; ++c) {
+                if (stats[c].median > 1e-9f || stats[c].mad > 1e-9f) {
+                    avgMed += stats[c].median;
+                    avgMad += stats[c].mad;
+                    activeChannels++;
+                }
+            }
+            if (activeChannels > 0) {
+                avgMed /= activeChannels;
+                avgMad /= activeChannels;
+            } else {
+                avgMed = (stats[0].median + stats[1].median + stats[2].median) / 3.0f;
+                avgMad = (stats[0].mad + stats[1].mad + stats[2].mad) / 3.0f;
+            }
             
             float shadow = 0.0f; 
             float mid = 0.5f;
@@ -1086,8 +1124,22 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
         const float shadowClip = -2.8f; 
         
         if (linked && m_channels == 3) {
-            float avgMed = (stats[0].median + stats[1].median + stats[2].median) / 3.0f;
-            float avgMad = (stats[0].mad + stats[1].mad + stats[2].mad) / 3.0f;
+            float avgMed = 0.0f, avgMad = 0.0f;
+            int activeChannels = 0;
+            for (int c = 0; c < 3; ++c) {
+                if (stats[c].median > 1e-9f || stats[c].mad > 1e-9f) {
+                    avgMed += stats[c].median;
+                    avgMad += stats[c].mad;
+                    activeChannels++;
+                }
+            }
+            if (activeChannels > 0) {
+                avgMed /= activeChannels;
+                avgMad /= activeChannels;
+            } else {
+                avgMed = (stats[0].median + stats[1].median + stats[2].median) / 3.0f;
+                avgMad = (stats[0].mad + stats[1].mad + stats[2].mad) / 3.0f;
+            }
             
             float shadow = std::max(0.0f, avgMed + shadowClip * avgMad);
             // If the image is uniform (mad=0) and bright (median=1), shadow becomes 1.0.

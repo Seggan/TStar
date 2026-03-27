@@ -121,7 +121,7 @@ void StarStretchDialog::updatePreview() {
     
     if (m_runner.run(m_originalBuffer, m_previewBuffer, params)) {
         // preserveView = true to avoid zooming out on every slider move
-        m_viewer->setBuffer(m_previewBuffer, m_viewer->windowTitle(), true); 
+        m_viewer->setBuffer(m_previewBuffer, m_viewer->windowTitle(), false); 
     }
 }
 

@@ -72,6 +72,8 @@ public:
     // Returns true if applied
     bool applied() const { return m_applied; }
 
+    void reject() override;
+
     struct State {
         std::vector<SplinePoint> points;
         bool logScale;

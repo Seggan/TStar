@@ -271,6 +271,7 @@ void StretchDialog::setViewer(ImageViewer* v) {
     if (m_viewer && !m_applied) {
         if (m_originalBuffer.isValid()) {
              m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
+             m_viewer->setDisplayState(m_originalDisplayMode, m_originalDisplayLinked);
         }
         m_viewer->clearPreviewLUT();
     }

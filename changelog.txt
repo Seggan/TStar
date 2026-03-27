@@ -1,6 +1,11 @@
 TStar Changelog
 ===============
 
+Version 1.8.2
+-------------
+- Fixed a smal bug in CC for mono images
+- Fixed mono stretch bug in Histogram Transformation tool
+
 Version 1.8.1
 -------------
 - Added compass to the annotation tool
