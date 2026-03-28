@@ -125,9 +125,12 @@ void PreprocessingDialog::setupMastersGroup() {
     
     // Dark Flat (optional)
     QVBoxLayout* darkFlatCol = new QVBoxLayout();
-    darkFlatCol->addWidget(new QLabel(tr("Dark for Flat:"), this));
+    QLabel* darkFlatLabel = new QLabel(tr("Dark for Flat:"), this);
+    darkFlatLabel->setToolTip(tr("(Optional: A Master Dark frame taken at the SAME exposure time and temperature as your FLAT frames. Used to subtract thermal noise from the flats before flat-fielding. If left empty, the main DARK is used instead (or flats are not dark-subtracted if no dark is set). Cosmetic correction uses the DARK tab file — not this Dark for Flat.)"));
+    darkFlatCol->addWidget(darkFlatLabel);
     m_darkFlatPath = new QLineEdit(this);
     m_darkFlatPath->setPlaceholderText(tr("(Optional)"));
+    m_darkFlatPath->setToolTip(darkFlatLabel->toolTip());
     darkFlatCol->addWidget(m_darkFlatPath);
     QHBoxLayout* darkFlatBtn = new QHBoxLayout();
     m_selectDarkFlatBtn = new QPushButton(tr("..."), this);
@@ -163,7 +166,13 @@ void PreprocessingDialog::setupOptionsGroup() {
     // Row 2: Fixes
     QHBoxLayout* fixRow = new QHBoxLayout();
     m_fixBandingCheck = new QCheckBox(tr("Fix banding"), this);
+    m_fixBandingCheck->setToolTip(tr(
+        "Repairs horizontal readout banding noise common in CMOS sensors. Works by estimating and subtracting the per-row/column offset. Enable only if you see horizontal stripe patterns in dark or bias frames."
+    ));
     m_fixBadLinesCheck = new QCheckBox(tr("Fix bad lines"), this);
+    m_fixBadLinesCheck->setToolTip(tr(
+        "Identifies and repairs individual defective rows or columns (stuck pixels, hot lines). A 'bad line' is a row or column whose mean value deviates significantly from its neighbours. Cosmetic correction (sigma-clipping or from Master Dark) provides complementary hot/cold pixel repair."
+    ));
     m_fixXTransCheck = new QCheckBox(tr("Fix X-Trans"), this);
     fixRow->addWidget(m_fixBandingCheck);
     fixRow->addWidget(m_fixBadLinesCheck);
@@ -218,6 +227,13 @@ void PreprocessingDialog::setupOptionsGroup() {
     debayerRow->addWidget(m_debayerAlgoCombo);
     
     m_cfaEqualizeCheck = new QCheckBox(tr("Equalize CFA"), this);
+    m_cfaEqualizeCheck->setToolTip(tr(
+        "Equalizes the CFA (Color Filter Array) channel sensitivities before stacking.\n"
+        "This preserves the raw Bayer pattern for Drizzle integration.\n"
+        "\n"
+        "IMPORTANT: When using Drizzle, do NOT enable Debayer — instead enable CFA mode.\n"
+        "Drizzle works on the raw CFA data; Debayer should only be applied after stacking."
+    ));
     debayerRow->addWidget(m_cfaEqualizeCheck);
     debayerRow->addStretch();
     layout->addLayout(debayerRow);
@@ -231,6 +247,12 @@ void PreprocessingDialog::setupOptionsGroup() {
     m_cosmeticModeCombo->addItem(tr("Sigma-clipping"), 0);
     m_cosmeticModeCombo->addItem(tr("From Master Dark"), 1);
     m_cosmeticModeCombo->setMaximumWidth(120);
+    m_cosmeticModeCombo->setToolTip(tr(
+        "Sigma-clipping: detects hot/cold pixels statistically on each frame.\n"
+        "From Master Dark: uses the DARK tab master to map defective pixels (not Dark for Flat).\n"
+        "\n"
+        "Cosmetic correction always reads the file from the DARK tab, not the Dark for Flat tab."
+    ));
     cosmRow->addWidget(m_cosmeticModeCombo);
 
     cosmRow->addWidget(new QLabel(tr("Hot σ:"), this));

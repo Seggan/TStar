@@ -6,6 +6,7 @@
 #include "PCCDistributionDialog.h"
 #include "../photometry/StarDetector.h"
 #include "../ImageViewer.h"
+#include "../astrometry/WCSUtils.h"
 
 
 PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, tr("Photometric Color Calibration"), 0, 0), m_viewer(viewer) {
@@ -40,7 +41,7 @@ PCCDialog::PCCDialog(ImageViewer* viewer, QWidget* parent) : DialogBase(parent, 
             m_status->setText(tr("Ready. Cached stars: %1").arg(meta.catalogStars.size()));
         }
         
-        if (meta.ra == 0 && meta.dec == 0) {
+        if (!WCSUtils::hasValidWCS(meta)) {
             m_status->setText(tr("Warning: No WCS coordinates found!"));
         } else if (!meta.catalogStars.empty()) {
             m_status->setText(tr("Ready (Catalog stars cached)."));
@@ -74,7 +75,7 @@ void PCCDialog::setViewer(ImageViewer* v) {
         // Update status if stars cached
         if (!meta.catalogStars.empty()) {
             m_status->setText(tr("Ready. Cached stars: %1").arg(meta.catalogStars.size()));
-        } else if (meta.ra == 0 && meta.dec == 0) {
+        } else if (!WCSUtils::hasValidWCS(meta)) {
             m_status->setText(tr("Warning: No WCS coordinates found!"));
         } else {
             m_status->setText(tr("Ready (RA: %1, Dec: %2)").arg(meta.ra).arg(meta.dec));
@@ -102,7 +103,7 @@ void PCCDialog::onRun() {
     double ra = meta.ra;
     double dec = meta.dec;
     
-    if (ra == 0 && dec == 0) {
+    if (!WCSUtils::hasValidWCS(meta)) {
         QMessageBox::critical(this, tr("Error"), tr("Image must be plate solved first."));
         return;
     }

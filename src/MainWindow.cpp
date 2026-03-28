@@ -746,6 +746,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Menu Style
     menuBar()->setStyleSheet("QMenuBar { background-color: #252525; color: #ccc; } QMenuBar::item:selected { background: #444; }");
     menuBar()->setVisible(false); 
+    menuBar()->setFocusPolicy(Qt::NoFocus);
+    menuBar()->installEventFilter(this);
 
     m_stretchCombo = new QComboBox();
     m_stretchCombo->setFixedWidth(120);
@@ -3097,6 +3099,16 @@ void MainWindow::openHeaderEditorDialog() {
 }
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == menuBar()) {
+        if (event->type() == QEvent::KeyPress) {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Alt || keyEvent->key() == Qt::Key_AltGr) {
+                // Return true to swallow the event and prevent the hidden menu bar from taking focus
+                return true; 
+            }
+        }
+    }
+
     if (obj == m_mdiArea) {
         if (event->type() == QEvent::DragEnter) {
             QDragEnterEvent* dragEvent = static_cast<QDragEnterEvent*>(event);
@@ -3289,8 +3301,14 @@ bool MainWindow::isViewerInUse(ImageViewer* viewer, QString* toolName) const {
 
 void MainWindow::applyGeometry(const QString& op) {
     if (auto v = currentViewer()) {
-        // NOTE: Flip and rotate should NOT be saved to undo/redo stack
-        // to prevent other tools from resetting rotation state
+        QString name;
+        if (op == "rot90") name = tr("Rotate CW");
+        else if (op == "rot180") name = tr("Rotate 180");
+        else if (op == "rot270") name = tr("Rotate CCW");
+        else if (op == "mirrorX") name = tr("Mirror H");
+        else if (op == "mirrorY") name = tr("Mirror V");
+        
+        v->pushUndo(name);
         
         // Use OpenCV optimized calls directly via Buffer
         if (op == "rot90") v->getBuffer().rotate90();
@@ -3300,15 +3318,14 @@ void MainWindow::applyGeometry(const QString& op) {
         else if (op == "mirrorY") v->getBuffer().mirrorY();
         
         updateDisplay();
-        log(tr("Geometry applied: ") + op, Log_Success);
+        log(tr("Geometry applied: ") + name, Log_Success);
         showConsoleTemporarily(2000);
     }
 }
 
 void MainWindow::applyGeometry(const QString& name, std::function<void(ImageBuffer&)> func) {
     if (auto v = currentViewer()) {
-        // NOTE: Flip and rotate should NOT be saved to undo/redo stack
-        // to prevent other tools from resetting rotation state
+        v->pushUndo(name);
         func(v->getBuffer());
         updateDisplay();
         log(tr("Geometry applied: ") + name, Log_Success);

@@ -3362,6 +3362,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Commento</translation>
         </message>
         <message>
+            <source>Copy Selected</source>
+            <translation type="finished">Copia selezionati</translation>
+        </message>
+        <message>
             <source>Filter FITS keys...</source>
             <translation type="finished">Filtra chiavi FITS...</translation>
         </message>
@@ -9105,6 +9109,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">(Opzionale)</translation>
         </message>
         <message>
+            <source>(Optional: A Master Dark frame taken at the SAME exposure time and temperature as your FLAT frames. Used to subtract thermal noise from the flats before flat-fielding. If left empty, the main DARK is used instead (or flats are not dark-subtracted if no dark is set). Cosmetic correction uses the DARK tab file — not this Dark for Flat.)</source>
+            <translation type="finished">(Opzionale: un Master Dark ripreso con lo STESSO tempo di esposizione e temperatura dei FLAT. Usato per sottrarre il rumore termico dai flat prima del flat-fielding. Se vuoto, verrà usato il DARK principale (o i flat non saranno sottratti se non è impostato alcun dark). La correzione cosmetica usa il file della scheda DARK — non questo Dark per i Flat.)</translation>
+        </message>
+        <message>
             <source>(Same as input)</source>
             <translation type="finished">(Come input)</translation>
         </message>
@@ -9245,6 +9253,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">σ Caldo:</translation>
         </message>
         <message>
+            <source>Identifies and repairs individual defective rows or columns (stuck pixels, hot lines). A 'bad line' is a row or column whose mean value deviates significantly from its neighbours. Cosmetic correction (sigma-clipping or from Master Dark) provides complementary hot/cold pixel repair.</source>
+            <translation type="finished">Identifica e ripara singole righe o colonne difettose (pixel bloccati, linee calde). Una "bad line" è una riga o colonna il cui valore medio devia significativamente dai vicini. La correzione cosmetica (sigma-clipping o da Master Dark) fornisce una riparazione complementare dei pixel caldi/freddi.</translation>
+        </message>
+        <message>
             <source>Image Calibration</source>
             <translation type="finished">Calibrazione Immagine</translation>
         </message>
@@ -9303,6 +9315,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>Remove</source>
             <translation type="finished">Rimuovi</translation>
+        </message>
+        <message>
+            <source>Repairs horizontal readout banding noise common in CMOS sensors. Works by estimating and subtracting the per-row/column offset. Enable only if you see horizontal stripe patterns in dark or bias frames.</source>
+            <translation type="finished">Ripara il rumore di banding orizzontale del readout comune nei sensori CMOS. Funziona stimando e sottraendo l’offset per riga/colonna. Abilita solo se noti pattern a strisce orizzontali nei frame dark o bias.</translation>
         </message>
         <message>
             <source>Save Master Bias</source>

@@ -1,6 +1,12 @@
 TStar Changelog
 ===============
 
+Version 1.8.3
+-------------
+- Fixed hidden menu bar activating when pressing alt key
+- Fixed WCS validation bug in PCC tool
+- Added tooltips for more clarity in some stacking suite tools
+
 Version 1.8.2
 -------------
 - Fixed a smal bug in CC for mono images
