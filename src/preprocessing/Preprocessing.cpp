@@ -76,6 +76,28 @@ void PreprocessingEngine::setParams(const PreprocessParams& params) {
                         fData[i] -= dfData[i];
                     }
                 }
+            } else {
+                // If no DarkFlat is provided, calibrate the MasterFlat with Bias (synthetic or master)
+                if (params.useBias && params.biasLevel < 1e20) {
+                    float b = static_cast<float>(params.biasLevel);
+                    float* fData = flat->data().data();
+                    size_t size = flat->size();
+                    for (size_t i = 0; i < size; ++i) {
+                        fData[i] -= b;
+                    }
+                    emit logMessage(tr("Calibrated Master Flat using synthetic bias %1").arg(b), "neutral");
+                } else if (params.useBias && m_masters.isLoaded(MasterType::Bias)) {
+                    const ImageBuffer* bias = m_masters.get(MasterType::Bias);
+                    if (bias && bias->isValid()) {
+                        float* fData = flat->data().data();
+                        const float* bData = bias->data().data();
+                        size_t size = flat->size();
+                        for (size_t i = 0; i < size; ++i) {
+                            fData[i] -= bData[i];
+                        }
+                        emit logMessage(tr("Calibrated Master Flat using Master Bias"), "neutral");
+                    }
+                }
             }
         }
     }

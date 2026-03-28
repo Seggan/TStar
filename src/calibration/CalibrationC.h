@@ -39,6 +39,11 @@ int find_deviant_pixels_c(const float* dark, int width, int height,
 void fix_banding_c(float* image, int width, int height, int channels, int cfa_pattern, int threads);
 
 /**
+ * @brief Fix completely bad lines (hot or dead columns/rows)
+ */
+void fix_bad_lines_c(float* image, int width, int height, int channels, int cfa_pattern, int threads);
+
+/**
  * @brief Equalize CFA channels for flats (balance RGB before debayer)
  * Supports generic Bayer patterns (2x2) and X-Trans (6x6).
  * pattern_type: 0=RGGB, 1=BGGR, 2=GRBG, 3=GBRG, 4=XTRANS

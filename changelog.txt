@@ -5,6 +5,9 @@ Version 1.8.3
 -------------
 - Fixed hidden menu bar activating when pressing alt key
 - Fixed WCS validation bug in PCC tool
+- Fixed an issue where CFA data was incorrectly debayered before drizzle integration
+- Fixed F1 calibration skipping Master Bias for uncalibrated Master Flats
+- Improved the repair lines and banding correction algorithms for enhanced artifact removal
 - Added tooltips for more clarity in some stacking suite tools
 
 Version 1.8.2

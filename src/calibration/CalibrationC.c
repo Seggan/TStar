@@ -168,7 +168,8 @@ void fix_banding_c(float* image, int width, int height, int channels, int cfa_pa
             
             if (count > 0) {
                 qsort(med_buffer, count, sizeof(float), cmp_float);
-                targets[p] = (count % 2 == 0) ? (med_buffer[count/2-1] + med_buffer[count/2])*0.5f : med_buffer[count/2];
+                // Use 1Q (25th percentile) instead of Median to avoid stars/nebulas skewing the background estimate
+                targets[p] = med_buffer[count/4];
             }
         }
         
@@ -189,8 +190,9 @@ void fix_banding_c(float* image, int width, int height, int channels, int cfa_pa
                     row_samples[x] = image[(y * width + x) * channels + c];
                 }
                 qsort(row_samples, width, sizeof(float), cmp_float);
-                float row_med = (width % 2 == 0) ? (row_samples[width/2-1] + row_samples[width/2])*0.5f : row_samples[width/2];
-                row_corrections[y] = targets[p] - row_med;
+                // Use 1Q (25th percentile) for the row as well to ignore stars gracefully!
+                float row_q1 = row_samples[width/4];
+                row_corrections[y] = targets[p] - row_q1;
                 free(row_samples);
             }
         }
@@ -208,6 +210,144 @@ void fix_banding_c(float* image, int width, int height, int channels, int cfa_pa
     free(row_buffer);
     free(row_corrections);
     free(med_buffer);
+}
+
+void fix_bad_lines_c(float* image, int width, int height, int channels, int cfa_pattern, int threads) {
+    if (!image) return;
+
+    for (int c = 0; c < channels; ++c) {
+        int phases_y = (channels == 1 && cfa_pattern >= 0) ? 2 : 1;
+        if (cfa_pattern == 4) phases_y = 6;
+        int phases_x = phases_y;
+
+        // --- HORIZONTAL BAD LINES ---
+        float* row_meds = (float*)malloc(height * sizeof(float));
+        if (row_meds) {
+            #pragma omp parallel for num_threads(threads)
+            for (int y = 0; y < height; ++y) {
+                float* samples = (float*)malloc(width * sizeof(float));
+                if (samples) {
+                    for (int x = 0; x < width; ++x) {
+                        samples[x] = image[(y * width + x) * channels + c];
+                    }
+                    qsort(samples, width, sizeof(float), cmp_float);
+                    row_meds[y] = samples[width/2];
+                    free(samples);
+                } else row_meds[y] = 0;
+            }
+
+            for (int p = 0; p < phases_y; ++p) {
+                int count = 0;
+                for (int y = p; y < height; y += phases_y) count++;
+                if (count < 5) continue;
+                
+                float* p_meds = (float*)malloc(count * sizeof(float));
+                int idx = 0;
+                for (int y = p; y < height; y += phases_y) p_meds[idx++] = row_meds[y];
+                
+                qsort(p_meds, count, sizeof(float), cmp_float);
+                float phase_median = p_meds[count/2];
+                
+                float* p_devs = (float*)malloc(count * sizeof(float));
+                for(int i=0; i<count; ++i) p_devs[i] = fabsf(p_meds[i] - phase_median);
+                qsort(p_devs, count, sizeof(float), cmp_float);
+                float phase_mad = p_devs[count/2];
+                float sigma = phase_mad * 1.4826f;
+                if (sigma < 1e-6f) sigma = 1e-6f;
+                
+                free(p_meds); free(p_devs);
+                
+                float thresh = 6.0f * sigma; // 6 sigma is very safe for bad lines
+                for (int y = p; y < height; y += phases_y) {
+                    if (fabsf(row_meds[y] - phase_median) > thresh) {
+                        int prev_y = y - phases_y;
+                        int next_y = y + phases_y;
+                        
+                        while(prev_y >= 0 && fabsf(row_meds[prev_y] - phase_median) > thresh) prev_y -= phases_y;
+                        while(next_y < height && fabsf(row_meds[next_y] - phase_median) > thresh) next_y += phases_y;
+                        
+                        for (int x = 0; x < width; ++x) {
+                            float val1 = (prev_y >= 0) ? image[(prev_y * width + x) * channels + c] : -1;
+                            float val2 = (next_y < height) ? image[(next_y * width + x) * channels + c] : -1;
+                            
+                            if (val1 >= 0 && val2 >= 0) {
+                                image[(y * width + x) * channels + c] = (val1 + val2) * 0.5f;
+                            } else if (val1 >= 0) {
+                                image[(y * width + x) * channels + c] = val1;
+                            } else if (val2 >= 0) {
+                                image[(y * width + x) * channels + c] = val2;
+                            }
+                        }
+                    }
+                }
+            }
+            free(row_meds);
+        }
+
+        // --- VERTICAL BAD LINES ---
+        float* col_meds = (float*)malloc(width * sizeof(float));
+        if (col_meds) {
+            #pragma omp parallel for num_threads(threads)
+            for (int x = 0; x < width; ++x) {
+                float* samples = (float*)malloc(height * sizeof(float));
+                if (samples) {
+                    for (int y = 0; y < height; ++y) {
+                        samples[y] = image[(y * width + x) * channels + c];
+                    }
+                    qsort(samples, height, sizeof(float), cmp_float);
+                    col_meds[x] = samples[height/2];
+                    free(samples);
+                } else col_meds[x] = 0;
+            }
+
+            for (int p = 0; p < phases_x; ++p) {
+                int count = 0;
+                for (int x = p; x < width; x += phases_x) count++;
+                if (count < 5) continue;
+                
+                float* p_meds = (float*)malloc(count * sizeof(float));
+                int idx = 0;
+                for (int x = p; x < width; x += phases_x) p_meds[idx++] = col_meds[x];
+                
+                qsort(p_meds, count, sizeof(float), cmp_float);
+                float phase_median = p_meds[count/2];
+                
+                float* p_devs = (float*)malloc(count * sizeof(float));
+                for(int i=0; i<count; ++i) p_devs[i] = fabsf(p_meds[i] - phase_median);
+                qsort(p_devs, count, sizeof(float), cmp_float);
+                float phase_mad = p_devs[count/2];
+                float sigma = phase_mad * 1.4826f;
+                if (sigma < 1e-6f) sigma = 1e-6f;
+                
+                free(p_meds); free(p_devs);
+                
+                float thresh = 6.0f * sigma;
+                for (int x = p; x < width; x += phases_x) {
+                    if (fabsf(col_meds[x] - phase_median) > thresh) {
+                        int prev_x = x - phases_x;
+                        int next_x = x + phases_x;
+                        
+                        while(prev_x >= 0 && fabsf(col_meds[prev_x] - phase_median) > thresh) prev_x -= phases_x;
+                        while(next_x < width && fabsf(col_meds[next_x] - phase_median) > thresh) next_x += phases_x;
+                        
+                        for (int y = 0; y < height; ++y) {
+                            float val1 = (prev_x >= 0) ? image[(y * width + prev_x) * channels + c] : -1;
+                            float val2 = (next_x < width) ? image[(y * width + next_x) * channels + c] : -1;
+                            
+                            if (val1 >= 0 && val2 >= 0) {
+                                image[(y * width + x) * channels + c] = (val1 + val2) * 0.5f;
+                            } else if (val1 >= 0) {
+                                image[(y * width + x) * channels + c] = val1;
+                            } else if (val2 >= 0) {
+                                image[(y * width + x) * channels + c] = val2;
+                            }
+                        }
+                    }
+                }
+            }
+            free(col_meds);
+        }
+    }
 }
 
 void equalize_cfa_c(float* image, int width, int height, int pattern_type, int threads) {

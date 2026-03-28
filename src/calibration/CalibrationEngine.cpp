@@ -73,8 +73,19 @@ void CalibrationEngine::fixBanding(ImageBuffer& image) {
 }
 
 void CalibrationEngine::fixBadLines(ImageBuffer& image) {
-    Q_UNUSED(image);
-    // Placeholder
+    int w = image.width();
+    int h = image.height();
+    int channels = image.channels();
+    float* data = image.data().data();
+
+    QString bayer = image.getHeaderValue("BAYERPAT");
+    int cfaPattern = -1; 
+    if (channels == 1) {
+        if (bayer.contains("Trans", Qt::CaseInsensitive)) cfaPattern = 4; // XTrans
+        else cfaPattern = 0; // Standard Bayer
+    }
+
+    fix_bad_lines_c(data, w, h, channels, cfaPattern, omp_get_max_threads());
 }
 
 void CalibrationEngine::fixXTransArtifacts(ImageBuffer& image) {
