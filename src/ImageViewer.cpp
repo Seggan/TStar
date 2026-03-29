@@ -14,6 +14,7 @@
 #include "ImageBufferDelta.h"
 #include "core/Logger.h"
 #include <QTimer>
+#include <QSettings>
 
 
 ImageViewer::ImageViewer(QWidget* parent) : QGraphicsView(parent) {
@@ -528,7 +529,9 @@ void ImageViewer::mouseMoveEvent(QMouseEvent* event) {
         // Magnifier only visible if NOT in a special drawing/editing mode
         bool inDrawingMode = m_drawing || m_moving || m_lassoDrawing || m_movingSample;
         
-        if (overImage && m_cursorOverViewport && !inDrawingMode) {
+        bool hideMagnifierSetting = QSettings().value("display/hide_magnifier", false).toBool();
+        
+        if (overImage && m_cursorOverViewport && !inDrawingMode && !hideMagnifierSetting) {
             m_magnifierScenePos   = scenePos;
             m_magnifierViewportPos = event->pos();
             m_magnifierVisible    = true;

@@ -403,24 +403,8 @@
             <translation type="finished">Grün</translation>
         </message>
         <message>
-            <source>IC</source>
-            <translation type="finished">IC</translation>
-        </message>
-        <message>
             <source>Image must be plate solved first.</source>
             <translation type="finished">Bild muss zuerst astrometrisch gelöst sein.</translation>
-        </message>
-        <message>
-            <source>LdN</source>
-            <translation type="finished">LdN</translation>
-        </message>
-        <message>
-            <source>Messier</source>
-            <translation type="finished">Messier</translation>
-        </message>
-        <message>
-            <source>NGC</source>
-            <translation type="finished">NGC</translation>
         </message>
         <message>
             <source>No image loaded</source>
@@ -457,10 +441,6 @@
         <message>
             <source>Select/Pan (no drawing)</source>
             <translation type="finished">Auswählen/Pan (kein Zeichnen)</translation>
-        </message>
-        <message>
-            <source>Sh2</source>
-            <translation type="finished">Sh2</translation>
         </message>
         <message>
             <source>Stars</source>
@@ -1261,6 +1241,10 @@
             <translation type="finished">Alle VizieR-Spiegel für Gaia DR3 fehlgeschlagen.</translation>
         </message>
         <message>
+            <source>All VizieR mirrors failed for HyperLeda.</source>
+            <translation type="finished">Alle VizieR-Spiegel für HyperLeda sind fehlgeschlagen.</translation>
+        </message>
+        <message>
             <source>Mirror %1 failed (%2, HTTP %3). Retrying...</source>
             <translation type="finished">Spiegel %1 fehlgeschlagen (%2, HTTP %3). Wiederholung...</translation>
         </message>
@@ -1271,6 +1255,10 @@
         <message>
             <source>Querying Gaia DR3 on %1...</source>
             <translation type="finished">Abfrage von Gaia DR3 auf %1...</translation>
+        </message>
+        <message>
+            <source>Querying HyperLeda (PGC) on %1...</source>
+            <translation type="finished">Abfrage von HyperLeda (PGC) auf %1...</translation>
         </message>
     </context>
     <context>
@@ -6836,6 +6824,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Drehen / Zuschneiden</translation>
         </message>
         <message>
+            <source>Rotate 180</source>
+            <translation type="finished">Um 180° drehen</translation>
+        </message>
+        <message>
             <source>Rotate CCW</source>
             <translation type="finished">Gegen den Uhrzeigersinn drehen</translation>
         </message>
@@ -9038,6 +9030,14 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
             <translation type="finished">Bias-Abzug fehlgeschlagen</translation>
         </message>
         <message>
+            <source>Calibrated Master Flat using Master Bias</source>
+            <translation type="finished">Kalibriertes Master-Flat unter Verwendung von Master Bias</translation>
+        </message>
+        <message>
+            <source>Calibrated Master Flat using synthetic bias %1</source>
+            <translation type="finished">Kalibriertes Master-Flat unter Verwendung von synthetischem Bias %1</translation>
+        </message>
+        <message>
             <source>Calibrating image %1 (%2/%3)...</source>
             <translation type="finished">Kalibriere Bild %1 (%2/%3)...</translation>
         </message>
@@ -11103,6 +11103,10 @@ Wählen Sie Nein, um nur im Speicher anzuwenden (Sie können später Speichern u
         <message>
             <source>GraXpert Executable:</source>
             <translation type="finished">GraXpert ausführbare Datei:</translation>
+        </message>
+        <message>
+            <source>Hide Magnifier Viewer</source>
+            <translation type="finished">Vergrößerungslupe ausblenden</translation>
         </message>
         <message>
             <source>Histogram</source>

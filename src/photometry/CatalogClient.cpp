@@ -134,6 +134,57 @@ void CatalogClient::sendGaia() {
     });
 }
 
+void CatalogClient::queryHyperLeda(double ra, double dec, double radiusDeg) {
+    double cappedRadius = std::min(radiusDeg, 3.0);
+    
+    m_lastQueryRa = ra; m_lastQueryDec = dec; m_lastQueryRadius = cappedRadius;
+    m_lastQueryType = "HYPERLEDA";
+    
+    if (s_currentMirrorIndex >= VIZIER_MIRRORS.size()) s_currentMirrorIndex = 0;
+    
+    sendHyperLeda();
+}
+
+void CatalogClient::sendHyperLeda() {
+    if (s_currentMirrorIndex >= VIZIER_MIRRORS.size()) {
+        emit errorOccurred(tr("All VizieR mirrors failed for HyperLeda."));
+        return;
+    }
+
+    QUrl url(VIZIER_MIRRORS[s_currentMirrorIndex]);
+    emit mirrorStatus(tr("Querying HyperLeda (PGC) on %1...").arg(url.host()));
+    
+    qInfo() << "[CatalogClient] Querying HyperLeda on mirror" << s_currentMirrorIndex
+               << VIZIER_MIRRORS[s_currentMirrorIndex];
+    
+    QUrlQuery query;
+    query.addQueryItem("-source", "VII/237/pgc"); 
+    query.addQueryItem("-c", QString::number(m_lastQueryRa, 'f', 6) + " " + QString::number(m_lastQueryDec, 'f', 6));
+    query.addQueryItem("-c.rm", QString::number(m_lastQueryRadius * 60.0, 'f', 2)); // arcmin
+    query.addQueryItem("-out", "PGC,RAJ2000,DEJ2000,logD25,logR25,PA");
+    const int outMax = (m_lastQueryRadius > 2.0) ? 1000 : 2000;
+    query.addQueryItem("-out.max", QString::number(outMax));
+    
+    url.setQuery(query);
+    
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::UserAgentHeader, "TStar-CatalogClient");
+    req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+    QNetworkReply* reply = m_manager->get(req);
+    
+    const int timeoutMs = (m_lastQueryRadius > 2.0) ? 30000 : 20000;
+    QTimer::singleShot(timeoutMs, reply, [this, reply]() {
+        if (reply->isRunning()) {
+            qWarning() << "VizieR HyperLeda timeout on mirror" << s_currentMirrorIndex;
+            reply->abort();
+        }
+    });
+    
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        onReply(reply);
+    });
+}
+
 void CatalogClient::onReply(QNetworkReply* reply) {
     reply->deleteLater();
     if (reply->error() != QNetworkReply::NoError) {
@@ -165,6 +216,7 @@ void CatalogClient::onReply(QNetworkReply* reply) {
     }
     
     std::vector<CatalogStar> stars;
+    std::vector<PGCGalaxy> galaxies;
     QXmlStreamReader xml(data);
     
     // Column Mapping
@@ -176,6 +228,11 @@ void CatalogClient::onReply(QNetworkReply* reply) {
     int idxG = -1;
     int idxBP = -1;
     int idxRP = -1;
+    
+    int idxPGC = -1;
+    int idxLogD25 = -1;
+    int idxLogR25 = -1;
+    int idxPA = -1;
     
     int currentFieldIndex = 0;
     
@@ -189,6 +246,7 @@ void CatalogClient::onReply(QNetworkReply* reply) {
             if (name == "TABLE") {
                 currentFieldIndex = 0;
                 idxRA = idxDec = idxB = idxV = idxTeff = idxG = idxBP = idxRP = -1;
+                idxPGC = idxLogD25 = idxLogR25 = idxPA = -1;
             }
             
             // 1. Parsing Fields to map indices
@@ -211,6 +269,10 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                 // If UCD based matching is needed specifically for Gaia columns when names differ:
                 else if (idxBP == -1 && (fu.contains("em.opt.b") || fu.contains("phot.mag.b")) && fu.contains("phot.mag")) idxBP = currentFieldIndex;
                 else if (idxRP == -1 && (fu.contains("em.opt.r") || fu.contains("phot.mag.r")) && fu.contains("phot.mag")) idxRP = currentFieldIndex;
+                else if (fn == "pgc" || fi == "pgc") idxPGC = currentFieldIndex;
+                else if (fn == "logd25" || fi == "logd25") idxLogD25 = currentFieldIndex;
+                else if (fn == "logr25" || fi == "logr25") idxLogR25 = currentFieldIndex;
+                else if (fn == "pa" || fi == "pa") idxPA = currentFieldIndex;
                 
                 currentFieldIndex++;
             }
@@ -226,6 +288,11 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                 double bp_mag=std::numeric_limits<double>::quiet_NaN();
                 double rp_mag=std::numeric_limits<double>::quiet_NaN();
                 
+                QString pgcStr;
+                double logD=std::numeric_limits<double>::quiet_NaN();
+                double logR=std::numeric_limits<double>::quiet_NaN();
+                double pa=std::numeric_limits<double>::quiet_NaN();
+                
                 int colIndex = 0;
                 
                 // Read TDs for this TR
@@ -234,60 +301,78 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                         QString text = xml.readElementText();
                         
                         if (!text.isEmpty()) {
-                            double val = text.toDouble();
-                            // Parse based on mapped index
-                            if (colIndex == idxRA) r = val;
-                            else if (colIndex == idxDec) d = val;
-                            else if (colIndex == idxB) b = val;
-                            else if (colIndex == idxV) v = val;
-                            else if (colIndex == idxTeff) teff = val;
-                            else if (colIndex == idxG) g_mag = val;
-                            else if (colIndex == idxBP) bp_mag = val;
-                            else if (colIndex == idxRP) rp_mag = val;
+                            if (colIndex == idxPGC) pgcStr = text;
+                            else if (colIndex == idxRA) r = text.toDouble();
+                            else if (colIndex == idxDec) d = text.toDouble();
+                            else if (colIndex == idxB) b = text.toDouble();
+                            else if (colIndex == idxV) v = text.toDouble();
+                            else if (colIndex == idxTeff) teff = text.toDouble();
+                            else if (colIndex == idxG) g_mag = text.toDouble();
+                            else if (colIndex == idxBP) bp_mag = text.toDouble();
+                            else if (colIndex == idxRP) rp_mag = text.toDouble();
+                            else if (colIndex == idxLogD25) logD = text.toDouble();
+                            else if (colIndex == idxLogR25) logR = text.toDouble();
+                            else if (colIndex == idxPA) pa = text.toDouble();
                         }
                         
                         colIndex++;
                     }
                 }
                 
-                // Create Star Object
-                if (idxRA != -1 && idxDec != -1) {
-                    CatalogStar s;
-                    s.ra = r;
-                    s.dec = d;
-                    s.teff = teff;
-                    
-                    // Logic for Mag/Color
-                    // Support Gaia DR3 if APASS missing
-                    if (std::isnan(v) && std::isfinite(g_mag)) v = g_mag; 
-                    if (std::isnan(b) && std::isfinite(bp_mag) && std::isfinite(rp_mag)) b = bp_mag; 
-                    
-                    s.magB = b;
-                    s.magV = v;
-                    s.bp_rp = std::numeric_limits<double>::quiet_NaN();
-
-                    // Prioritize dedicated Gaia BP-RP color index if available
-                    if (std::isfinite(bp_mag) && std::isfinite(rp_mag)) {
-                        const double bprp = bp_mag - rp_mag;
-                        s.bp_rp = bprp;
-                        s.B_V = gaiaBpRpToBV(bprp);
-                    } else if (std::isfinite(b) && std::isfinite(v)) {
-                        // Use Johnson B/V (e.g. from APASS)
-                        const double bv = b - v;
-                        s.B_V = bv;
-                        // Rough inverse conversion: BV = 0.393 + 0.475*BPRP - 0.055*BPRP^2
-                        // BPRP ~= (BV - 0.39) / 0.45
-                        s.bp_rp = (bv - 0.393) / 0.45; 
-                    } else if (std::isfinite(bp_mag) && std::isfinite(g_mag)) {
-                        // Fallback proxy
-                        s.B_V = bp_mag - g_mag;
-                        s.bp_rp = s.B_V / 0.8; 
-                    } else {
-                        s.B_V = 0.65; // G2V fallback
+                // Create Object
+                if (m_lastQueryType == "HYPERLEDA") {
+                    if (idxRA != -1 && idxDec != -1) {
+                        PGCGalaxy g;
+                        g.pgcName = "PGC " + pgcStr.trimmed();
+                        g.ra = r;
+                        g.dec = d;
+                        if (std::isfinite(logD)) {
+                            double D = std::pow(10.0, logD) * 0.1;
+                            g.majorAxisArcmin = D;
+                            if (std::isfinite(logR)) {
+                                double R = std::pow(10.0, logR);
+                                g.minorAxisArcmin = D / R;
+                            } else {
+                                g.minorAxisArcmin = D;
+                            }
+                        }
+                        if (std::isfinite(pa)) {
+                            g.posAngle = pa;
+                        }
+                        galaxies.push_back(g);
                     }
-                    
-                    if ((std::isfinite(s.magV) || s.teff > 0)) { // Valid star
-                        stars.push_back(s);
+                } else {
+                    if (idxRA != -1 && idxDec != -1) {
+                        CatalogStar s;
+                        s.ra = r;
+                        s.dec = d;
+                        s.teff = teff;
+                        
+                        if (std::isnan(v) && std::isfinite(g_mag)) v = g_mag; 
+                        if (std::isnan(b) && std::isfinite(bp_mag) && std::isfinite(rp_mag)) b = bp_mag; 
+                        
+                        s.magB = b;
+                        s.magV = v;
+                        s.bp_rp = std::numeric_limits<double>::quiet_NaN();
+
+                        if (std::isfinite(bp_mag) && std::isfinite(rp_mag)) {
+                            const double bprp = bp_mag - rp_mag;
+                            s.bp_rp = bprp;
+                            s.B_V = gaiaBpRpToBV(bprp);
+                        } else if (std::isfinite(b) && std::isfinite(v)) {
+                            const double bv = b - v;
+                            s.B_V = bv;
+                            s.bp_rp = (bv - 0.393) / 0.45; 
+                        } else if (std::isfinite(bp_mag) && std::isfinite(g_mag)) {
+                            s.B_V = bp_mag - g_mag;
+                            s.bp_rp = s.B_V / 0.8; 
+                        } else {
+                            s.B_V = 0.65;
+                        }
+                        
+                        if ((std::isfinite(s.magV) || s.teff > 0)) {
+                            stars.push_back(s);
+                        }
                     }
                 }
             }
@@ -300,12 +385,15 @@ void CatalogClient::onReply(QNetworkReply* reply) {
         return;
     }
     
-    if (stars.empty()) {
-        // No stars found - still a valid response, emit empty set
-        // Don't retry on empty results (mirror is working, just no data in region)
-        qWarning() << "No stars found in region - catalog query succeeded but returned 0 stars";
-        emit catalogReady(stars);
+    if (m_lastQueryType == "HYPERLEDA") {
+        if (galaxies.empty()) {
+            qWarning() << "No galaxies found in region - catalog query succeeded but returned 0 galaxies";
+        }
+        emit galaxiesReady(galaxies);
     } else {
+        if (stars.empty()) {
+            qWarning() << "No stars found in region - catalog query succeeded but returned 0 stars";
+        }
         emit catalogReady(stars);
     }
 }
@@ -328,4 +416,5 @@ void CatalogClient::retryWithNextMirror() {
 
     if (m_lastQueryType == "GAIA") sendGaia();
     else if (m_lastQueryType == "APASS") sendAPASS();
+    else if (m_lastQueryType == "HYPERLEDA") sendHyperLeda();
 }

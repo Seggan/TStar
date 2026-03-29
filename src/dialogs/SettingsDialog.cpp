@@ -73,6 +73,9 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
     m_24bitStfCheck = new QCheckBox(tr("24-bit Autostretch (Smoother gradients)"));
     displayForm->addRow("", m_24bitStfCheck);
 
+    m_hideMagnifierCheck = new QCheckBox(tr("Hide Magnifier Viewer"));
+    displayForm->addRow("", m_hideMagnifierCheck);
+
     leftColumn->addWidget(displayGroup);
 
     // --- Paths & Integrations Group ---
@@ -212,6 +215,7 @@ SettingsDialog::SettingsDialog(QWidget* parent) : DialogBase(parent, tr("Setting
 
     // Default to true 
     m_24bitStfCheck->setChecked(m_settings.value("display/24bit_stf", true).toBool());
+    m_hideMagnifierCheck->setChecked(m_settings.value("display/hide_magnifier", false).toBool());
 }
 
 void SettingsDialog::pickStarNetPath() {
@@ -360,6 +364,7 @@ void SettingsDialog::saveSettings() {
     m_settings.setValue("general/language", newLang);
     m_settings.setValue("general/check_updates", m_checkUpdates->isChecked());
     m_settings.setValue("display/24bit_stf", m_24bitStfCheck->isChecked());
+    m_settings.setValue("display/hide_magnifier", m_hideMagnifierCheck->isChecked());
     
     // Save default stretch mode
     QString newStretch = m_defaultStretchCombo->currentData().toString();

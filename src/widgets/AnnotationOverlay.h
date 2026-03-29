@@ -39,6 +39,8 @@ struct CatalogObject {
     QString type;
     QString longType;
     double diameter = 0;  // arcmin
+    double minorDiameter = 0; // arcmin
+    double anglePA = 0; // Position angle (deg)
     double mag = 99;
     double redshift = 0;
     double pmra = 0;  // mas/yr

@@ -4209,4 +4209,9 @@ TRANSLATIONS = {
         'fr': 'Répare le bruit de bande (banding) de lecture horizontale courant dans les capteurs CMOS. Fonctionne en estimant et en soustrayant l’offset par ligne/colonne. À n’activer que si vous voyez des motifs de rayures horizontales dans les images dark ou bias.',
         'de': 'Repariert horizontales Readout-Banding-Rauschen, das bei CMOS-Sensoren häufig vorkommt. Funktioniert durch Schätzung und Subtraktion des Offsets pro Zeile/Spalte. Nur aktivieren, wenn horizontale Streifenmuster in Dark- oder Bias-Frames sichtbar sind.'
     },
+    "Hide Magnifier Viewer": {'it': 'Nascondi Lente Ingrandimento', 'es': 'Ocultar Lupa', 'fr': 'Masquer la Loupe', 'de': 'Vergrößerungslupe ausblenden'},
+    "Calibrated Master Flat using synthetic bias %1": {'it': 'Master Flat calibrato usando bias sintetico %1', 'es': 'Master Flat calibrado usando bias sintético %1', 'fr': 'Master Flat calibré utilisant le bias synthétique %1', 'de': 'Kalibriertes Master-Flat unter Verwendung von synthetischem Bias %1'},
+    "Calibrated Master Flat using Master Bias": {'it': 'Master Flat calibrato usando Master Bias', 'es': 'Master Flat calibrado usando Master Bias', 'fr': 'Master Flat calibré utilisant le Master Bias', 'de': 'Kalibriertes Master-Flat unter Verwendung von Master Bias'},
+    "Querying HyperLeda (PGC) on %1...": {'it': 'Interrogazione HyperLeda (PGC) su %1...', 'es': 'Consultando HyperLeda (PGC) en %1...', 'fr': 'Interrogation d\'HyperLeda (PGC) sur %1...', 'de': 'Abfrage von HyperLeda (PGC) auf %1...'},
+    "All VizieR mirrors failed for HyperLeda.": {'it': 'Tutti gli specchi VizieR hanno fallito per HyperLeda.', 'es': 'Todos los espejos de VizieR fallaron para HyperLeda.', 'fr': 'Tous les miroirs VizieR ont échoué pour HyperLeda.', 'de': 'Alle VizieR-Spiegel für HyperLeda sind fehlgeschlagen.'},
 }

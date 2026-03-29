@@ -1,6 +1,11 @@
 TStar Changelog
 ===============
 
+Version 1.8.4
+-------------
+- Added PGC catalog integration for the annotation tool
+- Added "hide magnifier" button in the settings
+
 Version 1.8.3
 -------------
 - Fixed hidden menu bar activating when pressing alt key

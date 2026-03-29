@@ -147,11 +147,12 @@ AnnotationToolDialog::AnnotationToolDialog(QWidget* parent)
     m_catGroup = new QGroupBox(tr("Catalogs && Grid"));
     auto* catLayout = new QGridLayout(m_catGroup);
     
-    m_chkMessier = new QCheckBox(tr("Messier"));
-    m_chkNGC = new QCheckBox(tr("NGC"));
-    m_chkIC = new QCheckBox(tr("IC"));
-    m_chkLdN = new QCheckBox(tr("LdN"));
-    m_chkSh2 = new QCheckBox(tr("Sh2"));
+    m_chkMessier = new QCheckBox("Messier");
+    m_chkNGC = new QCheckBox("NGC");
+    m_chkIC = new QCheckBox("IC");
+    m_chkLdN = new QCheckBox("LdN");
+    m_chkSh2 = new QCheckBox("Sh2");
+    m_chkHyperLeda = new QCheckBox("HyperLeda (PGC)");
     m_chkStars = new QCheckBox(tr("Stars"));
     m_chkConstellations = new QCheckBox(tr("Constellations"));
     m_chkWcsGrid = new QCheckBox(tr("WCS Grid (RA/Dec)"));
@@ -162,6 +163,7 @@ AnnotationToolDialog::AnnotationToolDialog(QWidget* parent)
     m_chkIC->setChecked(true);
     m_chkLdN->setChecked(true);
     m_chkSh2->setChecked(true);
+    m_chkHyperLeda->setChecked(true);
     m_chkStars->setChecked(true);
     m_chkConstellations->setChecked(false);
     m_chkWcsGrid->setChecked(true);
@@ -184,8 +186,9 @@ AnnotationToolDialog::AnnotationToolDialog(QWidget* parent)
     catLayout->addWidget(m_chkIC, 0, 2);
     catLayout->addWidget(m_chkLdN, 1, 0);
     catLayout->addWidget(m_chkSh2, 1, 1);
-    catLayout->addWidget(m_chkStars, 1, 2);
-    catLayout->addWidget(m_chkConstellations, 2, 0, 1, 2);
+    catLayout->addWidget(m_chkHyperLeda, 1, 2);
+    catLayout->addWidget(m_chkStars, 2, 0);
+    catLayout->addWidget(m_chkConstellations, 2, 1, 1, 2);
     catLayout->addWidget(m_chkWcsGrid, 3, 0, 1, 1);
     catLayout->addWidget(m_chkCompass, 3, 1, 1, 1);
     catLayout->addWidget(m_cmbCompassPosition, 3, 2, 1, 1);
@@ -344,6 +347,29 @@ void AnnotationToolDialog::setViewer(ImageViewer* viewer) {
     m_statusLabel->setText(tr("Ready to draw"));
 }
 
+static void deduplicateObjects(QVector<CatalogObject>& current, const QVector<CatalogObject>& news, double searchRadiusDeg = 10.0/3600.0) {
+    for (const auto& n : news) {
+        bool duplicate = false;
+        for (auto& c : current) {
+            if (std::abs(c.ra - n.ra) < searchRadiusDeg && std::abs(c.dec - n.dec) < searchRadiusDeg) {
+                duplicate = true;
+                // --- GEOMETRY INHERITANCE ---
+                // If existing object has no ellipse data but incoming one does, transfer it!
+                if (c.minorDiameter <= 0 && n.minorDiameter > 0) {
+                    c.minorDiameter = n.minorDiameter;
+                    c.anglePA = n.anglePA;
+                    // Also inherit diameter if it was zero
+                    if (c.diameter <= 0) c.diameter = n.diameter;
+                }
+                break;
+            }
+        }
+        if (!duplicate) {
+            current.append(n);
+        }
+    }
+}
+
 void AnnotationToolDialog::refreshAutomaticAnnotations() {
     if (!m_viewer || !m_overlay) return;
 
@@ -378,48 +404,43 @@ void AnnotationToolDialog::refreshAutomaticAnnotations() {
         return;
     }
 
-    QVector<CatalogObject> objects;
+    m_currentWcsObjects.clear();
+    
     int w = m_viewer->getBuffer().width();
     int h = m_viewer->getBuffer().height();
 
-    auto deduplicate = [](QVector<CatalogObject>& current, const QVector<CatalogObject>& news) {
-        const double EPSILON = 1.0/1800;
-        for (const auto& n : news) {
-            bool duplicate = false;
-            for (const auto& c : current) {
-                if (std::abs(c.ra - n.ra) < EPSILON && std::abs(c.dec - n.dec) < EPSILON) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (!duplicate) {
-                current.append(n);
-            }
-        }
-    };
-
+    // --- CATALOG LOADING WITH PRIORITY ---
+    // 1. Messier (Dominant name)
     if (m_chkMessier->isChecked()) {
-        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/messier.csv", meta, "Messier", w, h));
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/messier.csv", meta, "Messier", w, h));
     }
+    // 2. NGC
     if (m_chkNGC->isChecked()) {
-        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/ngc.csv", meta, "NGC", w, h));
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/ngc.csv", meta, "NGC", w, h));
     }
+    // 3. IC
     if (m_chkIC->isChecked()) {
-        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/ic.csv", meta, "IC", w, h));
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/ic.csv", meta, "IC", w, h));
     }
+    // 4. LdN & Sh2
     if (m_chkLdN->isChecked()) {
-        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/ldn.csv", meta, "LdN", w, h));
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/ldn.csv", meta, "LdN", w, h));
     }
     if (m_chkSh2->isChecked()) {
-        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/sh2.csv", meta, "Sh2", w, h));
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/sh2.csv", meta, "Sh2", w, h));
     }
+    // 5. PGC (Provides geometry to Messier/NGC if overlapping)
+    if (m_chkHyperLeda->isChecked()) {
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/pgc.csv", meta, "PGC", w, h));
+    }
+    // 6. Stars (Very strict radius to avoid removal by DSOs)
     if (m_chkStars->isChecked()) {
-        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/stars.csv", meta, "Star", w, h));
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/stars.csv", meta, "Star", w, h), 10.0/3600.0);
     }
+
     if (m_chkConstellations->isChecked()) {
-        objects.append(AnnotationEngine::loadConstellationLines(dataPath + "/constellations.csv", meta, w, h));
-        // Add constellation names
-        deduplicate(objects, AnnotationEngine::loadCatalog(dataPath + "/constellationsnames.csv", meta, "ConstellationName", w, h));
+        m_currentWcsObjects.append(AnnotationEngine::loadConstellationLines(dataPath + "/constellations.csv", meta, w, h));
+        deduplicateObjects(m_currentWcsObjects, AnnotationEngine::loadCatalog(dataPath + "/constellationsnames.csv", meta, "ConstellationName", w, h));
     }
 
     // Pass WCS Grid check state to overlay
@@ -432,11 +453,10 @@ void AnnotationToolDialog::refreshAutomaticAnnotations() {
         m_overlay->setCompassPosition(static_cast<AnnotationOverlay::CompassPosition>(idx));
     }
 
-    m_overlay->setWCSObjects(objects);
+    m_overlay->setWCSObjects(m_currentWcsObjects);
     m_overlay->setWCSObjectsVisible(true);
-    
     QApplication::restoreOverrideCursor();
-    m_statusLabel->setText(tr("Annotations updated. Found %1 unique objects.").arg(objects.size()));
+    m_statusLabel->setText(tr("Annotations updated. Found %1 unique objects.").arg(m_currentWcsObjects.size()));
 }
 
 QVector<Annotation> AnnotationToolDialog::saveAnnotations() const {

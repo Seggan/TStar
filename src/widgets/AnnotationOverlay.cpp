@@ -548,10 +548,49 @@ void AnnotationOverlay::drawWCSObjects(QPainter& painter) {
         // }
         
         // 1. Draw Marker (skip for constellation names)
-        if (!isConstellationName && finalRadiusScreen > 5.0) {
+        bool useShape = (finalRadiusScreen > 1.0 && obj.longType != "Star");
+        double minorRadiusScreen = finalRadiusScreen;
+        if (useShape && obj.minorDiameter > 0) {
+            double pixScale = m_viewer->pixelScale();
+            if (pixScale > 0) {
+                double minorRadiusImagePx = (obj.minorDiameter * 30.0) / pixScale;
+                minorRadiusScreen = minorRadiusImagePx * m_viewer->zoomFactor();
+                
+                QPointF p0_v = mapFromImage(QPointF(0, 0));
+                QPointF p1_v = mapFromImage(QPointF(imgW, imgH));
+                QRectF imgRectWidget = QRectF(p0_v, p1_v).normalized();
+                QRectF markerRect(widgetPos.x() - finalRadiusScreen, widgetPos.y() - finalRadiusScreen, 
+                                  finalRadiusScreen * 2, finalRadiusScreen * 2);
+                if (imgRectWidget.contains(markerRect.center()) && !imgRectWidget.contains(markerRect)) {
+                    minorRadiusScreen *= 0.9;
+                }
+            }
+        }
+
+        if (!isConstellationName && useShape) {
             painter.setPen(QPen(color, 1));
             painter.setBrush(Qt::NoBrush);
-            painter.drawEllipse(widgetPos, finalRadiusScreen, finalRadiusScreen);
+            if (obj.minorDiameter > 0) {
+                
+                painter.save();
+                painter.translate(widgetPos);
+                
+                // Astronomical PA is Measured East of North.
+                // Image Y-axis PA is WCSUtils::positionAngle(meta).
+                // Thus, the object rotation relative to image Y is (obj.anglePA - imgPA).
+                double imgPA = WCSUtils::positionAngle(meta);
+                double totalPA = obj.anglePA - imgPA;
+                if (WCSUtils::isParityFlipped(meta)) {
+                    painter.rotate(totalPA);
+                } else {
+                    painter.rotate(-totalPA);
+                }
+                
+                painter.drawEllipse(QPointF(0, 0), minorRadiusScreen, finalRadiusScreen);
+                painter.restore();
+            } else {
+                painter.drawEllipse(widgetPos, finalRadiusScreen, finalRadiusScreen);
+            }
         } else {
             double gap = (obj.longType=="Star") ? 3.0 : 5.0;
             double len = (obj.longType=="Star") ? 7.0 : 10.0;
@@ -569,21 +608,35 @@ void AnnotationOverlay::drawWCSObjects(QPainter& painter) {
             double labelW = textRect.width();
             double labelH = textRect.height();
             
-            if (finalRadiusScreen > 5.0) {
-                double angle = -M_PI / 4.0; 
-                auto getCirclePoint = [&](double r, double a) {
-                    return widgetPos + QPointF(r * std::cos(a), r * std::sin(a));
+            if (useShape) {
+                double labelAngleRad = -M_PI / 4.0; 
+                double imgPA = WCSUtils::positionAngle(meta);
+                double totalPA = obj.anglePA - imgPA;
+                double rotRad = WCSUtils::isParityFlipped(meta) ? (totalPA * M_PI / 180.0) : (-totalPA * M_PI / 180.0);
+                
+                auto getEllipsePoint = [&](double rx, double ry, double angleRad, double rot) {
+                    // Local angle relative to ellipse axes
+                    double localA = angleRad - rot;
+                    double x = rx * std::cos(localA);
+                    double y = ry * std::sin(localA);
+                    // Rotate back to screen space
+                    double rx_s = x * std::cos(rot) - y * std::sin(rot);
+                    double ry_s = x * std::sin(rot) + y * std::cos(rot);
+                    return widgetPos + QPointF(rx_s, ry_s);
                 };
+
+                double rx = (obj.minorDiameter > 0) ? minorRadiusScreen : finalRadiusScreen;
+                double ry = finalRadiusScreen;
+
+                QPointF circleEdge = getEllipsePoint(rx, ry, labelAngleRad, rotRad);
+                QPointF textPos = getEllipsePoint(rx * 1.15, ry * 1.15, labelAngleRad, rotRad); 
                 
-                QPointF circleEdge = getCirclePoint(finalRadiusScreen, angle);
-                QPointF textPos = getCirclePoint(finalRadiusScreen * 1.3, angle); 
-                
-                // EDGE AWARENESS: if textPos is out of widget bounds, flip angle 180 deg
+                // EDGE AWARENESS: if textPos is out of bounds, flip angle
                 if (textPos.x() < 20 || textPos.x() > width() - labelW - 20 || 
                     textPos.y() < 20 || textPos.y() > height() - 20) {
-                    angle += M_PI; 
-                    circleEdge = getCirclePoint(finalRadiusScreen, angle);
-                    textPos = getCirclePoint(finalRadiusScreen * 1.3, angle);
+                    labelAngleRad += M_PI; 
+                    circleEdge = getEllipsePoint(rx, ry, labelAngleRad, rotRad);
+                    textPos = getEllipsePoint(rx * 1.15, ry * 1.15, labelAngleRad, rotRad);
                 }
 
                 painter.setPen(QPen(color, 1));
@@ -601,7 +654,7 @@ void AnnotationOverlay::drawWCSObjects(QPainter& painter) {
                 painter.drawText(labelOrigin, labelText);
                 occupiedRects.append(QRectF(labelOrigin.x(), labelOrigin.y() - 15, labelW, labelH));
             } else {
-                double offset = 15.0;
+                double offset = 10.0;
                 struct Pos { QPointF p; QRectF r; };
                 std::vector<Pos> candidates;
                 
@@ -723,7 +776,24 @@ void AnnotationOverlay::renderToPainter(QPainter& painter, const QRectF& imageRe
                 painter.setPen(QPen(color, 1.0 * scaleM));
                 if (radiusImagePx > 5.0 * scaleM) {
                     painter.setBrush(Qt::NoBrush);
-                    painter.drawEllipse(imagePos, radiusImagePx, radiusImagePx);
+                    if (obj.minorDiameter > 0) {
+                        double minorRadiusImagePx = radiusImagePx;
+                        if (pixScale > 0) {
+                            minorRadiusImagePx = (obj.minorDiameter * 30.0) / pixScale;
+                            QRectF markerRect(imagePos.x() - minorRadiusImagePx, imagePos.y() - minorRadiusImagePx, 
+                                              minorRadiusImagePx * 2, minorRadiusImagePx * 2);
+                            if (imageRect.contains(markerRect.center()) && !imageRect.contains(markerRect)) {
+                                minorRadiusImagePx *= 0.9;
+                            }
+                        }
+                        painter.save();
+                        painter.translate(imagePos);
+                        painter.rotate(-obj.anglePA);
+                        painter.drawEllipse(QPointF(0, 0), minorRadiusImagePx, radiusImagePx);
+                        painter.restore();
+                    } else {
+                        painter.drawEllipse(imagePos, radiusImagePx, radiusImagePx);
+                    }
                 } else {
                     double gap = (obj.longType=="Star") ? 3.0 * scaleM : 5.0 * scaleM;
                     double len = (obj.longType=="Star") ? 7.0 * scaleM : 10.0 * scaleM;

@@ -15,15 +15,26 @@ struct CatalogStar {
     double bp_rp = std::numeric_limits<double>::quiet_NaN(); // Gaia BP-RP color index
 };
 
+struct PGCGalaxy {
+    QString pgcName;
+    double ra = 0;
+    double dec = 0;
+    double majorAxisArcmin = 0;
+    double minorAxisArcmin = 0;
+    double posAngle = 0;
+};
+
 class CatalogClient : public QObject {
     Q_OBJECT
 public:
     explicit CatalogClient(QObject* parent = nullptr);
     void queryAPASS(double ra, double dec, double radiusDeg);
     void queryGaiaDR3(double ra, double dec, double radiusDeg);
+    void queryHyperLeda(double ra, double dec, double radiusDeg);
 
 signals:
     void catalogReady(const std::vector<CatalogStar>& stars);
+    void galaxiesReady(const std::vector<PGCGalaxy>& galaxies);
     void errorOccurred(const QString& msg);
     void mirrorStatus(const QString& msg); // For retry transparency
 
@@ -40,6 +51,7 @@ private:
     // Internal send methods (don't reset mirror index — used for retries)
     void sendGaia();
     void sendAPASS();
+    void sendHyperLeda();
 
 };
 

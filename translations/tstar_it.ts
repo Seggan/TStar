@@ -403,24 +403,8 @@
             <translation type="finished">Verde</translation>
         </message>
         <message>
-            <source>IC</source>
-            <translation type="finished">IC</translation>
-        </message>
-        <message>
             <source>Image must be plate solved first.</source>
             <translation type="finished">L'immagine deve essere prima risolta astrometricamente.</translation>
-        </message>
-        <message>
-            <source>LdN</source>
-            <translation type="finished">LdN</translation>
-        </message>
-        <message>
-            <source>Messier</source>
-            <translation type="finished">Messier</translation>
-        </message>
-        <message>
-            <source>NGC</source>
-            <translation type="finished">NGC</translation>
         </message>
         <message>
             <source>No image loaded</source>
@@ -457,10 +441,6 @@
         <message>
             <source>Select/Pan (no drawing)</source>
             <translation type="finished">Seleziona/Pan (no disegno)</translation>
-        </message>
-        <message>
-            <source>Sh2</source>
-            <translation type="finished">Sh2</translation>
         </message>
         <message>
             <source>Stars</source>
@@ -1261,6 +1241,10 @@
             <translation type="finished">Tutti i mirror VizieR hanno fallito per Gaia DR3.</translation>
         </message>
         <message>
+            <source>All VizieR mirrors failed for HyperLeda.</source>
+            <translation type="finished">Tutti gli specchi VizieR hanno fallito per HyperLeda.</translation>
+        </message>
+        <message>
             <source>Mirror %1 failed (%2, HTTP %3). Retrying...</source>
             <translation type="finished">Mirror %1 fallito (%2, HTTP %3). Riprovo...</translation>
         </message>
@@ -1271,6 +1255,10 @@
         <message>
             <source>Querying Gaia DR3 on %1...</source>
             <translation type="finished">Interrogazione di Gaia DR3 su %1...</translation>
+        </message>
+        <message>
+            <source>Querying HyperLeda (PGC) on %1...</source>
+            <translation type="finished">Interrogazione HyperLeda (PGC) su %1...</translation>
         </message>
     </context>
     <context>
@@ -6836,6 +6824,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Ruota / Ritaglia</translation>
         </message>
         <message>
+            <source>Rotate 180</source>
+            <translation type="finished">Ruota 180°</translation>
+        </message>
+        <message>
             <source>Rotate CCW</source>
             <translation type="finished">Ruota Antiorario</translation>
         </message>
@@ -9038,6 +9030,14 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
             <translation type="finished">Sottrazione Bias fallita</translation>
         </message>
         <message>
+            <source>Calibrated Master Flat using Master Bias</source>
+            <translation type="finished">Master Flat calibrato usando Master Bias</translation>
+        </message>
+        <message>
+            <source>Calibrated Master Flat using synthetic bias %1</source>
+            <translation type="finished">Master Flat calibrato usando bias sintetico %1</translation>
+        </message>
+        <message>
             <source>Calibrating image %1 (%2/%3)...</source>
             <translation type="finished">Calibrazione immagine %1 (%2/%3)...</translation>
         </message>
@@ -11103,6 +11103,10 @@ Scegli No per applicare solo in memoria (puoi usare Salva con Nome dopo).</trans
         <message>
             <source>GraXpert Executable:</source>
             <translation type="finished">Eseguibile GraXpert:</translation>
+        </message>
+        <message>
+            <source>Hide Magnifier Viewer</source>
+            <translation type="finished">Nascondi Lente Ingrandimento</translation>
         </message>
         <message>
             <source>Histogram</source>

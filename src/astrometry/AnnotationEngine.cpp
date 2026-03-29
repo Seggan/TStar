@@ -36,19 +36,27 @@ QVector<CatalogObject> AnnotationEngine::loadCatalog(const QString& filename,
         QStringList parts = line.split(',');
         if (parts.size() >= 3) {
             CatalogObject obj;
+            QLocale cLocale = QLocale::c();
             obj.name = parts[0].trimmed();
-            obj.ra = parts[1].toDouble();
-            obj.dec = parts[2].toDouble();
+            obj.ra = cLocale.toDouble(parts[1]);
+            obj.dec = cLocale.toDouble(parts[2]);
             
-            if (parts.size() >= 4) obj.diameter = parts[3].toDouble();
-            if (parts.size() >= 5) obj.mag = parts[4].toDouble();
+            if (parts.size() >= 4) obj.diameter = cLocale.toDouble(parts[3]);
+            if (parts.size() >= 5) obj.mag = cLocale.toDouble(parts[4]);
             
             // For stars.csv: name,ra,dec,pmra,pmdec,mag,alias (7 columns)
             // For others like messier.csv: name,ra,dec,diameter,mag,alias (6 columns)
+            // For pgc.csv: name,ra,dec,diameter,mag,alias,minorDiameter,anglePA (8 columns)
             if (catalogType == "Star" && parts.size() >= 7) {
                 obj.alias = parts[6].trimmed();
             } else if (parts.size() >= 6) {
                 obj.alias = parts[5].trimmed();
+            }
+
+            // Handle optional PGC-specific columns for rotated ellipses
+            if (parts.size() >= 8) {
+                obj.minorDiameter = cLocale.toDouble(parts[6]);
+                obj.anglePA = cLocale.toDouble(parts[7]);
             }
             
             obj.type = catalogType;

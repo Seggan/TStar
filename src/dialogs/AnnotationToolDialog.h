@@ -55,7 +55,6 @@ private slots:
     void onUndo();
     void onRedo();
 
-
 private:
     void setupUI();
 
@@ -87,6 +86,7 @@ private:
     QCheckBox* m_chkIC;
     QCheckBox* m_chkLdN;
     QCheckBox* m_chkSh2;
+    QCheckBox* m_chkHyperLeda;
     QCheckBox* m_chkStars;
     QCheckBox* m_chkConstellations;
     QPushButton* m_btnAnnotate;
@@ -105,6 +105,7 @@ private:
     // Status
     QLabel* m_statusLabel;
 
+    QVector<CatalogObject> m_currentWcsObjects;
 
     // Pending text for text tool
     QString m_pendingText = "Label";

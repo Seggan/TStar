@@ -403,23 +403,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>IC</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Image must be plate solved first.</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>LdN</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Messier</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>NGC</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -456,10 +440,6 @@
         </message>
         <message>
             <source>Select/Pan (no drawing)</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Sh2</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -1261,6 +1241,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>All VizieR mirrors failed for HyperLeda.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Mirror %1 failed (%2, HTTP %3). Retrying...</source>
             <translation type="unfinished" />
         </message>
@@ -1270,6 +1254,10 @@
         </message>
         <message>
             <source>Querying Gaia DR3 on %1...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Querying HyperLeda (PGC) on %1...</source>
             <translation type="unfinished" />
         </message>
     </context>
@@ -11111,6 +11099,10 @@
         </message>
         <message>
             <source>GraXpert Executable:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Hide Magnifier Viewer</source>
             <translation type="unfinished" />
         </message>
         <message>

@@ -41,6 +41,7 @@ private:
     QComboBox* m_defaultStretchCombo;
     class QCheckBox* m_checkUpdates;
     class QCheckBox* m_24bitStfCheck;
+    class QCheckBox* m_hideMagnifierCheck;
     QLineEdit* m_astapExtraArgs;
     QPushButton* m_btnDownloadModels;
     QLabel* m_lblModelsStatus;
