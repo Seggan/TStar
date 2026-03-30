@@ -3311,12 +3311,28 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Éditeur d'En-tête</translation>
         </message>
         <message>
+            <source>Header imported successfully. Click Save Changes to apply.</source>
+            <translation type="finished">En-tête importé avec succès. Cliquez sur Enregistrer les modifications pour appliquer.</translation>
+        </message>
+        <message>
+            <source>Import Header</source>
+            <translation type="finished">Importer l'en-tête</translation>
+        </message>
+        <message>
+            <source>Import...</source>
+            <translation type="finished">Importer...</translation>
+        </message>
+        <message>
             <source>KEYWORD</source>
             <translation type="finished">MOT-CLÉ</translation>
         </message>
         <message>
             <source>Key</source>
             <translation type="finished">Clé</translation>
+        </message>
+        <message>
+            <source>No other open images to import from.</source>
+            <translation type="finished">Aucune autre image ouverte à partir de laquelle importer.</translation>
         </message>
         <message>
             <source>Save Changes</source>
@@ -3329,6 +3345,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Save File</source>
             <translation type="finished">Enregistrer Fichier</translation>
+        </message>
+        <message>
+            <source>Select Image to import header from:</source>
+            <translation type="finished">Sélectionnez l'image à partir de laquelle importer l'en-tête :</translation>
         </message>
         <message>
             <source>Set</source>
@@ -8421,8 +8441,16 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Erreur Catalogue : %1</translation>
         </message>
         <message>
-            <source>Catalog mag range: %1 – %2 (%3 stars, %4 with bad mag)</source>
-            <translation type="finished">Plage de magnitude du catalogue : %1 – %2 (%3 étoiles, %4 avec une mauvaise mag)</translation>
+            <source>Catalog mag range: %1 - %2 (%3 stars, %4 with bad mag)</source>
+            <translation type="finished">Plage de mag du catalogue : %1 - %2 (%3 étoiles, %4 avec une mauvaise mag)</translation>
+        </message>
+        <message>
+            <source>Catalog magnitudes unavailable (%1 stars, all invalid mags)</source>
+            <translation type="finished">Magnitudes du catalogue indisponibles (%1 étoiles, toutes les mags sont invalides)</translation>
+        </message>
+        <message>
+            <source>Catalog query returned too few valid stars (%1).</source>
+            <translation type="finished">La requête du catalogue a renvoyé trop peu d'étoiles valides (%1).</translation>
         </message>
         <message>
             <source>Catalog received. Found %1 stars.</source>
@@ -8437,12 +8465,36 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Détection Étoiles Image...</translation>
         </message>
         <message>
+            <source>Image data buffer is inconsistent.</source>
+            <translation type="finished">Le tampon de données de l'image est incohérent.</translation>
+        </message>
+        <message>
             <source>Initial match: %1 pairs, offset=(%2, %3) arcsec</source>
             <translation type="finished">Correspondance initiale : %1 paires, offset=(%2, %3) arcsec</translation>
         </message>
         <message>
+            <source>Insufficient matched pairs after initial solve (%1).</source>
+            <translation type="finished">Paires correspondantes insuffisantes après la résolution initiale (%1).</translation>
+        </message>
+        <message>
+            <source>Invalid image buffer.</source>
+            <translation type="finished">Tampon d'image invalide.</translation>
+        </message>
+        <message>
+            <source>Invalid image snapshot for solving.</source>
+            <translation type="finished">Instantané d'image invalide pour la résolution.</translation>
+        </message>
+        <message>
+            <source>Invalid solve parameters (RA/Dec/Radius).</source>
+            <translation type="finished">Paramètres de résolution invalides (AD/Déc/Rayon).</translation>
+        </message>
+        <message>
             <source>Match Success! Computing WCS...</source>
             <translation type="finished">Correspondance Réussie ! Calcul du WCS...</translation>
+        </message>
+        <message>
+            <source>Matched pair vectors became inconsistent (A=%1, B=%2, need=%3).</source>
+            <translation type="finished">Les vecteurs de paires correspondantes sont devenus incohérents (A=%1, B=%2, besoin=%3).</translation>
         </message>
         <message>
             <source>Matching failed. No valid solution found.</source>
@@ -8455,6 +8507,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Not enough image stars detected (%1).</source>
             <translation type="finished">Pas assez d'étoiles d'image détectées (%1).</translation>
+        </message>
+        <message>
+            <source>Pixel scale is invalid or missing; proceeding without strict scale constraints.</source>
+            <translation type="finished">L'échelle des pixels est invalide ou manquante ; poursuite sans contraintes d'échelle strictes.</translation>
         </message>
         <message>
             <source>Projected %1 catalog stars at RA=%2 Dec=%3</source>
@@ -8475,6 +8531,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Starting Native Solver. Center: %1, %2 Radius: %3 deg</source>
             <translation type="finished">Démarrage Solver Natif. Centre: %1, %2 Rayon: %3 deg</translation>
+        </message>
+        <message>
+            <source>Starting native solve pipeline...</source>
+            <translation type="finished">Démarrage du pipeline de résolution native...</translation>
+        </message>
+        <message>
+            <source>Too few valid pairs after culling (%1).</source>
+            <translation type="finished">Trop peu de paires valides après le tri (%1).</translation>
         </message>
         <message>
             <source>Transform sanity check failed (|cos|≠|sin| by &gt;%.1f arcsec/px).</source>
@@ -10656,6 +10720,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Available Scripts</source>
             <translation type="finished">Scripts disponibles</translation>
+        </message>
+        <message>
+            <source>Available commands: save &lt;filename&gt; [format], starnet [stride] [create_star_mask], align &lt;ref&gt; &lt;target1&gt; &lt;target2&gt; ..., integrate &lt;type&gt; &lt;output&gt;, load &lt;filename&gt;, pm &lt;expression&gt;, Variables: ${VAR_NAME}</source>
+            <translation type="finished">Commandes disponibles : save &lt;filename&gt; [format], starnet [stride] [create_star_mask], align &lt;ref&gt; &lt;target1&gt; &lt;target2&gt; ..., integrate &lt;type&gt; &lt;output&gt;, load &lt;filename&gt;, pm &lt;expression&gt;, Variables : ${VAR_NAME}</translation>
         </message>
         <message>
             <source>Close</source>

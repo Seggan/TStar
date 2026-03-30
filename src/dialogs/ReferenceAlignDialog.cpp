@@ -263,6 +263,7 @@ void ReferenceAlignDialog::rebuildBuffer() {
     cv::Mat cropped = transformed(roi).clone();
 
     m_currentBuffer.resize(cropW, cropH, c);
+    m_currentBuffer.setMetadata(m_targetBuffer.metadata());
     std::memcpy(m_currentBuffer.data().data(), cropped.ptr<float>(), m_currentBuffer.data().size() * sizeof(float));
 
     updatePreview();

@@ -21,7 +21,7 @@ private slots:
     void onAdd();
     void onDelete();
     void onSave(); // Updates ImageViewer and Saves File
-    // void onSaveAs(); // Maybe later
+    void onImport(); // Import from another open image
 
 private:
     void setupUI();
@@ -33,6 +33,7 @@ private:
     QTableWidget* m_table;
     QPushButton* m_addBtn;
     QPushButton* m_delBtn;
+    QPushButton* m_importBtn;
     QPushButton* m_saveBtn;
     QLineEdit* m_keyInput;
     QLineEdit* m_valInput;

@@ -247,6 +247,7 @@ void AlignChannelsDialog::onApply()
         int ch = tgtBuf.channels();
 
         ImageBuffer warped(w, h, ch);
+        warped.setMetadata(tgtBuf.metadata());
         {
             cv::Mat src(h, w, CV_32FC(ch),
                         const_cast<void*>(static_cast<const void*>(tgtBuf.data().data())));

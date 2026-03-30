@@ -107,6 +107,14 @@ void ScriptDialog::setupUI() {
     m_scriptEditor = new QTextEdit(this);
     m_scriptEditor->setFontFamily("Consolas");
     m_scriptEditor->setStyleSheet("background-color: #1e1e1e; color: #d4d4d4;");
+    m_scriptEditor->setToolTip(tr("Available commands:\n"
+        "save <filename> [format]\n"
+        "starnet [stride] [create_star_mask]\n"
+        "align <ref> <target1> <target2> ...\n"
+        "integrate <type> <output>\n"
+        "load <filename>\n"
+        "pm <expression>\n"
+        "Variables can be used as ${VAR_NAME}"));
     editorLayout->addWidget(m_scriptEditor);
     topSplitter->addWidget(editorGroup);
     

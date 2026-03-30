@@ -1,6 +1,7 @@
 #include "NativePlateSolver.h"
 #include "../photometry/CatalogClient.h"
 #include <cmath>
+#include <limits>
 #include <QtConcurrent/QtConcurrent>
 #include <QPointer>
 #include <unordered_map>
@@ -25,6 +26,25 @@ NativePlateSolver::NativePlateSolver(QObject* parent)
 }
 
 void NativePlateSolver::solve(const ImageBuffer& image, double raHint, double decHint, double radiusDeg, double pixelScale) {
+    if (!image.isValid()) {
+        NativeSolveResult res;
+        res.errorMsg = tr("Invalid image buffer.");
+        emit finished(res);
+        return;
+    }
+
+    if (!std::isfinite(raHint) || !std::isfinite(decHint) || !std::isfinite(radiusDeg) || radiusDeg <= 0.0) {
+        NativeSolveResult res;
+        res.errorMsg = tr("Invalid solve parameters (RA/Dec/Radius).");
+        emit finished(res);
+        return;
+    }
+
+    if (!std::isfinite(pixelScale) || pixelScale <= 0.0) {
+        emit logMessage(tr("Pixel scale is invalid or missing; proceeding without strict scale constraints."));
+        pixelScale = -1.0;
+    }
+
     m_image = image;
     m_raHint = raHint;
     m_decHint = decHint;
@@ -64,19 +84,35 @@ void NativePlateSolver::fetchCatalog() {
     CatalogClient* client = new CatalogClient(this);
     
     connect(client, &CatalogClient::catalogReady, this, [this, client](const std::vector<CatalogStar>& stars) {
-        m_catalogStars = stars;
+        m_catalogStars.clear();
+        m_catalogStars.reserve(stars.size());
+
+        for (const auto& s : stars) {
+            if (!std::isfinite(s.ra) || !std::isfinite(s.dec)) {
+                continue;
+            }
+            m_catalogStars.push_back(s);
+        }
+
         std::vector<MatchStar> ms;
-        ms.reserve(stars.size());
-        for(const auto& s : stars) {
+        ms.reserve(m_catalogStars.size());
+        for (const auto& s : m_catalogStars) {
             MatchStar m;
             m.id    = (int)ms.size();  // ← set sequential catalog index (critical for updateStarPositions)
             m.index = (int)ms.size();
             m.x     = s.ra;   // RA in degrees
             m.y     = s.dec;  // Dec in degrees
-            m.mag   = s.magV;
+            m.mag   = std::isfinite(s.magV) ? s.magV : 99.0;
             m.match_id = -1;
             ms.push_back(m);
         }
+
+        if (ms.size() < 10) {
+            this->onCatalogError(tr("Catalog query returned too few valid stars (%1).").arg(ms.size()));
+            client->deleteLater();
+            return;
+        }
+
         this->onCatalogReceived(ms);
         client->deleteLater();
     });
@@ -210,7 +246,8 @@ void NativePlateSolver::updateStarPositions(std::vector<MatchStar>& matchedCatSt
     }
 
     // For each matched catalog star, update its coordinates using the map
-    for (int i = 0; i < numMatched; i++) {
+    const int safeCount = std::min(numMatched, static_cast<int>(matchedCatStars.size()));
+    for (int i = 0; i < safeCount; i++) {
         auto it = idMap.find(matchedCatStars[i].id);
         if (it != idMap.end()) {
             matchedCatStars[i].x = it->second->x;
@@ -371,7 +408,13 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
         return -1;
     }
 
-    int numMatched = (int)matchedImgStars.size();
+    int numMatched = std::min((int)matchedImgStars.size(), (int)matchedCatStars.size());
+    if (numMatched < AT_MATCH_STARTN_LINEAR) {
+        if (safeThis) {
+            emit logMessage(tr("Insufficient matched pairs after initial solve (%1).").arg(numMatched));
+        }
+        return -1;
+    }
 
     // === Step 4: Convergence loop ===
     //
@@ -414,6 +457,12 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
 
         // 4d: Recalculate TRANS from the SAME matched pairs (RECALC_YES = use all from start)
         // Port of: atRecalcTrans(numMatched, star_list_A, numMatched, star_list_B, ...)
+        if ((int)matchedImgStars.size() < numMatched || (int)matchedCatStars.size() < numMatched) {
+            if (safeThis) emit logMessage(tr("Matched pair vectors became inconsistent (A=%1, B=%2, need=%3).")
+                                          .arg(matchedImgStars.size()).arg(matchedCatStars.size()).arg(numMatched));
+            break;
+        }
+
         std::vector<int> idxA(numMatched), idxB(numMatched);
         for (int i = 0; i < numMatched; i++) { idxA[i] = i; idxB[i] = i; }
 
@@ -426,18 +475,33 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
         }
 
         // Cull arrays to prevent accumulation of rejected outliers that will induce NaN mappings downstream
-        std::vector<MatchStar> culledImg(newTrans.nr);
-        std::vector<MatchStar> culledCat(newTrans.nr);
-        for (int i = 0; i < newTrans.nr; i++) {
-            culledImg[i] = matchedImgStars[idxA[i]];
-            culledCat[i] = matchedCatStars[idxB[i]];
+        const int requested = std::max(0, std::min(newTrans.nr, std::min((int)idxA.size(), (int)idxB.size())));
+        std::vector<MatchStar> culledImg;
+        std::vector<MatchStar> culledCat;
+        culledImg.reserve(requested);
+        culledCat.reserve(requested);
+
+        for (int i = 0; i < requested; i++) {
+            const int aIdx = idxA[i];
+            const int bIdx = idxB[i];
+            if (aIdx < 0 || bIdx < 0 || aIdx >= (int)matchedImgStars.size() || bIdx >= (int)matchedCatStars.size()) {
+                continue;
+            }
+            culledImg.push_back(matchedImgStars[aIdx]);
+            culledCat.push_back(matchedCatStars[bIdx]);
         }
+
+        if ((int)culledImg.size() < AT_MATCH_REQUIRE_LINEAR || (int)culledCat.size() < AT_MATCH_REQUIRE_LINEAR) {
+            if (safeThis) emit logMessage(tr("Too few valid pairs after culling (%1).").arg(culledImg.size()));
+            break;
+        }
+
         matchedImgStars = culledImg;
         matchedCatStars = culledCat;
 
         transOut = newTrans;
         // Update numMatched to survivors after sigma clipping
-        numMatched = transOut.nr;
+        numMatched = std::min((int)transOut.nr, std::min((int)matchedImgStars.size(), (int)matchedCatStars.size()));
         conv = std::sqrt(transOut.x00 * transOut.x00 + transOut.y00 * transOut.y00);
 
         if (safeThis) {
@@ -479,6 +543,26 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
                                         double raHint, double decHint,
                                         double pixelScale)
 {
+    if (!image.isValid() || image.width() <= 0 || image.height() <= 0 || image.channels() <= 0) {
+        NativeSolveResult res;
+        res.errorMsg = tr("Invalid image snapshot for solving.");
+        QPointer<NativePlateSolver> safeThis(this);
+        if (safeThis) emit finished(res);
+        return;
+    }
+
+    const std::vector<float>& pixels = image.data();
+    const size_t expectedSize = static_cast<size_t>(image.width()) *
+                                static_cast<size_t>(image.height()) *
+                                static_cast<size_t>(image.channels());
+    if (pixels.size() < expectedSize || !pixels.data()) {
+        NativeSolveResult res;
+        res.errorMsg = tr("Image data buffer is inconsistent.");
+        QPointer<NativePlateSolver> safeThis(this);
+        if (safeThis) emit finished(res);
+        return;
+    }
+
     if (catStars.size() < 10) {
         NativeSolveResult res;
         res.errorMsg = tr("Not enough catalog stars found (%1).").arg(catStars.size());
@@ -516,17 +600,28 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
 
     // Log catalog magnitude range to diagnose bad catalog queries
     if (!catStars.empty()) {
-        double magMin = catStars[0].mag, magMax = catStars[0].mag;
+        double magMin = std::numeric_limits<double>::infinity();
+        double magMax = -std::numeric_limits<double>::infinity();
         int nBadMag = 0;
+        int nGoodMag = 0;
         for (const auto& s : catStars) {
-            if (s.mag <= 0 || std::isnan(s.mag)) { nBadMag++; continue; }
+            if (!std::isfinite(s.mag) || s.mag <= 0.0) {
+                nBadMag++;
+                continue;
+            }
             magMin = std::min(magMin, s.mag);
             magMax = std::max(magMax, s.mag);
+            nGoodMag++;
         }
         if (safeThis) {
-            emit logMessage(tr("Catalog mag range: %1 – %2 (%3 stars, %4 with bad mag)")
-                            .arg(magMin, 0, 'f', 1).arg(magMax, 0, 'f', 1)
-                            .arg((int)catStars.size()).arg(nBadMag));
+            if (nGoodMag > 0) {
+                emit logMessage(tr("Catalog mag range: %1 - %2 (%3 stars, %4 with bad mag)")
+                                .arg(magMin, 0, 'f', 1).arg(magMax, 0, 'f', 1)
+                                .arg((int)catStars.size()).arg(nBadMag));
+            } else {
+                emit logMessage(tr("Catalog magnitudes unavailable (%1 stars, all invalid mags)")
+                                .arg((int)catStars.size()));
+            }
         }
     }
 
@@ -574,9 +669,7 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
 void NativePlateSolver::onCatalogReceived(const std::vector<MatchStar>& catalogStars) {
     emit logMessage(tr("Catalog received. Found %1 stars.").arg(catalogStars.size()));
 
-    // Capture member data by value so the background thread does not access
-    // member variables through `this` — the QObject may be destroyed (or its
-    // parent dialog hidden/closed) while the thread is still running.
+    // Capture member data by value so processing uses a stable snapshot.
     ImageBuffer              imageSnapshot   = m_image;
     double                   pixelScale      = m_pixelScale;
     double                   raHint          = m_raHint;
@@ -585,17 +678,13 @@ void NativePlateSolver::onCatalogReceived(const std::vector<MatchStar>& catalogS
 
     QPointer<NativePlateSolver> safeThis(this);
 
-    (void)QtConcurrent::run([safeThis,
-                              catalogStars,
-                              imageSnapshot   = std::move(imageSnapshot),
-                              rawCatalogStars = std::move(rawCatalogStars),
-                              pixelScale,
-                              raHint,
-                              decHint]() mutable {
-        if (safeThis) {
-            safeThis->processSolving(catalogStars, imageSnapshot, rawCatalogStars, raHint, decHint, pixelScale);
-        }
-    });
+    // Run on the owner thread for stability. This avoids invoking QObject
+    // member logic from a worker thread, which can trigger hard-to-reproduce
+    // access violations on some Windows runtimes.
+    if (safeThis) {
+        emit logMessage(tr("Starting native solve pipeline..."));
+        safeThis->processSolving(catalogStars, imageSnapshot, rawCatalogStars, raHint, decHint, pixelScale);
+    }
 }
 
 void NativePlateSolver::onCatalogError(const QString& msg) {

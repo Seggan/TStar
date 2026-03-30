@@ -48,6 +48,7 @@ void ScriptBrowserDialog::setupUI() {
     m_preview = new QTextEdit();
     m_preview->setReadOnly(true);
     m_preview->setFont(QFont("Consolas", 9));
+    m_preview->setToolTip(tr("Available commands: save <filename> [format], starnet [stride] [create_star_mask], align <ref> <target1> <target2> ..., integrate <type> <output>, load <filename>, pm <expression>, Variables: ${VAR_NAME}"));
     m_preview->setStyleSheet("background: #1e1e1e; color: #d4d4d4;");
     previewLayout->addWidget(m_preview);
     splitter->addWidget(previewGroup);

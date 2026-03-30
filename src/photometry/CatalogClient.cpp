@@ -322,6 +322,9 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                 // Create Object
                 if (m_lastQueryType == "HYPERLEDA") {
                     if (idxRA != -1 && idxDec != -1) {
+                        if (!std::isfinite(r) || !std::isfinite(d)) {
+                            continue;
+                        }
                         PGCGalaxy g;
                         g.pgcName = "PGC " + pgcStr.trimmed();
                         g.ra = r;
@@ -343,6 +346,10 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                     }
                 } else {
                     if (idxRA != -1 && idxDec != -1) {
+                        if (!std::isfinite(r) || !std::isfinite(d)) {
+                            continue;
+                        }
+
                         CatalogStar s;
                         s.ra = r;
                         s.dec = d;
@@ -370,7 +377,7 @@ void CatalogClient::onReply(QNetworkReply* reply) {
                             s.B_V = 0.65;
                         }
                         
-                        if ((std::isfinite(s.magV) || s.teff > 0)) {
+                        if ((std::isfinite(s.magV) || s.teff > 0) && std::isfinite(s.ra) && std::isfinite(s.dec)) {
                             stars.push_back(s);
                         }
                     }

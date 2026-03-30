@@ -18,6 +18,22 @@ TriangleMatcher::TriangleMatcher() {
 }
 
 static bool compareStarsMag(const MatchStar& a, const MatchStar& b) {
+    const bool aFinite = std::isfinite(a.mag);
+    const bool bFinite = std::isfinite(b.mag);
+
+    // Finite magnitudes first; NaN/Inf are pushed to the end.
+    if (aFinite != bFinite) {
+        return aFinite;
+    }
+
+    // Deterministic ordering to satisfy strict-weak-order requirements.
+    if (a.mag == b.mag) {
+        if (a.id == b.id) {
+            return a.index < b.index;
+        }
+        return a.id < b.id;
+    }
+
     return a.mag < b.mag;
 }
 
@@ -572,25 +588,50 @@ bool TriangleMatcher::solve(const std::vector<MatchStar>& imgStars,
     m_lastNmatched   = 0;
     m_lastFailStage  = -1;
 
-    // === Step 1: Sort and select brightest ===
-    int nA = std::min((int)imgStars.size(), m_maxStars);
-    int nB = std::min((int)catStars.size(), m_maxStars);
+    // === Step 1: Filter/sanitize input stars, then sort and select brightest ===
+    std::vector<MatchStar> cleanA;
+    std::vector<MatchStar> cleanB;
+    cleanA.reserve(imgStars.size());
+    cleanB.reserve(catStars.size());
+
+    for (const auto& s : imgStars) {
+        if (!std::isfinite(s.x) || !std::isfinite(s.y)) continue;
+        MatchStar t = s;
+        if (!std::isfinite(t.mag)) t.mag = 99.0;
+        cleanA.push_back(t);
+    }
+
+    for (const auto& s : catStars) {
+        if (!std::isfinite(s.x) || !std::isfinite(s.y)) continue;
+        MatchStar t = s;
+        if (!std::isfinite(t.mag)) t.mag = 99.0;
+        cleanB.push_back(t);
+    }
+
+    int nA = std::min((int)cleanA.size(), m_maxStars);
+    int nB = std::min((int)cleanB.size(), m_maxStars);
 
     if (nA < AT_MATCH_STARTN_LINEAR || nB < AT_MATCH_STARTN_LINEAR) {
         m_lastFailStage = 0;
         return false;
     }
 
-    std::vector<MatchStar> sA = imgStars;
-    std::vector<MatchStar> sB = catStars;
+    std::vector<MatchStar> sA = std::move(cleanA);
+    std::vector<MatchStar> sB = std::move(cleanB);
     std::sort(sA.begin(), sA.end(), compareStarsMag);
     std::sort(sB.begin(), sB.end(), compareStarsMag);
     sA.resize(nA);
     sB.resize(nB);
 
     // Set indices
-    for (int i = 0; i < nA; ++i) sA[i].index = i;
-    for (int i = 0; i < nB; ++i) sB[i].index = i;
+    for (int i = 0; i < nA; ++i) {
+        sA[i].index = i;
+        if (sA[i].id < 0) sA[i].id = i;
+    }
+    for (int i = 0; i < nB; ++i) {
+        sB[i].index = i;
+        if (sB[i].id < 0) sB[i].id = i;
+    }
 
     // nbright = min(max(nA, nB), m_maxStars), clamped to actual sizes
     int nbright = std::min(std::max(nA, nB), m_maxStars);

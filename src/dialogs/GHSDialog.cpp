@@ -48,11 +48,15 @@ GHSDialog::GHSDialog(QWidget *parent) : DialogBase(parent, tr("Generalized Hyper
 
 GHSDialog::~GHSDialog() {
     // Cleanup on destruction if not already handled by reject()
-    if (m_activeViewer && !m_applied) {
-        m_activeViewer->setBuffer(m_bufferAtOpening, m_activeViewer->windowTitle(), true);
-    }
-    // Always reset interaction mode to prevent lingering selection cursor
     if (m_activeViewer) {
+        // Clear preview LUT first
+        std::vector<std::vector<float>> emptyLUT;
+        m_activeViewer->setPreviewLUT(emptyLUT);
+        
+        if (!m_applied) {
+            m_activeViewer->setBuffer(m_bufferAtOpening, m_activeViewer->windowTitle(), true);
+        }
+        // Always reset interaction mode to prevent lingering selection cursor
         m_activeViewer->setInteractionMode(ImageViewer::Mode_PanZoom);
         m_activeViewer->setCursor(Qt::ArrowCursor);
     }
@@ -66,8 +70,17 @@ void GHSDialog::reject() {
         disconnect(m_activeViewer, &ImageViewer::destroyed, this, nullptr);
         disconnect(m_activeViewer, &ImageViewer::bufferChanged, this, nullptr);
         
+        // CRITICAL: Clear preview LUT BEFORE restoring buffer to avoid "burned" preview
+        std::vector<std::vector<float>> emptyLUT;
+        m_activeViewer->setPreviewLUT(emptyLUT);
+        
         m_selfUpdating = true;
-        m_activeViewer->setBuffer(m_bufferAtOpening, m_activeViewer->windowTitle(), true);
+        if (!m_applied) {
+            m_activeViewer->setBuffer(m_bufferAtOpening, m_activeViewer->windowTitle(), true);
+        } else {
+            // Unset preview LUT 
+            m_activeViewer->setBuffer(m_originalBuffer, m_activeViewer->windowTitle(), true);
+        }
         
         // Reset Interaction
         m_activeViewer->setInteractionMode(ImageViewer::Mode_PanZoom);
@@ -695,6 +708,10 @@ void GHSDialog::setTarget(ImageViewer* viewer) {
         // Restore previous viewer to its clean state (remove preview)
         m_selfUpdating = true;
         qDebug() << "[GHSDialog::setTarget] Restoring buffer on Old Viewer.";
+        // Clear preview LUT before restoring buffer
+        std::vector<std::vector<float>> emptyLUT;
+        m_activeViewer->setPreviewLUT(emptyLUT);
+        
         m_activeViewer->setBuffer(m_originalBuffer, m_activeViewer->windowTitle(), true);
         
         // Reset Interaction Mode

@@ -236,10 +236,26 @@ StarDetector::RejectReason StarDetector::rejectStar(
 // ─── detect() — main pipeline ─────────────────────────────────────────────────
 std::vector<DetectedStar> StarDetector::detect(const ImageBuffer& image, int channel)
 {
-    const int   w   = image.width();
-    const int   h   = image.height();
-    const int   ch  = image.channels();
-    const float* raw = image.data().data();
+    if (!image.isValid()) {
+        return {};
+    }
+
+    const int w = image.width();
+    const int h = image.height();
+    const int ch = image.channels();
+    if (w <= 0 || h <= 0 || ch <= 0) {
+        return {};
+    }
+
+    const std::vector<float>& pixels = image.data();
+    const size_t expectedSize = static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(ch);
+    if (pixels.size() < expectedSize) {
+        return {};
+    }
+    const float* raw = pixels.data();
+    if (!raw) {
+        return {};
+    }
 
     // Clamp channel index
     channel = std::clamp(channel, 0, ch - 1);

@@ -1,11 +1,14 @@
 #include "HeaderEditorDialog.h"
 #include "../ImageViewer.h"
+#include "../MainWindow.h"
+#include "../widgets/CustomMdiSubWindow.h"
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QFileDialog>
 #include <QGroupBox>
+#include <QInputDialog>
 
 HeaderEditorDialog::HeaderEditorDialog(ImageViewer* viewer, QWidget* parent) 
     : DialogBase(parent, tr("Header Editor"), 700, 600), m_viewer(viewer) {
@@ -75,6 +78,9 @@ void HeaderEditorDialog::setupUI() {
     m_delBtn = new QPushButton(tr("Delete Selected"), this);
     connect(m_delBtn, &QPushButton::clicked, this, &HeaderEditorDialog::onDelete);
     
+    m_importBtn = new QPushButton(tr("Import..."), this);
+    connect(m_importBtn, &QPushButton::clicked, this, &HeaderEditorDialog::onImport);
+    
     m_saveBtn = new QPushButton(tr("Save Changes"), this);
     connect(m_saveBtn, &QPushButton::clicked, this, &HeaderEditorDialog::onSave);
     
@@ -82,6 +88,7 @@ void HeaderEditorDialog::setupUI() {
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::accept);
     
     btnLayout->addWidget(m_delBtn);
+    btnLayout->addWidget(m_importBtn);
     btnLayout->addStretch();
     btnLayout->addWidget(closeBtn);
     btnLayout->addWidget(m_saveBtn);
@@ -173,4 +180,36 @@ void HeaderEditorDialog::onSave() {
     
     m_viewer->setModified(true);
     accept();
+}
+
+void HeaderEditorDialog::onImport() {
+    MainWindow* mainWin = qobject_cast<MainWindow*>(parent());
+    if (!mainWin) return;
+    
+    QStringList items;
+    std::vector<ImageViewer*> viewers;
+    
+    auto sublist = mainWin->findChildren<CustomMdiSubWindow*>();
+    for (auto* sub : sublist) {
+        if (sub->viewer() && sub->viewer() != m_viewer) {
+            items << sub->windowTitle();
+            viewers.push_back(sub->viewer());
+        }
+    }
+    
+    if (items.isEmpty()) {
+        QMessageBox::information(this, tr("Import Header"), tr("No other open images to import from."));
+        return;
+    }
+    
+    bool ok;
+    QString item = QInputDialog::getItem(this, tr("Import Header"), tr("Select Image to import header from:"), items, 0, false, &ok);
+    if (ok && !item.isEmpty()) {
+        int idx = items.indexOf(item);
+        if (idx >= 0 && static_cast<size_t>(idx) < viewers.size()) {
+            m_meta = viewers[idx]->getBuffer().metadata();
+            loadMetadata();
+            QMessageBox::information(this, tr("Import Header"), tr("Header imported successfully. Click Save Changes to apply."));
+        }
+    }
 }

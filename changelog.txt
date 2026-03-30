@@ -5,6 +5,9 @@ Version 1.8.4
 -------------
 - Added PGC catalog integration for the annotation tool
 - Added "hide magnifier" button in the settings
+- Added more tooltips in the stacking suite
+- Added header metadata import from another file option in header editor
+- Fixed occasional native plate solver crash
 
 Version 1.8.3
 -------------

@@ -1840,6 +1840,11 @@ CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, 
     }
     ImageViewer* viewer = new ImageViewer(this); // Parent is temporary
     
+    // Explicitly copy metadata from the provided buffer into the new Viewer
+    // so that operations that create arbitrary windows (split, pixelmath, cc, etc) carry it implicitly.
+    ImageBuffer bufCopy = buffer;
+    bufCopy.setMetadata(buffer.metadata());
+    
     // Sync with current toolbar state, but allow override if mode is NOT linear (or if explicitly requested)
     // Use specific mode if passed, otherwise default logic handles it.
     
@@ -1847,7 +1852,7 @@ CustomMdiSubWindow* MainWindow::createNewImageWindow(const ImageBuffer& buffer, 
     // Change: caller can pass the desired mode.
     viewer->setDisplayState(mode, displayLinked);
     viewer->setAutoStretchMedian(autoStretchMedian);
-    viewer->setBuffer(buffer, title);
+    viewer->setBuffer(bufCopy, title);
     
     // Connect History Sync (live update of Undo/Redo menus)
     connect(viewer, &ImageViewer::historyChanged, this, &MainWindow::updateMenus);
@@ -2680,8 +2685,8 @@ void MainWindow::openAbeDialog() {
     // When ABE applies, it emits a result buffer
     connect(dlg, &ABEDialog::applyResult, [this, v](const ImageBuffer& res) {
         v->pushUndo(tr("ABE applied"));
-        // Updated: Preserve View!
-        v->setBuffer(res, "ABE_Result", true); 
+        // Updated: Preserve View without renaming filename
+        v->setBuffer(res, v->windowTitle(), true); 
         log(tr("ABE applied."), Log_Success, true);
         showConsoleTemporarily(2000);
     });

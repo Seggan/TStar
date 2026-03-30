@@ -3309,11 +3309,27 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Header imported successfully. Click Save Changes to apply.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Import Header</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Import...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>KEYWORD</source>
             <translation type="unfinished" />
         </message>
         <message>
             <source>Key</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No other open images to import from.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3326,6 +3342,10 @@
         </message>
         <message>
             <source>Save File</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Select Image to import header from:</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8418,7 +8438,15 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Catalog mag range: %1 – %2 (%3 stars, %4 with bad mag)</source>
+            <source>Catalog mag range: %1 - %2 (%3 stars, %4 with bad mag)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Catalog magnitudes unavailable (%1 stars, all invalid mags)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Catalog query returned too few valid stars (%1).</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8434,11 +8462,35 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Image data buffer is inconsistent.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Initial match: %1 pairs, offset=(%2, %3) arcsec</source>
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Insufficient matched pairs after initial solve (%1).</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Invalid image buffer.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Invalid image snapshot for solving.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Invalid solve parameters (RA/Dec/Radius).</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Match Success! Computing WCS...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Matched pair vectors became inconsistent (A=%1, B=%2, need=%3).</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8451,6 +8503,10 @@
         </message>
         <message>
             <source>Not enough image stars detected (%1).</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Pixel scale is invalid or missing; proceeding without strict scale constraints.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8471,6 +8527,14 @@
         </message>
         <message>
             <source>Starting Native Solver. Center: %1, %2 Radius: %3 deg</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Starting native solve pipeline...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Too few valid pairs after culling (%1).</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10652,6 +10716,10 @@
         </message>
         <message>
             <source>Available Scripts</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Available commands: save &lt;filename&gt; [format], starnet [stride] [create_star_mask], align &lt;ref&gt; &lt;target1&gt; &lt;target2&gt; ..., integrate &lt;type&gt; &lt;output&gt;, load &lt;filename&gt;, pm &lt;expression&gt;, Variables: ${VAR_NAME}</source>
             <translation type="unfinished" />
         </message>
         <message>
