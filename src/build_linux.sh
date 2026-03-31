@@ -4,20 +4,6 @@
 # Equivalent of build_macos.sh but adapted for Linux environments.
 # =============================================================================
 
-safe_rm_rf() {
-    local path="$1"
-    if [ -d "$path" ] || [ -L "$path" ]; then
-        rm -rf "$path"
-    fi
-}
-
-ensure_dir() {
-    local dir="$1"
-    if [ ! -d "$dir" ]; then
-        mkdir -p "$dir"
-    fi
-}
-
 set -e  # Exit on error
 
 # Check for --clean flag
@@ -45,6 +31,13 @@ echo "==========================================="
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 PROJECT_ROOT="$(pwd)"
+
+if [ -f "$SCRIPT_DIR/utils_common.sh" ]; then
+    source "$SCRIPT_DIR/utils_common.sh"
+else
+    echo "[ERROR] utils_common.sh not found!"
+    exit 1
+fi
 
 # --- CONFIGURATION ---
 CMAKE_CMD="cmake"
@@ -144,6 +137,7 @@ if [ $? -ne 0 ]; then
     echo "[ERROR] Build failed!"
     exit 1
 fi
+strip --strip-unneeded --remove-section=.comment --remove-section=.note "$BUILD_DIR/TStar"
 
 # --- 5. VERIFY BUILD ---
 echo ""

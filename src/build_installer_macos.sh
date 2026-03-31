@@ -19,6 +19,12 @@ cd "$SCRIPT_DIR/.."
 PROJECT_ROOT="$(pwd)"
 
 # Load utilities
+if [ -f "$SCRIPT_DIR/utils_common.sh" ]; then
+    source "$SCRIPT_DIR/utils_common.sh"
+else
+    echo "[ERROR] utils_common.sh not found!"
+    exit 1
+fi
 if [ -f "$SCRIPT_DIR/macos_utils.sh" ]; then
     source "$SCRIPT_DIR/macos_utils.sh"
 else
