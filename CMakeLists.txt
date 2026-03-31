@@ -847,8 +847,8 @@ set(TSTAR_SOURCES
     src/scripting/msvc_compat.cpp
     src/scripting/StackingCommands.cpp
     src/scripting/StackingCommands.h
-    
-
+    src/scripting/PythonFinder.cpp
+    src/scripting/PythonFinder.h
 
     src/dialogs/ScriptDialog.cpp
     src/dialogs/ScriptDialog.h
@@ -1007,7 +1007,7 @@ if(ZSTD_FOUND)
     target_include_directories(TStar PRIVATE ${ZSTD_INCLUDE_DIRS})
     target_compile_definitions(TStar PRIVATE HAVE_ZSTD)
 endif()
-if(LIBRAW_FOUND)
+if(LIBRAW_FOUND AND NOT LINUX)
     target_include_directories(TStar PRIVATE ${LIBRAW_INCLUDE_DIRS})
     target_compile_definitions(TStar PRIVATE HAVE_LIBRAW)
 endif()

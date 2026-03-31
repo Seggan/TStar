@@ -11,6 +11,8 @@
 #include <QStandardPaths>
 #include <iostream>
 
+#include "PythonFinder.h"
+
 RARRunner::RARRunner(QObject* parent) : QObject(parent) {}
 
 bool RARRunner::run(const ImageBuffer& input, ImageBuffer& output, const RARParams& params, QString* errorMsg) {
@@ -91,17 +93,7 @@ bool RARRunner::run(const ImageBuffer& input, ImageBuffer& output, const RARPara
     // Locate bundled Python interpreter.
     // No test-run: DYLD_FRAMEWORK_PATH (set below) lets dyld find Python.framework
     // inside the bundle even when the baked-in Homebrew Cellar path is stale.
-    QString pythonExe;
-#if defined(Q_OS_MAC)
-    pythonExe = QCoreApplication::applicationDirPath() + "/../Resources/python_venv/bin/python3";
-    if (!QFile::exists(pythonExe))
-        pythonExe = QCoreApplication::applicationDirPath() + "/../../deps/python_venv/bin/python3";
-#else
-    pythonExe = QCoreApplication::applicationDirPath() + "/python/python.exe";
-    if (!QFile::exists(pythonExe))
-        pythonExe = QCoreApplication::applicationDirPath() + "/../deps/python/python.exe";
-#endif
-
+    QString pythonExe = findPythonExecutable();
     if (!QFile::exists(pythonExe)) {
         if(errorMsg) *errorMsg = "Bundled Python interpreter not found.\nExpected path: " + pythonExe;
         return false;

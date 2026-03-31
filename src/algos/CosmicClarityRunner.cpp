@@ -18,6 +18,8 @@
 #include <QJsonDocument>
 #include <QOverload>
 
+#include "PythonFinder.h"
+
 // ============================================================================
 // CosmicClarityWorker Implementation
 // ============================================================================
@@ -57,17 +59,7 @@ void CosmicClarityWorker::process(const ImageBuffer& input, const CosmicClarityP
     // Locate bundled Python interpreter.
     // No test-run: DYLD_FRAMEWORK_PATH (set below) lets dyld find Python.framework
     // inside the bundle even when the baked-in Homebrew Cellar path is stale.
-    QString pythonExe;
-#if defined(Q_OS_MAC)
-    pythonExe = QCoreApplication::applicationDirPath() + "/../Resources/python_venv/bin/python3";
-    if (!QFile::exists(pythonExe))
-        pythonExe = QCoreApplication::applicationDirPath() + "/../../deps/python_venv/bin/python3";
-#else
-    pythonExe = QCoreApplication::applicationDirPath() + "/python/python.exe";
-    if (!QFile::exists(pythonExe))
-        pythonExe = QCoreApplication::applicationDirPath() + "/../deps/python/python.exe";
-#endif
-
+    QString pythonExe = findPythonExecutable();
     if (!QFile::exists(pythonExe)) {
         emit finished(output, "Bundled Python interpreter not found.\nExpected path: " + pythonExe);
         return;

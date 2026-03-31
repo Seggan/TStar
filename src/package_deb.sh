@@ -5,6 +5,14 @@
 # It assumes that the project has already been built using build_linux.sh.
 # =============================================================================
 
+cp_all() {
+    local SRC="$1"
+    local DEST="$2"
+    for FILE in $SRC; do
+        cp "$FILE" "$DEST"
+    done
+}
+
 set -e
 
 # Check for silent mode
@@ -77,14 +85,18 @@ chmod 755 "$DIST_DIR/opt/tstar/TStar"
 
 cp -r "$PROJECT_ROOT/deps/python_venv" "$DIST_DIR/opt/tstar/python_venv"
 
-for QM_FILE in "$BUILD_DIR"/*.qm; do
-    if [ -f "$QM_FILE" ]; then
-        cp "$QM_FILE" "$DIST_DIR/opt/tstar/"
-    fi
-done
+cp_all "$BUILD_DIR/*.qm" "$DIST_DIR/opt/tstar/"
 cp -r "$BUILD_DIR/data" "$DIST_DIR/opt/tstar/"
 cp -r "$BUILD_DIR/images" "$DIST_DIR/opt/tstar/"
 cp -r "$BUILD_DIR/scripts" "$DIST_DIR/opt/tstar/"
+cp_all "$PROJECT_ROOT/src/scripts/*" "$DIST_DIR/opt/tstar/scripts/"
+if [ -d "$BUILD_DIR/translations" ]; then
+    cp -r "$BUILD_DIR/translations" "$DIST_DIR/opt/tstar/"
+fi
+ASTAP_DIR="$PROJECT_ROOT/deps/astap"
+if [ -d "$ASTAP_DIR" ]; then
+    cp -r "$ASTAP_DIR" "$DIST_DIR/opt/tstar/"
+fi
 
 ensure_dir "$DIST_DIR/usr/share/doc/tstar/"
 cp "$PROJECT_ROOT/LICENSE" "$DIST_DIR/usr/share/doc/tstar/copyright"
