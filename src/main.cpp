@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName("TStar");
     QCoreApplication::setOrganizationDomain("tstar.app");
     QCoreApplication::setApplicationName("TStar");
+    QApplication::setDesktopFileName("tstar");
     
     TStarApplication app(argc, argv);
     

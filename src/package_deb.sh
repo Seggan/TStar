@@ -177,6 +177,7 @@ Terminal=false
 Type=Application
 MimeType=application/x-tstar-project;
 Categories=Science;Astronomy;
+StartupWMClass=TStar
 EOL
 chmod 644 "$DESKTOP_DIR/tstar.desktop"
 
