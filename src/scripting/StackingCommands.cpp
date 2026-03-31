@@ -1749,7 +1749,7 @@ bool StackingCommands::cmdConvert(const ScriptCommand& cmd) {
                     // Suppress LibRaw's default "data corrupted at X" stderr messages.
                     // These are non-fatal decompression warnings that clutter the log.
                     struct NoOpHandler {
-                        static void callback(void*, const char*, const INT64) {}
+                        static void callback(void*, const char*, const int) {}
                     };
                     libraw_set_dataerror_handler(lr, NoOpHandler::callback, nullptr);
                     

@@ -3,6 +3,7 @@
 
 #include <QString>
 #include <exception>
+#include <bits/types/siginfo_t.h>
 
 class GlobalExceptionHandler
 {

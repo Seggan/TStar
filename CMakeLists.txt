@@ -105,6 +105,10 @@ elseif(WIN32)
     # Disable AutoMoc predefs generation (Fixes pre-processing failures on Windows/MinGW)
     set(CMAKE_AUTOMOC_COMPILER_PREDEFS OFF CACHE BOOL "" FORCE)
     message(STATUS "Building for Windows")
+elseif(LINUX)
+    message(STATUS "Building for Linux")
+else()
+    message(FATAL_ERROR "Unsupported platform")
 endif()
 
 set(CMAKE_AUTOMOC ON)
@@ -218,6 +222,29 @@ else()
     endif()
 endif()
 
+## Get all properties that cmake supports
+execute_process(COMMAND cmake --help-property-list OUTPUT_VARIABLE CMAKE_PROPERTY_LIST)
+## Convert command output into a CMake list
+STRING(REGEX REPLACE ";" "\\\\;" CMAKE_PROPERTY_LIST "${CMAKE_PROPERTY_LIST}")
+STRING(REGEX REPLACE "\n" ";" CMAKE_PROPERTY_LIST "${CMAKE_PROPERTY_LIST}")
+
+list(REMOVE_DUPLICATES CMAKE_PROPERTY_LIST)
+
+function(print_target_properties tgt)
+    if(NOT TARGET ${tgt})
+        message("There is no target named '${tgt}'")
+        return()
+    endif()
+
+    foreach (prop ${CMAKE_PROPERTY_LIST})
+        string(REPLACE "<CONFIG>" "${CMAKE_BUILD_TYPE}" prop ${prop})
+        get_target_property(propval ${tgt} ${prop})
+        if (propval)
+            message ("${tgt} ${prop} = ${propval}")
+        endif()
+    endforeach(prop)
+endfunction(print_target_properties)
+
 # =============================================================================
 # CFITSIO
 # =============================================================================
@@ -236,11 +263,15 @@ if(APPLE)
     else()
         message(FATAL_ERROR "CFITSIO not found. Install with: brew install cfitsio")
     endif()
-else()
+elseif(WIN32)
     # Windows: local deps
     set(CFITSIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/cfitsio")
     set(CFITSIO_INCLUDE_DIR "${CFITSIO_DIR}/include")
     set(CFITSIO_LIBRARY "${CFITSIO_DIR}/lib/libcfitsio.a")
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(CFITSIO REQUIRED IMPORTED_TARGET cfitsio)
+    pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 endif()
 
 # =============================================================================
@@ -260,10 +291,12 @@ if(APPLE)
     # Explicitly exclude dnn module which depends on OpenVINO
     # Only include modules actually used by TStar to minimize dependencies
     find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs photo features2d calib3d)
-else()
+elseif(WIN32)
     # Windows: local deps
     set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv")
     find_package(OpenCV REQUIRED PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv" NO_DEFAULT_PATH)
+else()
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs photo features2d calib3d)
 endif()
 
 # =============================================================================
@@ -285,7 +318,7 @@ if(APPLE)
         set(LZ4_LIBRARIES "${LZ4_PREFIX}/lib/liblz4.dylib")
         message(STATUS "Using Homebrew LZ4 from: ${LZ4_PREFIX}")
     endif()
-else()
+elseif(WIN32)
     # Windows: local deps in deps/lz4
     set(LZ4_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/lz4")
     if(EXISTS "${LZ4_DIR}/include/lz4.h")
@@ -300,6 +333,13 @@ else()
         endif()
     else()
         set(LZ4_FOUND FALSE)
+    endif()
+else()
+    find_package(lz4 QUIET)
+    set(LZ4_FOUND lz4_FOUND)
+    if(LZ4_FOUND)
+        get_target_property(LZ4_LIBRARIES LZ4::lz4_static LOCATION)
+        get_target_property(LZ4_INCLUDE_DIRS LZ4::lz4_static INTERFACE_INCLUDE_DIRECTORIES)
     endif()
 endif()
 
@@ -322,7 +362,7 @@ if(APPLE)
         set(ZSTD_LIBRARIES "${ZSTD_PREFIX}/lib/libzstd.dylib")
         message(STATUS "Using Homebrew Zstd from: ${ZSTD_PREFIX}")
     endif()
-else()
+elseif(WIN32)
     # Windows: local deps in deps/zstd
     set(ZSTD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/zstd")
     if(EXISTS "${ZSTD_DIR}/include/zstd.h")
@@ -337,6 +377,13 @@ else()
         endif()
     else()
         set(ZSTD_FOUND FALSE)
+    endif()
+else()
+    find_package(zstd QUIET)
+    set(ZSTD_FOUND zstd_FOUND)
+    if(ZSTD_FOUND)
+        get_target_property(ZSTD_LIBRARIES zstd::libzstd_static LOCATION)
+        get_target_property(ZSTD_INCLUDE_DIRS zstd::libzstd_static INTERFACE_INCLUDE_DIRECTORIES)
     endif()
 endif()
 
@@ -385,7 +432,7 @@ if(APPLE)
         message(STATUS "  - Include: ${LIBRAW_INCLUDE_DIRS}")
         message(STATUS "  - Library: ${LIBRAW_LIBRARIES}")
     endif()
-else()
+elseif(WIN32)
     # Windows: local deps
     set(LIBRAW_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/libraw")
     if(EXISTS "${LIBRAW_DIR}/CMakeLists.txt")
@@ -408,6 +455,13 @@ else()
         endif()
         message(STATUS "Using local LibRaw from ${LIBRAW_DIR}")
     endif()
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBRAW QUIET IMPORTED_TARGET libraw)
+endif()
+
+if(NOT LIBRAW_FOUND)
+    message(STATUS "LibRaw not found - RAW file support will be disabled")
 endif()
 
 # Force disable AutoMoc predefs on Windows
@@ -824,7 +878,7 @@ if(APPLE)
         file(GLOB LCMS2_SOURCES "deps/lcms2/src/*.c")
         list(APPEND TSTAR_SOURCES ${LCMS2_SOURCES})
     endif()
-else()
+elseif(WIN32)
     # Windows/Other: build from sources
     # NOTE: Using explicit file list instead of GLOB to avoid CMake cache issues
     # that force full rebuilds when dependencies change
@@ -862,6 +916,9 @@ else()
     if(NOT MSVC)
         set_source_files_properties(${LCMS2_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-pedantic")
     endif()
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LCMS2 REQUIRED IMPORTED_TARGET lcms2)
 endif()
 
 # =============================================================================
@@ -895,12 +952,15 @@ if(APPLE)
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist"
         )
     endif()
-else()
+elseif(WIN32)
     # Windows with resource file
     add_executable(TStar
         ${CMAKE_CURRENT_BINARY_DIR}/TStar.rc
         ${TSTAR_SOURCES}
     )
+else()
+    # Linux/Other: simple executable
+    add_executable(TStar src/main.cpp ${TSTAR_SOURCES})
 endif()
 
 # =============================================================================
@@ -913,8 +973,8 @@ qt_add_translations(TStar
         "translations/tstar_fr.ts"
         "translations/tstar_de.ts"
     QM_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/translations"
-    RESOURCE "src/i18n.qrc"
 )
+qt_add_resources(TStar "src/i18n.qrc")
 
 # =============================================================================
 # Include Directories
@@ -994,6 +1054,14 @@ target_link_libraries(TStar PRIVATE
     ${TSTAR_LIBS}
 )
 
+if(LINUX)
+    target_link_libraries(TStar PRIVATE
+            PkgConfig::CURL
+            PkgConfig::CFITSIO
+            PkgConfig::LCMS2
+    )
+endif()
+
 # OpenMP
 if(TARGET OpenMP::OpenMP_CXX)
     target_link_libraries(TStar PRIVATE OpenMP::OpenMP_CXX)
@@ -1006,9 +1074,13 @@ endif()
 if(APPLE)
     find_package(ZLIB REQUIRED)
     target_link_libraries(TStar PRIVATE ZLIB::ZLIB)
-else()
+elseif(WIN32)
     # Windows: zlib and winsock + PDH/DXGI for resource monitor
     target_link_libraries(TStar PRIVATE z ws2_32 pdh dxguid)
+elseif(LINUX)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ZLIB REQUIRED zlib)
+    target_link_libraries(TStar PRIVATE ${ZLIB_LIBRARIES})
 endif()
 
 # Optional compression libraries
@@ -1021,8 +1093,12 @@ if(ZSTD_FOUND)
     message(STATUS "Zstd compression enabled for XISF")
 endif()
 if(LIBRAW_FOUND)
-    target_link_libraries(TStar PRIVATE ${LIBRAW_LIBRARIES})
-    message(STATUS "LibRaw support enabled")
+    if(LINUX)
+        target_link_libraries(TStar PRIVATE PkgConfig::LIBRAW)
+    else()
+        target_link_libraries(TStar PRIVATE ${LIBRAW_LIBRARIES})
+        message(STATUS "LibRaw support enabled")
+    endif()
 endif()
 
 # =============================================================================

@@ -5,6 +5,8 @@ cmake-build-*/
 out/
 dist/
 installer_output/
+QM_OUTPUT_DIRECTORY
+RESOURCE
 
 # Dependencies (users should download separately)
 deps/
