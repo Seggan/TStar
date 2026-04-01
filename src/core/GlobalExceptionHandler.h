@@ -3,7 +3,9 @@
 
 #include <QString>
 #include <exception>
+#if defined(Q_OS_LINUX)
 #include <bits/types/siginfo_t.h>
+#endif
 
 class GlobalExceptionHandler
 {
