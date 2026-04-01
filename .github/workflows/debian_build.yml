@@ -35,6 +35,13 @@ jobs:
         run: |
           ./src/build_linux.sh
 
+      - name: Breakpoint if failed
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: Seggan
+
       - name: Create Debian Package
         run: |
           ./src/package_deb.sh
