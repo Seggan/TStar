@@ -51,7 +51,8 @@ private:
     // Internal methods
     void fetchCatalog();
     void processSolving(const std::vector<MatchStar>& catStars,
-                        const ImageBuffer&             image,
+                        const std::vector<float>&     pixels,
+                        int w, int h, int ch,
                         const std::vector<CatalogStar>& catalogStars,
                         double raHint, double decHint,
                         double pixelScale);

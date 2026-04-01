@@ -62,23 +62,26 @@
 // Data structures
 // ============================================================================
 
-struct MatchStar {
-    int id = 0;
-    int index = 0;      // position in the sorted array
-    double x = 0;
-    double y = 0;
-    double mag = 0;
-    int match_id = -1;  // ID of star in other list which matches
+struct alignas(16) MatchStar {
+    int    id       = 0;
+    int    index    = 0;      // position in the sorted array
+    double x        = 0;
+    double y        = 0;
+    double mag      = 0;
+    int    match_id = -1;     // ID of star in other list which matches
+    int    _pad     = 0;      // Explicit padding for 16-byte alignment (Total 48 bytes)
+    double _res     = 0;
 };
 
-struct MatchTriangle {
-    int id = 0;
-    int a_index = 0;    // index of vertex OPPOSITE the longest side
-    int b_index = 0;    // index of vertex OPPOSITE the intermediate side
-    int c_index = 0;    // index of vertex OPPOSITE the shortest side
-    double a_length = 0; // Length of longest side (not normalized)
-    double ba = 0;      // Ratio b/a (0..1)
-    double ca = 0;      // Ratio c/a (0..1)
+struct alignas(16) MatchTriangle {
+    int    id       = 0;
+    int    a_index  = 0;    // index of vertex OPPOSITE the longest side
+    int    b_index  = 0;    // index of vertex OPPOSITE the intermediate side
+    int    c_index  = 0;    // index of vertex OPPOSITE the shortest side
+    double a_length = 0;    // Length of longest side (not normalized)
+    double ba       = 0;    // Ratio b/a (0..1)
+    double ca       = 0;    // Ratio c/a (0..1)
+    double _res     = 0;    // Explicit padding for 16-byte alignment (Total 48 bytes)
 };
 
 // Linear transformation: x' = x00 + x10*x + x01*y, y' = y00 + y10*x + y01*y

@@ -513,26 +513,18 @@ int NativePlateSolver::matchCatalog(const std::vector<MatchStar>& imgStars, int 
 // processSolving — Main pipeline after catalog received
 // ==========================================================================
 void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
-                                        const ImageBuffer&             image,
+                                        const std::vector<float>&     pixels,
+                                        int w, int h, int ch,
                                         const std::vector<CatalogStar>& catalogStars,
                                         double raHint, double decHint,
                                         double pixelScale)
 {
-    if (!image.isValid() || image.width() <= 0 || image.height() <= 0 || image.channels() <= 0) {
+    const size_t expectedSize = static_cast<size_t>(w) *
+                                static_cast<size_t>(h) *
+                                static_cast<size_t>(ch);
+    if (w <= 0 || h <= 0 || ch <= 0 || pixels.size() < expectedSize) {
         NativeSolveResult res;
         res.errorMsg = tr("Invalid image snapshot for solving.");
-        QPointer<NativePlateSolver> safeThis(this);
-        if (safeThis) emit finished(res);
-        return;
-    }
-
-    const std::vector<float>& pixels = image.data();
-    const size_t expectedSize = static_cast<size_t>(image.width()) *
-                                static_cast<size_t>(image.height()) *
-                                static_cast<size_t>(image.channels());
-    if (pixels.size() < expectedSize || !pixels.data()) {
-        NativeSolveResult res;
-        res.errorMsg = tr("Image data buffer is inconsistent.");
         QPointer<NativePlateSolver> safeThis(this);
         if (safeThis) emit finished(res);
         return;
@@ -551,7 +543,7 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
     StarDetector detector;
     if (m_stop) return;
     detector.setMaxStars(500);
-    std::vector<DetectedStar> detected = detector.detect(image);
+    std::vector<DetectedStar> detected = detector.detectRaw(pixels.data(), w, h, ch, 0);
     if (m_stop) return;
     if (safeThis) emit logMessage(tr("Detected %1 stars in image.").arg(detected.size()));
 
@@ -564,8 +556,8 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
     }
 
     // Center and flip Y — image stars in centered coordinates
-    double imgCenterX = image.width()  * 0.5;
-    double imgCenterY = image.height() * 0.5;
+    double imgCenterX = w  * 0.5;
+    double imgCenterY = h * 0.5;
 
     std::vector<MatchStar> imgMatchStars;
     imgMatchStars.reserve(detected.size());
@@ -625,7 +617,7 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
 
         // WCS: After convergence, CRVAL = converged center, CD = trans coeffs
         if (WcsSolver::computeWcs(bestTrans, finalRA, finalDec,
-                                  image.width(), image.height(),
+                                  w, h,
                                   res.crpix1, res.crpix2,
                                   res.crval1, res.crval2, res.cd)) {
             if (safeThis) {
@@ -651,8 +643,14 @@ void NativePlateSolver::processSolving(const std::vector<MatchStar>& catStars,
 void NativePlateSolver::onCatalogReceived(const std::vector<MatchStar>& catalogStars) {
     emit logMessage(tr("Catalog received. Found %1 stars.").arg(catalogStars.size()));
 
-    // Capture member data by value so processing uses a stable snapshot.
-    ImageBuffer              imageSnapshot   = m_image;
+    // Capture and CLONE image data into a stable, non-swappable local vector.
+    // This snapshot prevents the SwapManager from invalidating data while 
+    // the background thread is searching for stars.
+    const std::vector<float> pixelSnapshot = m_image.data();
+    const int w = m_image.width();
+    const int h = m_image.height();
+    const int ch = m_image.channels();
+
     double                   pixelScale      = m_pixelScale;
     double                   raHint          = m_raHint;
     double                   decHint         = m_decHint;
@@ -662,11 +660,11 @@ void NativePlateSolver::onCatalogReceived(const std::vector<MatchStar>& catalogS
 
     if (safeThis) {
         emit logMessage(tr("Starting native solve pipeline in background..."));
-        (void)QtConcurrent::run([safeThis, catalogStars, imageSnapshot,
+        (void)QtConcurrent::run([safeThis, catalogStars, pixelSnapshot, w, h, ch,
                                   rawCatalogStars, raHint, decHint, pixelScale]() {
             if (!safeThis) return;
             try {
-                safeThis->processSolving(catalogStars, imageSnapshot,
+                safeThis->processSolving(catalogStars, pixelSnapshot, w, h, ch,
                                      rawCatalogStars, raHint, decHint, pixelScale);
             } catch (const std::exception& e) {
                 NativeSolveResult res;

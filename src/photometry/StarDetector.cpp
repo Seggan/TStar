@@ -233,7 +233,6 @@ StarDetector::RejectReason StarDetector::rejectStar(
     return RejectReason::OK;
 }
 
-// ─── detect() — main pipeline ─────────────────────────────────────────────────
 std::vector<DetectedStar> StarDetector::detect(const ImageBuffer& image, int channel)
 {
     if (!image.isValid()) {
@@ -254,6 +253,16 @@ std::vector<DetectedStar> StarDetector::detect(const ImageBuffer& image, int cha
     }
     const float* raw = pixels.data();
     if (!raw) {
+        return {};
+    }
+
+    return detectRaw(raw, w, h, ch, channel);
+}
+
+// ─── detectRaw() — core pipeline ─────────────────────────────────────────────
+std::vector<DetectedStar> StarDetector::detectRaw(const float* raw, int w, int h, int ch, int channel)
+{
+    if (!raw || w <= 0 || h <= 0 || ch <= 0) {
         return {};
     }
 

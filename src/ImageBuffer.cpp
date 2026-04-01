@@ -46,21 +46,22 @@ ImageBuffer::ImageBuffer(int width, int height, int channels)
 
 ImageBuffer::ImageBuffer(const ImageBuffer& other)
     : m_width(other.m_width), m_height(other.m_height), m_channels(other.m_channels),
-      m_data(other.m_data), m_meta(other.m_meta), m_name(other.m_name),
+      m_meta(other.m_meta), m_name(other.m_name),
       m_modified(other.m_modified), m_mask(other.m_mask), m_hasMask(other.m_hasMask),
       m_mutex(std::make_unique<QReadWriteLock>(QReadWriteLock::Recursive)),
       m_lastAccess(QDateTime::currentMSecsSinceEpoch())
 {
-    // Do not copy swap state - new buffer starts effectively loaded
+    ReadLock otherLock(&other); // Thread-safe access to other's data and swap state
+    
+    // If other is swapped, we must swap it in to copy data!
     if (other.m_isSwapped) {
-        // If other is swapped, we must swap it in to copy data!
-        // This is tricky if 'other' is const.
-        // We assume 'other.m_data' is empty if swapped.
-        // So we must force swap-in on 'other' to copy.
-        // Cast away constness safely because forceSwapIn is logical const (restore state)
+        // Cast away constness safely because forceSwapIn is logically const (it restores state)
         const_cast<ImageBuffer&>(other).forceSwapIn();
-        m_data = other.m_data;
     }
+    
+    // Now m_data is valid
+    m_data = other.m_data;
+    
     SwapManager::instance().registerBuffer(this);
 }
 

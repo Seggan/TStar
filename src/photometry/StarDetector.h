@@ -75,6 +75,7 @@ public:
 
     // ── Main entry point ──
     std::vector<DetectedStar> detect(const ImageBuffer& image, int channel = 0);
+    std::vector<DetectedStar> detectRaw(const float* raw, int w, int h, int ch, int channel = 0);
 
     // Separable Gaussian blur (σ = KERNEL_SIZE = 2.0)
     static void gaussianBlur(const float* src, float* dst,
