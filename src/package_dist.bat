@@ -68,7 +68,7 @@ if exist "%DIST_DIR%\TStar.exe" (
 )
 
 echo.
-echo [STEP 3] Copying Qt and MinGW DLLs...
+echo [STEP 3] Copying Qt and local DLLs...
 setlocal enabledelayedexpansion
 for %%f in ("%BUILD_DIR%\*.dll") do (
     copy "%%f" "%DIST_DIR%\" >nul 2>&1
@@ -81,6 +81,29 @@ for %%f in ("%BUILD_DIR%\*.dll") do (
     )
 )
 endlocal & set "COPY_COUNT=%COPY_COUNT%" & set "ERROR_COUNT=%ERROR_COUNT%"
+
+echo.
+echo [STEP 3.5] Collecting mandatory MinGW and OpenMP runtimes...
+call src\windows_utils.bat :FindMinGW
+if "%MINGW_BIN%"=="" (
+    echo   [WARNING] MinGW bin path not detected. Some runtimes may be missing.
+) else (
+    echo   - MinGW Location: %MINGW_BIN%
+    for %%f in (libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll libgomp-1.dll zlib1.dll liblz4.dll libzstd.dll) do (
+        if exist "%MINGW_BIN%\%%f" (
+            copy "%MINGW_BIN%\%%f" "%DIST_DIR%\" >nul 2>&1
+            if exist "%DIST_DIR%\%%f" (
+                set /a COPY_COUNT+=1
+                echo   - %%f: OK
+            )
+        ) else (
+            REM Some of these might be optional or named differently based on MinGW version
+            if "%%f"=="libgomp-1.dll" (
+                echo   [WARNING] libgomp-1.dll NOT FOUND. Native Solver will CRASH!
+            )
+        )
+    )
+)
 
 echo.
 echo [STEP 5] Copying OpenGL (optional)...
@@ -108,8 +131,8 @@ for %%f in ("%OPENCV_SRC_DIR%\libopencv_*.dll") do (
     set /a COPY_COUNT+=1
     set /a OPENCV_COUNT+=1
 )
-if exist "%OPENCV_SRC_DIR%\opencv_videoio_ffmpeg455_64.dll" (
-    copy "%OPENCV_SRC_DIR%\opencv_videoio_ffmpeg455_64.dll" "%DIST_DIR%\" >nul 2>&1
+for %%f in ("%OPENCV_SRC_DIR%\opencv_videoio_ffmpeg*.dll") do (
+    copy "%%f" "%DIST_DIR%\" >nul 2>&1
     set /a COPY_COUNT+=1
     set /a OPENCV_COUNT+=1
 )
@@ -120,20 +143,21 @@ echo [STEP 7] Copying GSL DLLs...
 set "GSL_SRC_DIR=deps\gsl\bin"
 if not exist "%GSL_SRC_DIR%" set "GSL_SRC_DIR=%BUILD_DIR%"
 
-for %%f in (libgsl-28.dll libgslcblas-0.dll) do (
-    if exist "%GSL_SRC_DIR%\%%f" (
-        copy "%GSL_SRC_DIR%\%%f" "%DIST_DIR%\" >nul 2>&1
-        if exist "%DIST_DIR%\%%f" (
-            set /a COPY_COUNT+=1
-            echo   - %%f: OK
-        ) else (
-            set /a ERROR_COUNT+=1
-            echo   [ERROR] %%f: FAILED
-        )
-    ) else (
-        set /a ERROR_COUNT+=1
-        echo   [ERROR] %%f: NOT FOUND IN %GSL_SRC_DIR%
+set "GSL_FOUND_COUNT=0"
+for %%f in ("%GSL_SRC_DIR%\libgsl-*.dll" "%GSL_SRC_DIR%\libgslcblas-*.dll") do (
+    copy "%%f" "%DIST_DIR%\" >nul 2>&1
+    if exist "%DIST_DIR%\%%~nxf" (
+        set /a COPY_COUNT+=1
+        set /a GSL_FOUND_COUNT+=1
+        echo   - %%~nxf: OK
     )
+)
+
+if %GSL_FOUND_COUNT% equ 0 (
+    echo   [ERROR] No GSL DLLs found in %GSL_SRC_DIR%
+    set /a ERROR_COUNT+=1
+) else (
+    echo   - GSL DLLs successfully collected.
 )
 
 echo.

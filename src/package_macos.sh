@@ -168,16 +168,16 @@ copy_dylib "libz.dylib" "zlib" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || {
     fi
 }
 
-copy_dylib "libgsl" "gsl" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libgslcblas" "gsl" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libcfitsio" "cfitsio" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "liblz4" "lz4" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libzstd" "zstd" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libomp" "libomp" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libbrotlicommon" "brotli" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libbrotlidec" "brotli" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libraw" "libraw" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
-copy_dylib "libmd4c" "md4c" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
+copy_dylib "libgsl" "gsl" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libgslcblas" "gsl" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libcfitsio" "cfitsio" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "liblz4" "lz4" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libzstd" "zstd" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libomp" "libomp" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libbrotlicommon" "brotli" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libbrotlidec" "brotli" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libraw" "libraw" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
+copy_dylib "libmd4c" "md4c" "$FRAMEWORKS_DIR" "$BUILD_ARCH"
 
 copy_dylib "libopenblas.0" "openblas" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || \
 copy_dylib "libopenblas" "openblas" "$FRAMEWORKS_DIR" "$BUILD_ARCH" || true
@@ -227,7 +227,7 @@ if [ ! -d "$OPENCV_PREFIX/lib" ]; then
 fi
 
 if [ -n "$OPENCV_PREFIX" ] && [ -d "$OPENCV_PREFIX/lib" ]; then
-    OPENCV_MODULES="core imgproc imgcodecs photo features2d calib3d"
+    OPENCV_MODULES="core imgproc imgcodecs photo features2d calib3d video videoio objdetect flann"
     
     COPIED_COUNT=0
     for module in $OPENCV_MODULES; do
