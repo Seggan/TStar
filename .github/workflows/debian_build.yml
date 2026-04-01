@@ -1,0 +1,46 @@
+name: debian_build.yml
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+jobs:
+  package:
+    name: Build Debian Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          sudo apt update && sudo apt install -y build-essential libgl1-mesa-dev qt6-base-dev qt6-svg-dev qt6-tools-dev cmake clazy g++ ninja-build pkg-config libopencv-dev libgsl-dev libcfitsio-dev libomp-dev libmd4c-dev liblcms2-dev libcurl4-gnutls-dev liblz4-dev libzstd-dev libraw-dev
+
+      - name: Package Python venv
+        run: |
+          ./setup_python_linux.sh
+
+      - name: Build TStar
+        run: |
+          ./src/build_linux.sh
+
+      - name: Create Debian Package
+        run: |
+          ./src/package_deb.sh
+
+      - name: Upload Debian Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tstar-deb-x86_64
+          path: dist/*.deb

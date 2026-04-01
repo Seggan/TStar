@@ -278,3 +278,39 @@ The macOS build supports several optional features that are automatically enable
 
 These libraries are automatically detected by CMake and bundled into the app during packaging.
 
+---
+## Building on Debian Linux
+### Install dependencies
+```bash
+sudo apt update
+sudo apt install build-essential libgl1-mesa-dev
+sudo apt install qt6-base-dev qt6-svg-dev qt6-tools-dev cmake clazy g++
+sudo apt install ninja-build pkg-config
+sudo apt install libopencv-dev libgsl-dev libcfitsio-dev libomp-dev libmd4c-dev liblcms2-dev libcurl4-gnutls-dev
+```
+
+Additionally, Python 3.11 or 3.12 is required for the AI tools and bridge scripts.
+
+### Install optional dependencies for XISF compression and RAW support
+```bash
+sudo apt install liblz4-dev libzstd-dev
+sudo apt install libraw-dev
+```
+
+### Build the application
+```bash
+# 1. Setup Python environment
+chmod +x setup_python_linux.sh
+./setup_python_linux.sh
+
+# 2. Build the application
+chmod +x src/build_linux.sh
+./src/build_linux.sh
+
+# 3. Create distribution package
+chmod +x src/package_linux.sh
+./src/package_linux.sh
+```
+
+A `.deb` package will be created in the `dist/` folder for easy installation on Debian-based systems.
+
