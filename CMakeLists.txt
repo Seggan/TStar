@@ -342,7 +342,7 @@ else()
         get_target_property(LZ4_INCLUDE_DIRS LZ4::lz4_static INTERFACE_INCLUDE_DIRECTORIES)
     else()
         find_package(PkgConfig QUIET)
-        pkg_check_modules(LZ4 QUIET IMPORTED_TARGET lz4)
+        pkg_check_modules(LZ4 QUIET IMPORTED_TARGET liblz4)
     endif()
 endif()
 
