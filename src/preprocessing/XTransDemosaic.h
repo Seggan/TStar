@@ -23,11 +23,11 @@ public:
     static bool demosaic(const ImageBuffer& input, ImageBuffer& output, Algorithm algo = Algorithm::Markesteijn);
     
 private:
-    static void interpolateMarkesteijn(const ImageBuffer& input, ImageBuffer& output);
-    static void interpolateVNG(const ImageBuffer& input, ImageBuffer& output);
+    static void interpolateMarkesteijn(const ImageBuffer& input, ImageBuffer& output, const int pattern[6][6]);
+    static void interpolateVNG(const ImageBuffer& input, ImageBuffer& output, const int pattern[6][6]);
     
     // 6x6 Pattern Helper
-    static int getPixelType(int x, int y); // 0=G, 1=R, 2=B
+    static int getPixelType(int x, int y, const int pattern[6][6]); // 0=G, 1=R, 2=B
 };
 
 } // namespace Preprocessing

@@ -106,7 +106,7 @@ void UpdateChecker::onReplyFinished(QNetworkReply* reply) {
 }
 
 void UpdateChecker::fetchChangelog() {
-    // We fetch from master branch, or we could try to fetch from the specific tag if known. 
+    // Fetch from master branch; version-specific tags could be used alternatively 
     // Fetching from master is usually fine for latest.
     QNetworkRequest request(QUrl("https://raw.githubusercontent.com/Ft2801/TStar/master/changelog.txt"));
     request.setHeader(QNetworkRequest::UserAgentHeader, "TStar-Updater");

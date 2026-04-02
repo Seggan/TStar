@@ -36,8 +36,17 @@ static QString deduceBayerPattern(libraw_data_t* lr)
     unsigned int f = lr->idata.filters;
 
     // X-Trans (Fujifilm) – 6x6 pattern, not a simple Bayer grid
-    if (f == 9)
-        return "XTRANS";
+    if (f == 9) {
+        QString pat;
+        const char* desc = lr->idata.cdesc; // usually "RGBG"
+        for (int r = 0; r < 6; ++r) {
+            for (int c = 0; c < 6; ++c) {
+                int idx = lr->idata.xtrans[r][c];
+                pat += desc[idx];
+            }
+        }
+        return pat;
+    }
 
     // Foveon / no-filter sensors
     if (f == 0)

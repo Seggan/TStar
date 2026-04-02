@@ -92,7 +92,7 @@ namespace RobustStatistics {
         
         // 4. Final Calculation
         if (inliers.size() < 5) {
-            // Not enough inliers? Use Trimmed Mean of original data (30% trim)
+            // Insufficient inliers: use Trimmed Mean (30% trim) on original data
             return standardTrimmedMean(data, 0.3f);
         } else {
             return (float)(sum / inliers.size());
@@ -221,7 +221,7 @@ namespace RobustStatistics {
     float getMedian(const std::vector<float>& data) {
         if (data.empty()) return 0.0f;
         float med;
-        // Use 4 threads default? Or max?
+        // Use maximum available threads for parallel computation
         findMinMaxPercentile(data.data(), data.size(), 0.5f, &med, 0.5f, nullptr, omp_get_max_threads());
         return med;
     }

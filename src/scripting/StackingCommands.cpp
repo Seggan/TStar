@@ -338,7 +338,6 @@ bool StackingCommands::cmdSave(const ScriptCommand& cmd) {
     QString ext = QFileInfo(path).suffix().toLower();
     if (ext != "fit" && ext != "fits" && ext != "fts") {
         path += ".fit";
-        // Re-write if name changed (actually better to just ensure path is correct BEFORE writing)
     }
 
     return true;
@@ -1038,7 +1037,7 @@ bool StackingCommands::cmdLinearMatch(const ScriptCommand& cmd) {
     
     // Compute stats using Statistics module
     // We need Median and MAD (Mean Absolute Deviation)
-    // For simplicity, let's just do it on the first channel if mono
+    // For mono images, apply the operation on the first channel only
     
     int sizeRef = refImg.width() * refImg.height();
     int sizeTgt = tgtImg.width() * tgtImg.height();

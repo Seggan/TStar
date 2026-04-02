@@ -52,9 +52,9 @@ bool SERFile::readHeader() {
     m_file.read(reinterpret_cast<char*>(&m_header), sizeof(Header)); // 178 bytes
     
     // Check ID
-    // Note: sizeof(Header) might be padded by compiler. 
-    // Manual read is safer but struct is mostly 4-byte packed.
-    // Let's verify string.
+    // Note: sizeof(Header) may include compiler padding.
+    // Manual read is safer, but the structure is mostly 4-byte packed.
+    // Verify the string.
     std::string id(m_header.fileID, 14);
     if (id != "LUCAM-RECORDER") return false;
     

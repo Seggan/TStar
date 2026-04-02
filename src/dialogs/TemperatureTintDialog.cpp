@@ -7,10 +7,16 @@
 #include "../ImageViewer.h"
 #include <algorithm>
 #include <cmath>
+#include <QTimer>
 
 TemperatureTintDialog::TemperatureTintDialog(QWidget* parent, ImageViewer* viewer)
     : DialogBase(parent, tr("Temperature / Tint"), 420, 120), m_viewer(nullptr), m_buffer(nullptr)
 {
+    m_previewTimer = new QTimer(this);
+    m_previewTimer->setSingleShot(true);
+    m_previewTimer->setInterval(150); // 150ms debounce
+    connect(m_previewTimer, &QTimer::timeout, this, &TemperatureTintDialog::updatePreview);
+
     setupUI();
     if (viewer) {
         setViewer(viewer);
@@ -122,8 +128,16 @@ void TemperatureTintDialog::computeGain(float& r, float& g, float& b) const {
 void TemperatureTintDialog::triggerPreview() {
     if (!m_viewer || !m_buffer || !m_originalBuffer.isValid()) return;
     if (m_chkPreview && !m_chkPreview->isChecked()) return;
+    
+    // Debounce: restart the timer
+    m_previewTimer->start();
+}
 
-    // Reset to clean state
+void TemperatureTintDialog::updatePreview() {
+    if (!m_viewer || !m_buffer || !m_originalBuffer.isValid()) return;
+    if (m_chkPreview && !m_chkPreview->isChecked()) return;
+
+    // Reset to clean state (Deep copy - this is the expensive part)
     *m_buffer = m_originalBuffer;
 
     float r, g, b;
@@ -192,7 +206,8 @@ void TemperatureTintDialog::setViewer(ImageViewer* viewer) {
         if (m_viewer->getBuffer().isValid()) {
             m_buffer = &m_viewer->getBuffer();
             m_originalBuffer = *m_buffer;
-            triggerPreview();
+            // Immediate first preview for responsiveness
+            updatePreview();
         }
     }
 }

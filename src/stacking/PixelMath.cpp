@@ -41,7 +41,7 @@ bool PixelMath::evaluate(const QString& expression, ImageBuffer& output) {
     
     auto rpn = shuntingYard(tokens);
     if (rpn.empty()) {
-        return false; // Error set in shuntingYard usually, or truly empty
+        return false; // Error is reported by shuntingYard, or the expression is empty
     }
     
     return executeRPN(rpn, output);
@@ -78,10 +78,8 @@ std::vector<PixelMath::Token> PixelMath::tokenize(const QString& expr) {
             }
             Token t; 
             t.value = name;
-            // Identifying if function or var?
-            // If next char is '(', it's likely function (except if it's a variable multiplied implicit? No support for implicit mul)
-            // But '$' logic suggests variable.
-            // Check known functions
+              // Determine whether the token is a function or variable.
+              // Function names are recognized explicitly below.
             if (name == "mtf" || name == "min" || name == "max" || name == "median") 
                  t.type = Token::Function;
             else 
@@ -95,9 +93,9 @@ std::vector<PixelMath::Token> PixelMath::tokenize(const QString& expr) {
             if (c == '(') t.type = Token::LParen;
             else if (c == ')') t.type = Token::RParen;
             else if (c == ',') t.type = Token::Comma;
-            else if (c == '~') t.type = Token::Function; // Treat Unary ~ as function "invert" internally? Or Operator
+            else if (c == '~') t.type = Token::Function; // Treat unary ~ as an invert operator internally
             
-            // ~ is unary prefix.
+                // ~ is a unary prefix.
             if (c == '~') {
                t.type = Token::Operator; // Unary operator priority
             }
@@ -172,7 +170,7 @@ struct Operand {
     
     float getValue(int x, int y, int c) const {
         if (isImage && img) {
-            // Handle bounds? Assuming aligned.
+            // Handle bounds assuming aligned buffers.
             if (c >= img->channels()) c = 0; // Mono fallback
             return img->value(x, y, c);
         }
@@ -200,7 +198,7 @@ bool PixelMath::executeRPN(const std::vector<Token>& rpn, ImageBuffer& output) {
         }
     }
     
-    if (w == 0) { // All scalars? Default 1x1
+    if (w == 0) { // All scalars: default to 1x1
         w=1; h=1; c=1;
     }
     

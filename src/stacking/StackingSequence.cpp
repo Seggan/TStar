@@ -685,11 +685,9 @@ bool ImageSequence::computeCometShifts(int refIndex, int targetIndex) {
     double cx2 = targetImg.registration.cometX;
     double cy2 = targetImg.registration.cometY;
     
-    // These positions are usually in the ALIGNED reference frame if user clicked after registration
-    // OR in raw frame.
-    // Case 1: Stars are registered. User sees aligned images. User clicks comet in #1 and #N.
-    // The clicked coordinates are in the Aligned Space.
-    // So cx1, cx2 are aligned coordinates.
+    // These positions are in the aligned reference frame when the user clicks after registration.
+    // Case 1: stars are registered and the user clicks the comet in #1 and #N.
+    // The clicked coordinates are in aligned space.
     // Velocity V = (Pos2_aligned - Pos1_aligned) / dt.
     // Shift_Comet(t) = - V * dt.
     // This shift is ADDED to the existing star alignment.

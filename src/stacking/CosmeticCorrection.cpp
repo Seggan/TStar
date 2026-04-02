@@ -115,8 +115,7 @@ CosmeticMap CosmeticCorrection::findDefects(const ImageBuffer& dark, float hotSi
             
             // Need enough neighbors for stats
             if (neighbors.size() < 4) {
-                // Edge case: Trust global? Or reject?
-                // Let's trust global if on edge
+                // Edge case: trust the global map at the border
                 if (potentialHot) map.hotPixels[i] = true;
                 if (potentialCold) map.coldPixels[i] = true;
                 defects++;
@@ -170,7 +169,7 @@ void CosmeticCorrection::apply(ImageBuffer& image, const CosmeticMap& map, bool 
 void CosmeticCorrection::apply(ImageBuffer& image, const CosmeticMap& map, int offsetX, int offsetY, bool cfa) {
     if (!image.isValid() || !map.isValid()) return;
     
-    // Bounds check? No, trust caller or clip.
+    // Image coordinates map to cosmetic map via offsets (caller ensures valid bounds)
     // offsets are such that image pixel (x,y) corresponds to map pixel (x+offsetX, y+offsetY)
 
     int width = image.width();

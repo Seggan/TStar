@@ -157,7 +157,7 @@ void fix_banding_c(float* image, int width, int height, int channels, int cfa_pa
             size_t step = (total_px > 2000000) ? 10 : 1; 
             
             // Gather ALL pixels of this channel/phase into med_buffer
-            // Stride X = channels * step? No, step is for subsampling.
+            // Stride for subsampling; channels is the pixel size
             // Pixel Addr = (y * width + x) * channels + c
             
             for(int y = p; y < height; y += phases_y) {
@@ -173,28 +173,26 @@ void fix_banding_c(float* image, int width, int height, int channels, int cfa_pa
             }
         }
         
-        // Per-row correction
-        #pragma omp parallel for num_threads(threads)
-        for(int y = 0; y < height; ++y) {
-            // Determine phase
-            int p = y % phases_y;
-            
-            // Gather row (INTERLEAVED stride)
-            // Cannot use memcpy. Must loop.
-            // allocate local stack buffer? or use shared?
-            // malloc inside omp loop is slow.
-            // Let's alloc 'row_samples' locally.
-            float* row_samples = (float*)malloc(width * sizeof(float));
-            if(row_samples) {
-                for(int x=0; x<width; ++x) {
-                    row_samples[x] = image[(y * width + x) * channels + c];
+        // Per-row correction: use per-thread buffers to avoid malloc in loop
+        float* thread_samples = (float*)malloc((size_t)threads * width * sizeof(float));
+        if (thread_samples) {
+            #pragma omp parallel num_threads(threads)
+            {
+                int tid = omp_get_thread_num();
+                float* local_samples = thread_samples + (size_t)tid * width;
+                
+                #pragma omp for
+                for(int y = 0; y < height; ++y) {
+                    int p = y % phases_y;
+                    for(int x=0; x<width; ++x) {
+                        local_samples[x] = image[(y * width + x) * channels + c];
+                    }
+                    qsort(local_samples, width, sizeof(float), cmp_float);
+                    float row_q1 = local_samples[width/4];
+                    row_corrections[y] = targets[p] - row_q1;
                 }
-                qsort(row_samples, width, sizeof(float), cmp_float);
-                // Use 1Q (25th percentile) for the row as well to ignore stars gracefully!
-                float row_q1 = row_samples[width/4];
-                row_corrections[y] = targets[p] - row_q1;
-                free(row_samples);
             }
+            free(thread_samples);
         }
         
         // Apply
@@ -389,9 +387,8 @@ void fix_bad_lines_c(float* image, int width, int height, int channels, int cfa_
 
 void equalize_cfa_c(float* image, int width, int height, int pattern_type, int threads) {
     if (!image) return;
-    // Assuming Mono Raw for CFA Equalization (channels=1 usually)
-    // If it were RGB, it would be weird to equalize CFA.
-    // So assume stride 1.
+    // CFA equalization operates on mono raw data.
+    // Use a stride of 1.
     
     int block_w = (pattern_type == 4) ? 6 : 2;
     int block_h = (pattern_type == 4) ? 6 : 2;
@@ -607,8 +604,8 @@ static float evaluate_uncalibrated_noise(const float* light, const float* dark,
     int n_pixels = roi_w * roi_h;
     if (n_pixels <= 0) return 0.0f;
     
-    // Limit sample size for speed?
-    // Let's use max 50000 pixels
+    // Limit sample size for performance
+    // Use a maximum of 50000 pixels
     int step = 1;
     if (n_pixels > 50000) step = n_pixels / 50000;
     
@@ -643,14 +640,12 @@ static float evaluate_uncalibrated_noise(const float* light, const float* dark,
     
     free(diffs);
     
-    // Normalize by median intensity? 
     // C++ version: totalNoise += noise / abs(median) if median > 1e-6
     // But here 'median' is median of DIFF. That's approx 0.
     // The C++ logic was median of DIFF (Light - kDark).
     // If median of diff is 0, we just return MAD.
-    // Wait, typical background is > 0. 
-    // Light ~ Dark + Sky. Light - Dark ~ Sky. Sky > 0.
-    // So Median ~ SkyBackground.
+    // Typical background is > 0. Light ~ Dark + Sky. Light - Dark ~ Sky. Sky > 0.
+    // Therefore Median ~ SkyBackground.
     
     if (fabsf(median) > 1e-6f) {
         return mad / fabsf(median);
@@ -724,7 +719,7 @@ void apply_cosmetic_correction_c(float* image, int width, int height, int channe
                 float neighbors[8];
                 int n_count = 0;
                 
-                // If CFA (channels=1 usually, but could be 3 if debayer not done yet? No usually pre-debayer)
+                // CFA is typically single-channel; debayer is performed separately
                 if (channels == 1 && cfa_pattern >= 0) {
                    // Same-color separation is 2
                    // 4 neighbors: (x-2, y), (x+2, y), (x, y-2), (x, y+2)
@@ -813,8 +808,82 @@ void apply_cosmetic_correction_c(float* image, int width, int height, int channe
 void fix_xtrans_c(float* image, int width, int height,
                   const char* bay_pattern, const char* model_name,
                   int threads) {
-    // X-Trans support is reserved for future implementation.
-    // Currently, this function serves as a placeholder to allow the application to
-    // compile and run with X-Trans images, albeit without specific artifact correction.
-    (void)image; (void)width; (void)height; (void)bay_pattern; (void)model_name; (void)threads;
+    if (!image || !bay_pattern) return;
+
+    // Determine X-Trans color map from bay_pattern (should be 36 chars) or fallback
+    int xt_map[6][6];
+    int pattern_len = (int)strlen(bay_pattern);
+    
+    if (pattern_len >= 36) {
+        // Parse the 6x6 pattern string provided by RawLoader (e.g. "GRGGBG...")
+        for (int i = 0; i < 36; ++i) {
+            char c = bay_pattern[i];
+            int color = 0; // Default G
+            if (c == 'R' || c == 'r') color = 1;
+            else if (c == 'B' || c == 'b') color = 2;
+            xt_map[i / 6][i % 6] = color;
+        }
+    } else {
+        // Fallback to standard X-Trans 6x6 map
+        // (Used if metadata is missing or if it's an older Fuji model identified by model_name)
+        static const int std_xt[6][6] = {
+            {0, 1, 0, 0, 2, 0},
+            {1, 0, 1, 2, 0, 2},
+            {0, 1, 0, 0, 2, 0},
+            {0, 2, 0, 0, 1, 0},
+            {2, 0, 2, 1, 0, 1},
+            {0, 2, 0, 0, 1, 0}
+        };
+
+        // If bay_pattern is missing, we could use model_name to pick specific offsets.
+        // For now, we use it to log or as a hook for future model-specific variants.
+        if (model_name && (strstr(model_name, "X-T") || strstr(model_name, "X-H"))) {
+            // Logic for standard X-Trans series
+        }
+
+        memcpy(xt_map, std_xt, sizeof(xt_map));
+        
+        #ifdef _DEBUG
+        if (model_name) printf("[CalibrationC] Using default X-Trans pattern for %s\n", model_name);
+        #endif
+    }
+
+    // X-Trans 6x6 identification
+    // We look for same-colored neighbors in a 5x5 or 7x7 window to perform median filtering on outliers
+    // Since X-Trans is complex, we use a slightly larger window than Bayer
+    
+    #pragma omp parallel for collapse(2) num_threads(threads)
+    for (int y = 3; y < height - 3; ++y) {
+        for (int x = 3; x < width - 3; ++x) {
+            float val = image[y * width + x];
+            int color = xt_map[y % 6][x % 6];
+            
+            // Collect same-colored neighbors in 7x7 window
+            float neighbors[24]; // X-Trans has many green pixels, fewer R/B
+            int count = 0;
+            for (int dy = -3; dy <= 3; ++dy) {
+                for (int dx = -3; dx <= 3; ++dx) {
+                    if (dx == 0 && dy == 0) continue;
+                    if (xt_map[(y + dy) % 6][(x + dx) % 6] == color) {
+                        if (count < 24) neighbors[count++] = image[(y + dy) * width + (x + dx)];
+                    }
+                }
+            }
+            
+            if (count >= 4) {
+                // Determine if outlier
+                qsort(neighbors, count, sizeof(float), cmp_float);
+                float median = (count % 2 == 0) ? (neighbors[count/2 - 1] + neighbors[count/2]) * 0.5f : neighbors[count/2];
+                float mad_sum = 0;
+                for(int i=0; i<count; ++i) mad_sum += fabsf(neighbors[i] - median);
+                float sigma = (mad_sum / count) * 1.4826f;
+                if (sigma < 1e-6f) sigma = 1e-6f;
+                
+                // If value is > 8 sigma from median, it's likely a hot/cold pixel
+                if (fabsf(val - median) > 8.0f * sigma) {
+                    image[y * width + x] = median;
+                }
+            }
+        }
+    }
 }

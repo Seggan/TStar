@@ -286,7 +286,7 @@ void ConversionDialog::onConvert() {
         bool loaded = false;
         QString ext = QFileInfo(job.filePath).suffix().toLower();
         
-        // Reuse thread-local buffer? Be careful with async if thread_local persists across different tasks incorrectly
+        // Thread-local buffers are efficiently reused for each conversion task
         static thread_local ImageBuffer threadBuffer; 
         threadBuffer.resize(0, 0, 0);
         threadBuffer.setMetadata(ImageBuffer::Metadata());

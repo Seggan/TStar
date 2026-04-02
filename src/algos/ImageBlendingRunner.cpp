@@ -57,7 +57,7 @@ bool ImageBlendingRunner::run(const ImageBuffer& base, const ImageBuffer& top, I
             float bVal = (baseC == 3) ? bData[i * 3 + ch] : bData[i];
             float tVal = (topC == 3) ? tData[i * 3 + ch] : tData[i];
 
-            // If we are blending Mono into Color, we might target specific channels
+            // When blending Mono into Color, specific channels can be targeted
             bool applyInChannel = true;
             if (baseC == 3 && topC == 1) {
                 if (params.targetChannel != 3 && params.targetChannel != ch) {

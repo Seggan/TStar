@@ -119,7 +119,7 @@ void HeaderViewerDialog::setupUI() {
     
     // Set Delegate for Value Column (Index 1)
     m_table->setItemDelegateForColumn(1, new HeaderWordWrapDelegate(m_table));
-    // Also for comment? Maybe
+    // Set Delegate for Comment Column (Index 2)
     m_table->setItemDelegateForColumn(2, new HeaderWordWrapDelegate(m_table));
     
     // Set column widths before resizing rows

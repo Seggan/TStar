@@ -460,7 +460,7 @@ void CurvesDialog::onReset() {
 CurvesDialog::State CurvesDialog::getState() const {
     State s;
     s.points = m_graph->getPoints();
-    // Read directly from graph private members? No, need accessors or use UI toggles.
+    // Direct graph access unavailable; use public accessors or UI toggles
     // Graph doesn't expose log/grid getters easily but we have toggles.
     s.logScale = m_logBtn->isChecked();
     s.showGrid = m_gridBtn->isChecked();

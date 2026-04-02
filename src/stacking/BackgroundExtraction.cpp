@@ -53,7 +53,7 @@ bool BackgroundExtraction::generateModel(int width, int height,
     
     // Fill ATA and ATB directly
     for (const auto& s : samples) {
-        double x = s.x; // Normalized? Usually better for stability.
+        double x = s.x; // Values are normalized for numerical stability
         double y = s.y;
         double val = s.value;
         

@@ -53,7 +53,7 @@ bool XISFWriter::write(const QString& filePath, const ImageBuffer& buffer,
         QByteArray compressed = CompressionUtils::compress(
             toCompress, options.codec, options.compressionLevel, errorMsg);
         
-        // Only use compression if it actually reduces size
+        // Use compression only if it reduces size
         if (!compressed.isEmpty() && compressed.size() < rawData.size()) {
             dataToWrite = compressed;
             compressionAttr = CompressionUtils::buildCompressionAttr(

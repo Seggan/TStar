@@ -260,7 +260,7 @@ QString ScriptRunner::substituteVariables(const QString& text) const {
         // Since we can't easily include StackingCommands.h here without circularity,
         // we'll rely on ImageBuffer structure if we had access, or just metadata.
         
-        // Let's try to get it from a static accessor if possible or just use a placeholder
+        // Attempt to extract current image from static accessor or use placeholder reference
         // that the command handlers will handle? No, substitution should be here.
         
         // In this project, StackingCommands::getCurrentImage() is the way.

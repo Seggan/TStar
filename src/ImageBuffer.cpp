@@ -238,7 +238,8 @@ void ImageBuffer::doSwapIn() {
         qint64 bytesRead = file.read(reinterpret_cast<char*>(m_data.data()), size * sizeof(float));
         if (bytesRead != static_cast<qint64>(size * sizeof(float))) {
             qCritical() << "Swap Read Error: Expected" << size*sizeof(float) << "got" << bytesRead;
-            // Fill with zero to prevent crash?
+            // Initialize with zero to avoid uninitialized data
+            std::fill(m_data.begin(), m_data.end(), 0.0f);
         }
         
         file.close();
@@ -460,7 +461,7 @@ bool ImageBuffer::loadTiff32(const QString& filePath, QString* errorMsg, QString
         case CV_8U:  scale = 1.0 / 255.0; break;
         case CV_16U: scale = 1.0 / 65535.0; break;
         case CV_32S: 
-            // 32-bit signed - but TIFF might actually be unsigned, try SimpleTiffReader
+            // 32-bit signed data - attempt reading via SimpleTiffReader to handle unsigned TIFF formats
             {
                 int tw, th, tc;
                 std::vector<float> tdata;
@@ -1409,7 +1410,7 @@ QImage ImageBuffer::getDisplayImage(DisplayMode mode, bool linked, const std::ve
                 // Since this is downsampled, we need to map x,y to mask coords
                 int maskX = x * stepX;
                 
-                // For better quality, maybe average? simpler: nearest neighbor
+                // Use nearest neighbor interpolation for mask coordinates
                 float mVal = maskRow ? maskRow[maskX] : 0.0f;
                 if (m_mask.inverted) mVal = 1.0f - mVal;
                 
@@ -2906,7 +2907,7 @@ void ImageBuffer::rotate(float angleDegrees) {
     t.translate(centerX, centerY);
     t.rotate(angleDegrees);
     t.translate(-centerX, -centerY);
-    // Let's build explicitly:
+    // Build the display image explicitly:
     QTransform wcsTrans;
     wcsTrans.translate(newCenterX, newCenterY);
     wcsTrans.rotate(angleDegrees);

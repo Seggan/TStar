@@ -358,9 +358,7 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
 
         // Calculate parameters - ASTAP CLI expects the FOV of the HEIGHT dimension 
         // if width > height (landscape) or the WIDTH if height > width (portrait).
-        // Standard definition: FOV of the largest dimension? 
-        // The ASTAP manual says: "-fov <v> image height (or width if smaller) in degrees"
-        // Actually, it's usually defined as height.
+        // The ASTAP manual specifies: "-fov <v> image height (or width if smaller) in degrees"
         double fovDeg = (std::min(width, height) * pixelScale) / 3600.0;
         
         // For large FOV (>12°), apply conservative factor to account for optical distortion

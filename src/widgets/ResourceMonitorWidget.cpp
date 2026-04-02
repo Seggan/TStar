@@ -407,11 +407,9 @@ float ResourceMonitorWidget::queryGpuUsage() {
         nvmlUtilization_t_ util;
         if (s_nvmlDeviceGetUtilizationRates(m_nvmlDevice, &util) == NVML_SUCCESS_) {
              // If NVML reports > 0 usage, return it. 
-             // If 0, it might be idle or user is using iGPU. 
-             // We could check PDH too and take max, but let's trust NVML if it's there.
-             // Actually, hybrid graphics (Optimus) might have dGPU sleeping (0%) while iGPU works.
-             // So if NVML is 0, we might want to peek at PDH?
-             // For simplicity, if NVML works, we use it. 
+             // If 0, the discrete GPU may be idle or the integrated GPU may be active. 
+             // With hybrid graphics (Optimus), dGPU may sleep (0%) while iGPU is in use.
+             // Trust NVML when available. 
              return (float)util.gpu; 
         }
     }
@@ -440,11 +438,11 @@ void ResourceMonitorWidget::initPdh() {
     }
     
     // Add counter for all GPU engines "GPU Engine(*)\Utilization Percentage"
-    // English locale might be required or localized names. PdhAddCounter works with localized paths usually.
-    // To be safe internationally, PdhAddEnglishCounter is better if available (Vista+).
+    // Prefer PdhAddEnglishCounter when available; otherwise fall back to localized names.
     // Utilization Percentage is standard.
     if (PdhAddEnglishCounterW(m_pdhQuery, L"\\GPU Engine(*)\\Utilization Percentage", 0, &m_pdhGpuCounter) != ERROR_SUCCESS) {
-         // Fallback to localized if English fails (unlikely on modern Windows)
+         // Fallback to localized if English fails (unlikely on modern Windows, but possible if PDH is corrupt)
+         // Note: Users on non-English Windows might need the localized counter name if English index is missing
          if (PdhAddCounterW(m_pdhQuery, L"\\GPU Engine(*)\\Utilization Percentage", 0, &m_pdhGpuCounter) != ERROR_SUCCESS) {
              m_pdhAvailable = false;
              PdhCloseQuery(m_pdhQuery);
@@ -520,14 +518,10 @@ QString ResourceMonitorWidget::getGpuNameDxgi() {
         }
         
         // Found a hardware adapter
-        // Use the first one found (usually primary) or prioritize discrete?
-        // Usually iGPU is index 0 or discrete is index 0 depending on BIOS.
-        // We'll just take the first real HW GPU.
+        // Use the first hardware GPU found.
         bestName = QString::fromWCharArray(desc.Description);
         adapter->Release();
         break; 
-        
-        // Note: multiple GPUs? We just pick one for the name label for now.
     }
     
     factory->Release();

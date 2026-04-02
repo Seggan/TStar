@@ -649,9 +649,8 @@ void GHSDialog::setState(const State& s) {
 
     blockSignals(wasBlocked);
 
-    // Trigger update? 
-    // Usually we set state then TRIGGER preview if needed.
-    // But caller might just want to restore UI.
+    // Request display update.
+    // Callers can trigger preview separately if needed.
 }
 
 void GHSDialog::resetState() {

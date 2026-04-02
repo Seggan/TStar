@@ -41,7 +41,7 @@ public:
         bool channels[3];
         bool logScale;
         int sliderD, sliderB, sliderSP, sliderLP, sliderHP, sliderBP;
-        // Zoom handled separately? No, zoom is purely UI.
+        // Zoom is a UI-only parameter, not part of the algorithm
     };
     State getState() const;
     void setState(const State& s);

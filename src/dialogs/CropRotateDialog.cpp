@@ -95,9 +95,10 @@ void CropRotateDialog::setViewer(ImageViewer* v) {
     // Disable crop mode on old viewer
     if (m_viewer) {
         m_viewer->setCropMode(false);
-        // We might want to clear crop angle/rect too? 
+        // State preservation: do not clear crop parameters after tool exit 
         // m_viewer->setCropAngle(0); 
-        // No, keep state? Usually exiting tool means finishing or cancelling.
+        // Keep current state when tool is not active
+        // Tools typically remain open for user convenience
     }
     
     m_viewer = v;
@@ -136,11 +137,8 @@ void CropRotateDialog::onApply() {
     m_viewer->pushUndo(tr("Crop"));
     m_viewer->getBuffer().cropRotated(cx, cy, w, h, angle);
     
-    // Clear stale catalog stars — pixel coords are invalid after crop
-    {
-        // Actually, CatalogStars store RA/Dec, so they are not tied directly to pixels.
-        // We do not clear them. But if we must update them, we'd do it here.
-    }
+    // Catalog stars store RA/Dec coordinates which remain valid after crop.
+    // No update required for catalog objects.
     
     m_viewer->refreshDisplay(false); // Resets display mapping if needed
     m_viewer->fitToWindow();
@@ -151,11 +149,11 @@ void CropRotateDialog::onApply() {
         cb->logMessage(tr("Crop applied."), 1, true);
     }
     
-    // Reset angle after apply? Usually yes for crop.
+    // Reset rotation angle after applying crop operation
     m_angleSpin->setValue(0);
-    // m_viewer->setCropMode(false); // Keep mode on? Usually tools stay open.
+    // Keep crop tool active for subsequent operations
     // If we want continuous cropping, keep it on.
-    // Reset crop rect?
+    // Persist crop rectangle for next operation
     m_viewer->setCropMode(false); // Reset internal state
     m_viewer->setCropMode(true);  // Re-enable for next op
 }

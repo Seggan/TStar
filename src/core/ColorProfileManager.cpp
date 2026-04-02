@@ -369,7 +369,7 @@ bool ColorProfileManager::convertProfile(ImageBuffer& buffer, const ColorProfile
     }
 
     // TYPE_RGB_FLT assumes ImageBuffer uses standard float 3-channel data
-    // LittleCMS expects planar or interleaved? TYPE_RGB_FLT is interleaved float.
+    // LittleCMS uses interleaved float format (TYPE_RGB_FLT)
     cmsHTRANSFORM hTransform = cmsCreateTransform(
         hInProfile, TYPE_RGB_FLT,
         hOutProfile, TYPE_RGB_FLT,

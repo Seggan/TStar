@@ -46,9 +46,15 @@ double SwapManager::getMemoryUsagePercent() {
     DWORDLONG physMemUsed = memInfo.ullTotalPhys - memInfo.ullAvailPhys;
     return (static_cast<double>(physMemUsed) / totalPhysMem) * 100.0;
 #else
-    // Minimal Linux/Mac stub - assuming okay for now or use sysconf
-    // Todo: Impl for Mac
-    return 0.0; 
+    // Linux/Mac implementation using sysconf
+    long pages = sysconf(_SC_PHYS_PAGES);
+    long avail_pages = sysconf(_SC_AV_PHYS_PAGES);
+    long page_size = sysconf(_SC_PAGESIZE);
+    if (pages <= 0 || page_size <= 0) return 0.0;
+    
+    double totalPhysMem = (double)pages * page_size;
+    double physMemUsed = (double)(pages - avail_pages) * page_size;
+    return (physMemUsed / totalPhysMem) * 100.0;
 #endif
 }
 
@@ -87,16 +93,15 @@ void SwapManager::checkMemoryPressure() {
         return a->getLastAccessTime() < b->getLastAccessTime();
     });
     
-    // Swap out until usage drops? 
+    // Evict buffers until memory pressure reduces 
     // Or just swap standard batch (e.g. 1 at a time to avoid lag spike)
-    // Let's swap the oldest one.
+    // Swap the oldest buffer first.
     
     for (ImageBuffer* buf : candidates) {
         qDebug() << "[SwapManager] Attempting swap out:" << buf->name() << (void*)buf;
         if (buf->trySwapOut()) {
             qInfo() << "[SwapManager] Swapped out:" << buf->name() << "due to RAM pressure:" << usage << "%";
-            // Check pressure again? If we cleared big chunk, maybe stop.
-            // For now, swap one per cycle to avoid freezing UI.
+            // Swap one buffer per cycle to maintain UI responsiveness
             break;
         }
     }

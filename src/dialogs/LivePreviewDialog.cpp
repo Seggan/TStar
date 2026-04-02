@@ -112,8 +112,8 @@ void LivePreviewDialog::updateMask(const std::vector<float>& maskData, int width
     m_scene->setSceneRect(m_pixItem->boundingRect());
 
     if (m_firstUpdate) {
-        // Defer fit-to-view so it runs after the dialog is actually shown and
-        // the view has a valid geometry (fitInView is a no-op on hidden widgets).
+        // Defer fit-to-view until after the dialog is shown and has valid geometry.
+        // fitInView is a no-op on hidden widgets.
         QTimer::singleShot(0, this, &LivePreviewDialog::onFit);
         m_firstUpdate = false;
     }

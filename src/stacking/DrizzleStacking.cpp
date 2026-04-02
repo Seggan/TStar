@@ -188,15 +188,9 @@ void DrizzleStacking::drizzleFrame(
                         
                         // Apply Kernel Modulation if not Point
                         if (m_currentKernel != DrizzleKernelType::Point) {
-                            // Map output pixel center back to input space? 
-                            // Or Map Input Pixel Center to Output Space?
-                            // Drizzle kernel is usually defined around the "drop" center in Output Space.
-                            // The drop center is the transformed input pixel center.
-                            
-                            // Re-compute transformed center for this input pixel (x,y)
-                            // We need to do this outside the loop for efficiency, but let's do it here for correctness first.
-                            // Actually, 'quad' is the transformed polygon. Ideally its centroid is the center.
-                            // But simpler: transform (x+0.5, y+0.5).
+                            // Drizzle kernel is centered on the transformed input pixel center.
+                            // Compute transformed center for this input pixel (x,y).
+                            // Transform the pixel center (x+0.5, y+0.5) to output space.
                             
                             double cxIn = static_cast<double>(x) + 0.5;
                             double cyIn = static_cast<double>(y) + 0.5;
@@ -553,16 +547,15 @@ void MosaicFeathering::computeDistanceMask(
     // Normalize and copy to float vector
     // Existing logic normalized such that 50px = 1.0
     // We should maintain this "ramp width" logic.
-    // The previous implementation used a fixed 50 pixel ramp *in original scale*?
+    // The previous implementation used a fixed 50-pixel ramp in the original scale.
     // "float normalizedDist = static_cast<float>(minDist) / 50.0f;"
     // Yes.
     
     output.resize(static_cast<size_t>(outWidth) * outHeight);
     float* outIdx = output.data();
     
-    // Since we resized DISTANCE map, the values are still in "Original Pixels" units (roughly).
-    // Actually cv::resize interpolates values. If we shrink image 2x, values are still 0..MaxDist.
-    // So threshold of 50.0f still applies to the values inside smallDist.
+    // Distance map is resized. After interpolation, values remain in original units (0..MaxDist).
+    // The threshold of 50.0f applies to the resized distance map.
     
     float* sPtr = (float*)smallDist.data;
     size_t count = static_cast<size_t>(outWidth) * outHeight;
@@ -832,7 +825,7 @@ void DrizzleStacking::initKernel(DrizzleKernelType type, double param) {
     // Define max radius for LUT
     double maxRadius = 2.0;
     if (type == DrizzleKernelType::Lanczos) maxRadius = (param > 0) ? param : 3.0; // param is 'a'
-    else if (type == DrizzleKernelType::Gaussian) maxRadius = 3.0; // 3 sigma?
+    else if (type == DrizzleKernelType::Gaussian) maxRadius = 3.0; // 3-sigma radius
     
     m_lutScale = static_cast<float>(LUT_SIZE) / static_cast<float>(maxRadius);
     
@@ -840,9 +833,9 @@ void DrizzleStacking::initKernel(DrizzleKernelType type, double param) {
         double x = static_cast<double>(i) / m_lutScale;
         double val = 0.0;
         
-        if (type == DrizzleKernelType::Gaussian) {
-             // param = sigma. Default to 0.5?
-             double sigma = (param > 0) ? param : 1.0;
+           if (type == DrizzleKernelType::Gaussian) {
+               // param = sigma. Default to 1.0.
+               double sigma = (param > 0) ? param : 1.0;
              // Gaussian: exp(-x^2 / (2*sigma^2))
              // Normalize peak to 1.0 (weight normalization happens via weightAccum)
              val = std::exp(-(x*x) / (2.0 * sigma * sigma));
@@ -915,7 +908,7 @@ void DrizzleStacking::addImage(
     // The static drizzleFrame does not take rejectionMap yet.
     // We'll call the static method for now.
     
-    // Note: reg might need scaling if not handled inside drizzleFrame?
+    // reg may need scaling if it is not handled inside drizzleFrame.
     // drizzleFrame takes params.scaleFactor and applies it.
     // So reg should be the original registration (Image -> Reference).
     

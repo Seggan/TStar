@@ -170,7 +170,7 @@ void GlobalExceptionHandler::showDialog(const QString& message, bool isFatal)
 
     // Checking if app is dying
     if (!QApplication::instance()) {
-        // No Qt? Use MessageBox on Windows, stderr elsewhere
+        // Use platform-specific messaging without Qt dependencies
 #ifdef Q_OS_WIN
         MessageBoxW(NULL, message.toStdWString().c_str(), L"Critical Error", MB_ICONERROR | MB_OK);
 #else

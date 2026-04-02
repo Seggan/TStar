@@ -43,7 +43,7 @@ void SimbadSearcher::onReplyFinished(QNetworkReply* reply) {
             if (xml.name() == QLatin1String("Target")) {
                 // Keep looking
             } else if (xml.name() == QLatin1String("name")) { // Resolver name
-                 // We might want the main identifier, usually 'oname' inside <Resolver>
+                 // Attempt to extract the main identifier from <Resolver>
             } else if (xml.name() == QLatin1String("jradeg")) {
                 ra = xml.readElementText().toDouble();
             } else if (xml.name() == QLatin1String("jdedeg")) {
@@ -59,7 +59,7 @@ void SimbadSearcher::onReplyFinished(QNetworkReply* reply) {
     }
     
     if (found) {
-        emit objectFound("", ra, dec); // Name passed back empty or original?
+        emit objectFound("", ra, dec); // Name is returned empty in this path
     } else {
         emit errorOccurred(tr("Object not found in Simbad/Sesame."));
     }

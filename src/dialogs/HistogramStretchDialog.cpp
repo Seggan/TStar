@@ -583,8 +583,7 @@ void HistogramStretchDialog::updateHistogramOnly() {
     }
     
     // Normalize total if we summed multiple channels
-    // Actually totalPixels above is sum of all channel pixels
-    // We want percentage relative to total pixels considered
+    // Calculate percentage relative to total pixels considered
     
     if (totalPixels > 0) {
         float lowPct = (100.0f * lowClip) / totalPixels;

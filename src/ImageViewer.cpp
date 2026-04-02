@@ -671,8 +671,8 @@ void ImageViewer::mouseMoveEvent(QMouseEvent* event) {
         // Move item back to keep opposite edge anchored
         m_cropItem->moveBy(-centerShift.x(), -centerShift.y());
 
-        // We moved the item in scene, the scenePos changed relative to next mouse event?
-        // No, event->pos() is absolute. But lastPos should be updated.
+        // Scene object position updates relative to mouse movement
+        // Event position is absolute in scene coordinates; update last position tracking
         m_lastPos = scenePos;
         return;
     }
@@ -1151,7 +1151,7 @@ void ImageViewer::drawForeground(QPainter* painter, [[maybe_unused]] const QRect
     // ── Magnifier loupe ───────────────────────────────────
     // 100×100 px, floating top-right of the cursor at a small gap.
     // Drawn in viewport space: setWorldMatrixEnabled(false) disables the scene transform.
-    // Only draw if cursor is actually over THIS viewport (not hovering another window)
+    // Only draw magnifier if cursor is positioned over this viewport
     if (!m_magnifierVisible || !m_cursorOverViewport || !painter || !m_imageItem || m_imageItem->pixmap().isNull())
         return;
 

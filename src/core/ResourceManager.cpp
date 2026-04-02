@@ -35,8 +35,8 @@ ResourceManager::ResourceManager() {
 void ResourceManager::init() {
     int totalCores = QThread::idealThreadCount();
     
-    // User request: Limit to 90% CPU
-    // We floor the result to be safe, but ensure at least 1 thread.
+    // Limit CPU usage to 90%.
+    // Floor the result to be safe, while ensuring at least one thread.
     // Example: 16 cores * 0.9 = 14.4 -> 14 threads.
     // Example: 8 cores * 0.9 = 7.2 -> 7 threads.
     // Example: 4 cores * 0.9 = 3.6 -> 3 threads.

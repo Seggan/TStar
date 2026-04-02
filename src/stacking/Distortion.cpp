@@ -9,13 +9,10 @@ namespace Stacking {
 double Distortion::computePoly(double u, double v, int order, const std::vector<std::vector<double>>& coeffs) {
     double res = 0.0;
     
-    // SIP format usually: A_pq * u^p * v^q with p+q <= order
-    // coeffs storage: we need a consistent flattened or 2D way.
-    // StackingTypes defines vector<vector<double>>. 
-    // Let's assume coeffs[p][q] exists.
+    // SIP format: A_pq * u^p * v^q with p+q <= order.
+    // Coefficients are stored as coeffs[p][q].
     
-    // Optimization: Precompute powers of u and v?
-    // For small order (3-5), direct calc is okay.
+    // For small orders (3-5), direct evaluation is sufficient.
     
     for (int p = 0; p <= order; ++p) {
         for (int q = 0; q <= order; ++q) {
@@ -56,9 +53,7 @@ QPointF Distortion::applyForward(const QPointF& p, const RegistrationData& reg) 
 QPointF Distortion::applyReverse(const QPointF& p, const RegistrationData& reg) {
     if (!reg.hasDistortion || reg.sipOrder <= 0) return p;
     
-    // Check if AP/BP exist (Inverse SIP)
-    // If not, we might need to solve iteratively (Newton-Raphson).
-    // For now assume if hasDistortion is true, we have matrices.
+    // Inverse SIP coefficients are expected when distortion is enabled.
     
     double u = p.x();
     double v = p.y();

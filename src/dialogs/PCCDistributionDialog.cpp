@@ -123,7 +123,6 @@ void PCCDistributionDialog::drawScatterPlot(QPainter& p, const QRect& rect,
         p.drawLine(QPointF(mapX(minX), mapY(y1)), QPointF(mapX(maxX), mapY(y2)));
     }
     
-    // Draw White Reference Line (Slope 1/Ratio) if we wanted to visualize correction?
-    // Actually, fit line represents the current state.
-    // If aligned perfect, it would be slope=1, intercept=0.
+    // Fit line represents the current correction state.
+    // When perfectly aligned, it has slope=1 and intercept=0.
 }

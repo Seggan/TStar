@@ -155,7 +155,7 @@ StackResult StackingEngine::execute(StackingArgs& args) {
              
              // 2. If no positions, use Velocity (Velocity Mode):
              //    - Calculate Delta based on (Time - RefTime) * Velocity
-             //    - Subtract Delta from H_star (to "freeze" the comet, we move the frame opposite to comet motion?)
+             //    - Subtract Delta from H_star to align comet position across frames
              //      Wait. If Comet moves +10px. To keep it centered, we must shift the image -10px. 
              //      So subtract shift.
              
@@ -704,13 +704,7 @@ StackResult StackingEngine::stackSum(StackingArgs& args) {
                         // Interleaved Indexing: (y * W + x) * Ch + c
                         size_t outIdx = (static_cast<size_t>(y) * outputWidth + x) * channels + c;
                         
-                        // Atomic update needed if parallel? 
-                        // collapse(2) effectively loops y,x. 'outIdx' is unique for (y,x,c).
-                        // But c is inner loop. 
-                        // Wait, counts logic? 
-                        // If we loop y,x parallel, different threads maximize spread. 
-                        // No race condition on 'outIdx' if we loop x,y.
-                        
+                        // No race condition: each (y,x,c) triple writes to a unique outIdx
                         sums[outIdx] += value;
                         counts[outIdx]++;
                     }
@@ -768,7 +762,7 @@ static int64_t computeMaxRowsInMemory(int width, int height, int channels, int n
     
     // Also need stack/scratch buffers per thread 
     // (StackDataBlock has stackRGB[3], rejectedRGB[3] etc -> significant)
-    // Add overhead: ~ nbImages * channels * 4 * sizeof(float|int) per pixel? No, per thread.
+    // Memory overhead: approximately nbImages * channels * 4 bytes per pixel per thread
     // Scratch buffer is reusable. But bytesPerRow is large.
     
     if (bytesPerRow == 0) return 1;
@@ -1642,7 +1636,7 @@ StackResult StackingEngine::stackDrizzle(StackingArgs& args) {
              if (sigmaParam <= 0.0f) sigmaParam = 3.0f;
              
              float threshold = static_cast<float>(sigmaParam * ch0Noise);
-             // Safety minimum?
+             // Apply a minimum threshold.
              if (threshold < 1e-6f) threshold = 1e-6f;
              
              for (int y = 0; y < buffer.height(); ++y) {
@@ -1696,8 +1690,8 @@ StackResult StackingEngine::stackDrizzle(StackingArgs& args) {
     // 3. Resolve result
     args.progress(tr("Finalizing Drizzle..."), -1);
     // Prepare output buffer with VALID dimensions from drizzle output
-    if (!prepareOutput(args, drizzle.outputWidth(), drizzle.outputHeight(), args.sequence->channels())) {
-         // Restore reference stack if drizzle fails?
+        if (!prepareOutput(args, drizzle.outputWidth(), drizzle.outputHeight(), args.sequence->channels())) {
+            // Restore the reference stack if drizzle fails.
         return StackResult::AllocError;
     }
     
@@ -1705,7 +1699,7 @@ StackResult StackingEngine::stackDrizzle(StackingArgs& args) {
         return StackResult::GenericError;
     }
     
-    // Copy metadata from ref stack if valid?
+    // Copy metadata from the reference stack if valid.
     if (referenceStack.isValid()) {
         args.result.metadata() = referenceStack.metadata();
     }

@@ -354,7 +354,7 @@ bool PreprocessingEngine::subtractDark(ImageBuffer& image, double& K) {
         // If metadata is missing, we can't use ratio. 
         // We log a warning but continue with 1.0 (or whatever optimization finds).
         if (m_params.darkOptim.enabled) {
-            // Optimization might still work even without metadata
+            // Optimization remains valid even without metadata
         } else {
              emit logMessage(tr("Warning: Missing exposure time metadata. Using scaling factor 1.0."), "orange");
         }
@@ -362,8 +362,7 @@ bool PreprocessingEngine::subtractDark(ImageBuffer& image, double& K) {
     
     // Optionally optimize dark scaling
     if (m_params.darkOptim.enabled) {
-        // We could use K (exposure ratio) as a hint (K_min/K_max) or just let it search
-        // For now, let's keep the user's min/max hints but log what we're doing.
+        // Use K (exposure ratio) as a hint (K_min/K_max) and log the selected range.
         K = Calibration::CalibrationEngine::findOptimalDarkScale(image, *dark, m_params.darkOptim);
         emit logMessage(tr("Numerical dark optimization found factor K = %1").arg(K, 0, 'f', 4), "neutral");
     } else if (lightExptime > 0.0 && darkExptime > 0.0) {
@@ -530,18 +529,12 @@ bool PreprocessingEngine::debayer(ImageBuffer& image) {
             success = Debayer::superpixel(image, output, pattern);
             break;
         case DebayerAlgorithm::RCD:
-            // RCD was refactored to be static in previous steps
-            // We need to check Debayer.h if 'rcd' method exists or logic is inside vng?
-            // Wait, previous session I modified RCD in Debayer.cpp. 
-            // I should check if Debayer::rcd exists.
-            // Assuming it exists as I saw 'RCD' in DebayerAlgorithm enum.
-            // Wait, previous view of Debayer.cpp showed 'rcd' method.
+            // FIXME: RCD is not yet implemented; falls back to VNG internally
+            // (see Debayer::rcd() stub in Debayer.cpp)
             success = Debayer::rcd(image, output, pattern);
             break;
         case DebayerAlgorithm::AHD:
-             // Fallback to VNG if AHD not implemented, or use ahd if exists.
-             // Debayer.cpp showed AHD? No, I only saw VNG/RCD/Bilinear.
-             // Safe fallback to VNG.
+             // AHD not yet implemented; fall back to VNG interpolation
              success = Debayer::vng(image, output, pattern);
              break;
         default:

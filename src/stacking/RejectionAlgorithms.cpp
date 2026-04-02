@@ -317,9 +317,8 @@ RejectionResult RejectionAlgorithms::sigmaMedianClipping(
     do {
         replaced = 0;
         
-        // Copy current stack to work for stats (since we might modify stack in place?)
-        // Wait, SigmaMedian modifies STACK in place.
-        // But we need stats from current stack.
+        // Copy current stack to compute statistics
+        // SigmaMedian rejection iterates over the current stack state
         work = stack; 
         
         double sigma = Statistics::stdDev(work.data(), n, nullptr);
@@ -424,10 +423,8 @@ RejectionResult RejectionAlgorithms::winsorizedClipping(
             sigma0 = sigma;
             
             if (weights) {
-                 // Weighted Sigma of Winsorized Data
-                 // Note: We use original pixel weights? Yes.
-                 // Treat rejected as invalid? winsorization usually operates on whole set, but here we process iteratively.
-                 // Let's assume we treat currently rejected as invalid for stats calc.
+                  // Weighted sigma of winsorized data.
+                  // Rejected samples are excluded from the statistics calculation.
                  auto wStats = weightedMeanAndStdDev(wStack, *weights, &rejected);
                  sigma = 1.134 * wStats.second;
             } else {
@@ -593,9 +590,8 @@ RejectionResult RejectionAlgorithms::gesdtClipping(
     
     int currentSize = n;
     
-    // Simplifying: GESDT is destructive. We track original indices to map back to the 'rejected' array.
-    // Optimization: Use swap-remove (O(1)) instead of erase (O(N)) since Grubbs statistic is order-independent.
-    // Let's adapt:
+    // GESDT is destructive, so track original indices to map back to the rejected array.
+    // Use swap-remove (O(1)) instead of erase (O(N)) since the Grubbs statistic is order-independent.
     
     // We need to track original indices.
     std::vector<int> indices(n);
@@ -670,7 +666,7 @@ RejectionResult RejectionAlgorithms::biweightClipping(
     float mad = Statistics::quickMedian(work.data(), n);
     
     if (mad < 1e-9f) {
-        // All pixels identical?
+        // All pixels are identical.
         result.keptCount = n;
         return result;
     }
@@ -857,7 +853,7 @@ int RejectionAlgorithms::compactStack(
     std::vector<float>& stack,
     const std::vector<int>& rejected)
 {
-    // NO-OP or deprecated?
+    // No-op or deprecated path.
     // Modern logic avoids compacting to preserve indices.
     // If called, we compact.
     

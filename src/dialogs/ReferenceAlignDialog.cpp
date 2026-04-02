@@ -318,7 +318,7 @@ void ReferenceAlignDialog::updatePreview() {
         // Ensure both images have the same scale for a perfect overlay.
         // Since both were generated from bufferToQImageScaled with the same constraints, 
         // they should already be very close, but aspect ratios of buffers might differ slightly 
-        // if cropping wasn't exact. Let's force them to match.
+        // if cropping was not exact. Force them to match.
         if (targetImg.size() != refImg.size()) {
             targetImg = targetImg.scaled(refImg.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         }

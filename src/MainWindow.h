@@ -398,6 +398,9 @@ protected:
 private:
     bool m_isUpdating = false;
     
+    // Directory state
+    QString m_lastDialogDir;
+    
     // Pixel Info
     class QLabel* m_pixelInfoLabel = nullptr;
     void updatePixelInfo(const QString& info);

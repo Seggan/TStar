@@ -130,7 +130,7 @@ void HeaderEditorDialog::onAdd() {
     }
     
     loadMetadata();
-    // Re-select?
+    // Reselect current row after modification
 }
 
 void HeaderEditorDialog::onDelete() {

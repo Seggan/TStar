@@ -187,6 +187,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Set default home directory from Settings, or fallback to Desktop
     QSettings settings("TStar", "TStar");
     QString lastDir = settings.value("General/LastWorkingDir").toString();
+    m_lastDialogDir = settings.value("General/LastDialogDir").toString();
     
     if (!lastDir.isEmpty() && QDir(lastDir).exists()) {
         QDir::setCurrent(lastDir);
@@ -607,7 +608,7 @@ MainWindow::MainWindow(QWidget *parent)
                     
                     // --- Color Profile Check moved to checkAndHandleColorProfile ---
                     // It is now called in processImageLoadQueue before window creation,
-                    // or here just as a safety measure if needed (but already handled).
+                    // Safety check for parent widget availability during apply
                     checkAndHandleColorProfile(v->getBuffer(), v->windowTitle());
                     
                     // Sync Display Mode UI to the new viewer's state
@@ -2212,20 +2213,23 @@ void MainWindow::openFile() {
 #endif
         tr("All Files (*)");
     
-    // Use project working directory if a project is active
-    QString startDir = getProjectWorkingDirectory();
+    // Use last dialog directory or project working directory
+    QString startDir = m_lastDialogDir;
+    if (startDir.isEmpty() || !QDir(startDir).exists()) {
+        startDir = getProjectWorkingDirectory();
+    }
     QStringList paths = QFileDialog::getOpenFileNames(this, tr("Open Image(s)"), startDir, filter);
     if (paths.isEmpty()) return;
     
     // Set flag: we're about to batch load files (console won't auto-open during this)
     m_isLoadingBatch = true;
 
-    // Persist the user's last chosen working directory immediately.
+    // Update the last used DIALOG directory (without changing global CWD/Home)
     const QString chosenDir = QFileInfo(paths.first()).absolutePath();
     if (!chosenDir.isEmpty() && QDir(chosenDir).exists()) {
-        QDir::setCurrent(chosenDir);
+        m_lastDialogDir = chosenDir;
         QSettings settings("TStar", "TStar");
-        settings.setValue("General/LastWorkingDir", chosenDir);
+        settings.setValue("General/LastDialogDir", chosenDir);
     }
 
     int total = paths.size();
@@ -2237,7 +2241,7 @@ void MainWindow::openFile() {
         QMutex resultsMutex;
 
         // Use a semaphore or manual counting to manage parallel loads
-        // The user wants ALL cores except 1.
+        // Use thread pool with all available cores minus one to maintain system responsiveness
         int maxThreads = std::max(1, QThread::idealThreadCount() - 1);
         QThreadPool pool;
         pool.setMaxThreadCount(maxThreads);
@@ -2285,17 +2289,21 @@ void MainWindow::saveFile() {
         return;
     }
     
-    // 1. Get Filename first (Classic Windows Flow)
+    // Use last dialog directory or project working directory
     QString selectedFilter;
-    QString startDir = getProjectWorkingDirectory();
+    QString startDir = m_lastDialogDir;
+    if (startDir.isEmpty() || !QDir(startDir).exists()) {
+        startDir = getProjectWorkingDirectory();
+    }
+
     QString path = QFileDialog::getSaveFileName(this, tr("Save Image As"), startDir, 
         tr("FITS (*.fits);;XISF (*.xisf);;TIFF (*.tif *.tiff);;PNG (*.png);;JPG (*.jpg)"), &selectedFilter);
     if (!path.isEmpty()) {
         const QString chosenDir = QFileInfo(path).absolutePath();
         if (!chosenDir.isEmpty() && QDir(chosenDir).exists()) {
-            QDir::setCurrent(chosenDir);
+            m_lastDialogDir = chosenDir;
             QSettings settings("TStar", "TStar");
-            settings.setValue("General/LastWorkingDir", chosenDir);
+            settings.setValue("General/LastDialogDir", chosenDir);
         }
     }
         
@@ -2335,8 +2343,8 @@ void MainWindow::saveFile() {
     if (format == "FITS" || format == "TIFF" || format == "XISF") {
         depthBox->addItems({tr("32-bit Float"), tr("32-bit Integer"), tr("16-bit Integer"), tr("8-bit Integer")});
         
-        // Disable burning for raw formats (destructive)
-        if (format != "TIFF") { // TIFF is debatable (display or data?) let's allow TIFF burn if user wants (8/16bit)
+        // Allow TIFF burning since TIFF can store multiple bit depths appropriately
+        if (format != "TIFF") { // Disable burning for raw data formats (FITS/XISF)
             burnBox->setChecked(false);
             burnBox->setEnabled(false);
             burnBox->setToolTip(tr("Cannot burn annotations into raw data formats (FITS/XISF)"));
@@ -2917,7 +2925,7 @@ void MainWindow::log(const QString& msg, LogType type, bool autoShow, bool isTra
         static QRegularExpression logMetadataRe("(\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2},\\d{3}\\s+MainProcess\\s+.*?\\s+(INFO|DEBUG|WARNING|ERROR)\\s*)|(\\[Bridge\\]\\s*)");
         trimmed.remove(logMetadataRe);
         
-        // 2. Transience detection (Should this line overwrite the previous one?)
+        // 2. Transience detection: Determine if current line should overwrite the previous
         bool isTransient = isTransientParam || 
                            trimmed.contains("Progress:", Qt::CaseInsensitive) || 
                            trimmed.contains("chunk ", Qt::CaseInsensitive) || 
@@ -3014,7 +3022,7 @@ void MainWindow::suppressDirtyFlag(int durationMs) {
 void MainWindow::startLongProcess() {
     if (!m_sidebar) return;
     
-    // Capture active subwindow to restore it after opening console (User Request: Keep image on top)
+    // Capture the active subwindow so it can be restored after opening the console
     QMdiSubWindow* activeSub = m_mdiArea ? m_mdiArea->activeSubWindow() : nullptr;
 
     m_wasConsoleOpen = m_sidebar->isExpanded();
@@ -3043,7 +3051,7 @@ void MainWindow::endLongProcess() {
 }
 
 void MainWindow::openHeaderDialog() {
-    // Reliable check if the user is currently using the sidebar
+    // Check whether the sidebar is active
     if (!m_sidebar) return;
     m_sidebar->openPanel("Header");
     
@@ -3115,7 +3123,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event) {
 bool MainWindow::activateTool(const QString& title) {
     for (auto* sub : m_mdiArea->subWindowList()) {
         if (auto* csw = qobject_cast<CustomMdiSubWindow*>(sub)) {
-             // Check matches. Note: subWindowTitle might be set, or windowTitle. 
+             // Compare both title sources.
              // CustomMdiSubWindow::subWindowTitle() returns the title set on the bar.
              if (csw->windowTitle() == title) {
                  csw->showNormal();

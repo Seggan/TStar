@@ -222,7 +222,7 @@ int RegistrationEngine::registerSequence(ImageSequence& sequence, int referenceI
             #pragma omp parallel for schedule(static)
             for (int col = 0; col < iw; ++col) {
                 for (int row = 0; row < ih; ++row) {
-                    // Already invalid after X pass?
+                    // Already invalid after the X pass.
                     if (!maskX[row * iw + col]) {
                         for (int c = 0; c < ich; ++c)
                             dstData[(row * iw + col) * ich + c] = 0.0f;
@@ -842,7 +842,7 @@ bool RegistrationEngine::convertToMatchStars(const std::vector<DetectedStar>& sr
         // DetectedStar has flux (larger is brighter).
         // Convert flux to instrumental magnitude: m = -2.5 * log10(flux)
         // Or simply negate flux as a proxy for sorting.
-        // Let's use -flux to avoid log cost, as order is preserved (descending flux -> ascending -flux)
+        // Use -flux to avoid log cost; order is preserved (descending flux -> ascending -flux)
         s.mag = -src[i].flux; 
         
         s.match_id = -1;

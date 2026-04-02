@@ -577,7 +577,7 @@ void ModelDownloaderWorker::run() {
     if (ModelDownloader::modelsInstalled()) {
         emit finished(true, tr("Models downloaded and installed successfully."));
     } else {
-        // Detailed error message showing what was actually extracted
+        // Provide detailed error message listing extracted files
         QDir dest(ModelDownloader::cosmicClarityRoot());
         QStringList files = dest.entryList(QDir::Files);
         QString fileList = files.isEmpty() ? "No files found" : files.join(", ");

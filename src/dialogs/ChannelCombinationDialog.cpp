@@ -33,7 +33,7 @@ ChannelCombinationDialog::ChannelCombinationDialog(const std::vector<ChannelSour
     m_checkLinearFit->setChecked(false);
     mainLayout->addWidget(m_checkLinearFit);
 
-    // Auto-select if names match?
+    // Automatically select channels if names match
     // E.g. if we find "R", "G", "B" or "_R", "_G", "_B" suffix
     // Simple heuristic: 
     for(size_t i=0; i<m_sources.size(); ++i) {

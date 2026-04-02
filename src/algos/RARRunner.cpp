@@ -209,7 +209,7 @@ bool RARRunner::run(const ImageBuffer& input, ImageBuffer& output, const RARPara
     std::vector<float> data(blob.size() / sizeof(float));
     memcpy(data.data(), blob.constData(), blob.size());
     
-    // No Min/Max check needed here really, it's raw memory dump.
+    // Raw memory dump without bounds validation required
     emit processOutput(QString("Loaded RAW: %1 bytes").arg(blob.size()));
 
     output.setData(input.width(), input.height(), input.channels(), data);

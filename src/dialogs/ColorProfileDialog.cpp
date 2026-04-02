@@ -199,7 +199,7 @@ void ColorProfileDialog::applyChanges() {
         m_activeBuffer->setModified(true);
 
         // Refresh the viewer to display the interpreter change (though pixels didn't change, 
-        // the color management system in the viewer might render them differently now)
+        // Color management in the viewer may render colors differently after profile changes
         if (m_viewer) {
             m_viewer->refreshDisplay(true);
         }

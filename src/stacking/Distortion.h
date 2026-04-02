@@ -52,8 +52,6 @@ public:
      * @param refReg Reference Registration Data (contains SIP for Reference)
      * @return Transformed point in Reference coordinates
      */
-     // Wait, usually we need Inverse Transform for stacking (Output -> Input).
-     // Output (Ref grid) -> Input (Src pixel).
      static QPointF transformRefToSrc(const QPointF& outP, const RegistrationData& refReg, const RegistrationData& srcReg);
 
      /**

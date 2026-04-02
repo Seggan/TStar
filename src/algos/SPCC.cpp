@@ -1384,7 +1384,7 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
     
     // If NOT linear mode, the displayed scale factors are just an approximation (at Ref point)
     if (!params.linearMode) {
-        // Here we could evaluate the model at Exp=1.0 for display.
+        // Model evaluation at Exp=1.0 can be used for display purposes
         // Since Meas = f(Exp), for Exp=1.0, Meas = f(1.0).
         // Gain factor = Exp/Meas = 1.0 / f(1.0).
         double pR = polyEval(model.coeff_R, 1.0);
@@ -1422,7 +1422,7 @@ SPCCResult SPCC::calibrateWithStarList(const ImageBuffer& buf,
 
     if (params.linearMode) {
         // Linear Application: simple per-channel multiplication
-        // Note: we subtract background pivot then re-add a neutral pivot?
+        // Subtract the background pivot and re-add a neutral pivot.
         // PCC formula: P' = (P - Bg) * K + Bg_Mean
         const float kr = (float)kR;
         const float kb = (float)kB;

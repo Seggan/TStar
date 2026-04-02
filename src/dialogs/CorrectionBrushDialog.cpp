@@ -213,7 +213,7 @@ ImageBuffer CorrectionWorker::removeBlemish(const ImageBuffer& img, int x, int y
                 if (feather > 0.0f && dist > radius * (1.0f - feather)) {
                      // Simple feathering at edge
                      // Note: seamlessClone handles internal gradient blending, 
-                     // but we might want to feather the opacity of the entire correction
+                     // Consider feathering the opacity gradient at edges
                 }
                 
                 // Mask for blending original vs corrected

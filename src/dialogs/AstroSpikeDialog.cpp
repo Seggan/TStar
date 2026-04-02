@@ -668,19 +668,13 @@ void AstroSpikeCanvas::render(QPainter& p, float scale, const QPointF& offset) {
         QColor secColor = getStarColor(star, m_config.hueShift, m_config.colorSaturation, m_config.secondaryIntensity);
         
         // --- FIX SPIKE QUANTITY LOGIC ---
-        // User reports 4->2 spikes.
-        // If config.quantity = 4, we want 4 rays (cross).
-        // Each loop iteration draws 1 ray? 
-        // Previously: quantity was lines? 
-        // Let's implement full rays. 
-        // 4 rays = 0, 90, 180, 270 (if symmetrical)
-        // If the UI quantity is "points" (4 points):
-        // We iterate N times. 360/N separation.
-        
+        // The quantity represents the number of "points" (rays) emanating from the center.
+        // If quantity is 4, we draw 4 rays separated by 90 degrees (a cross).
+        // This avoids the "full line" issue where 4 lines would create 8 points.
         if (m_config.intensity > 0) {
             float rainbowStr = (m_config.enableRainbow && m_config.rainbowSpikes) ? m_config.rainbowIntensity : 0.0f;
             
-            // Check for min spikes
+            // Check for min spikes (points)
             int spikes = std::max(2, (int)m_config.quantity);
             
             for (int i = 0; i < spikes; ++i) {
@@ -691,13 +685,11 @@ void AstroSpikeCanvas::render(QPainter& p, float scale, const QPointF& offset) {
                 float dx = std::cos(theta);
                 float dy = std::sin(theta);
                 
-                QPointF start(sx, sy); // Start exactly at center? Or offset?
-                // Usually diffraction spikes go through center. 
-                // We draw from center out.
-                // NOTE: Previous logic might have been "lines" (drawing full diameter).
-                // Rays is safer for odd numbers (3, 5).
+                QPointF start(sx, sy); // Start at the center
+                // Diffraction spikes pass through the center.
+                // Use rays rather than full-diameter lines.
                 
-                // Let's use slight offset to avoid center buildup
+                // Apply a slight offset to avoid center buildup
                 QPointF rayStart(sx + dx * 1.5f * scale, sy + dy * 1.5f * scale);
                 QPointF rayEnd(sx + dx * baseLen, sy + dy * baseLen);
                 
@@ -950,7 +942,7 @@ void AstroSpikeDialog::timerEvent(QTimerEvent* event) {
         runDetection();
     }
 }
-// Continuing implementation... fixing timer logic properly via signals in next block or just direct call
+// Timer framework: use signals to update spike visualization per cycle
 
 void AstroSpikeDialog::runDetection() {
     if (!m_viewer) return;
@@ -990,8 +982,7 @@ void AstroSpikeDialog::filterStarsByThreshold() {
         if (s.brightness >= cutoff) {
             filtered.append(s);
         }
-        // Since sorted by brightness desc, once we go below cutoff, all subsequent are too dim
-        // BUT stars might not be perfectly monotonic after merge, so do full scan
+        // Since the list is sorted by brightness descending, continue scanning to handle merge-induced ordering changes
     }
     
     m_statusLabel->setText(tr("%1 stars (of %2 total)").arg(filtered.size()).arg(m_allStars.size()));

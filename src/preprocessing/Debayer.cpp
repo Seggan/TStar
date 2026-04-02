@@ -456,10 +456,91 @@ bool Debayer::superpixel(const ImageBuffer& input, ImageBuffer& output,
 
 bool Debayer::ahd(const ImageBuffer& input, ImageBuffer& output,
                   BayerPattern pattern) {
-    // Adapter for High-quality Demosaicing (AHD)
-    // Currently relying on VNG as a robust alternative until fully implemented.
-    qWarning() << "Debayer: AHD algorithm requested but not yet fully implemented. Falling back to VNG.";
-    return vng(input, output, pattern);
+    if (input.channels() != 1) return false;
+    
+    int width = input.width();
+    int height = input.height();
+    output.resize(width, height, 3);
+    
+    int rRow, rCol, bRow, bCol;
+    getPatternOffsets(pattern, rRow, rCol, bRow, bCol);
+    
+    const float* src = input.data().data();
+    float* dst = output.data().data();
+    
+    // AHD Step 1: Interpolate Green in H and V directions
+    std::vector<float> gH(width * height);
+    std::vector<float> gV(width * height);
+    
+    #pragma omp parallel for
+    for (int y = 2; y < height - 2; ++y) {
+        for (int x = 2; x < width - 2; ++x) {
+            int idx = y * width + x;
+            if (isGreen(x, y, rRow, rCol, bRow, bCol)) {
+                gH[idx] = gV[idx] = src[idx];
+            } else {
+                gH[idx] = (src[idx - 1] + src[idx + 1]) * 0.5f + (2 * src[idx] - src[idx - 2] - src[idx + 2]) * 0.25f;
+                gV[idx] = (src[idx - width] + src[idx + width]) * 0.5f + (2 * src[idx] - src[idx - 2 * width] - src[idx + 2 * width]) * 0.25f;
+            }
+        }
+    }
+    
+    // AHD Step 2: Choose direction based on homogeneity
+    #pragma omp parallel for
+    for (int y = 4; y < height - 4; ++y) {
+        for (int x = 4; x < width - 4; ++x) {
+            float hHomogeneity = 0, vHomogeneity = 0;
+            // Simplified homogeneity: sum of absolute differences in a 3x3 window
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    int neighborIdx = (y + dy) * width + (x + dx);
+                    hHomogeneity += std::abs(gH[neighborIdx] - gH[neighborIdx + 1]) + std::abs(gH[neighborIdx] - gH[neighborIdx + width]);
+                    vHomogeneity += std::abs(gV[neighborIdx] - gV[neighborIdx + 1]) + std::abs(gV[neighborIdx] - gV[neighborIdx + width]);
+                }
+            }
+            
+            int idx = y * width + x;
+            dst[idx * 3 + 1] = (hHomogeneity < vHomogeneity) ? gH[idx] : gV[idx];
+        }
+    }
+    
+    // AHD Step 3: Interpolate R and B (simplified ratio correction as in RCD)
+    #pragma omp parallel for
+    for (int y = 2; y < height - 2; ++y) {
+        for (int x = 2; x < width - 2; ++x) {
+            int idx = y * width + x;
+            float g = dst[idx * 3 + 1];
+            float r = 0, b = 0;
+            if (isRed(x, y, rRow, rCol)) {
+                r = src[idx];
+                // Interpolate blue at red position: use Green as guide
+                float bRatio = (src[(y-1)*width+x-1]/dst[((y-1)*width+x-1)*3+1] + src[(y-1)*width+x+1]/dst[((y-1)*width+x+1)*3+1] + 
+                                src[(y+1)*width+x-1]/dst[((y+1)*width+x-1)*3+1] + src[(y+1)*width+x+1]/dst[((y+1)*width+x+1)*3+1]) * 0.25f;
+                b = g * bRatio;
+            } else if (isBlue(x, y, bRow, bCol)) {
+                b = src[idx];
+                // Interpolate red at blue position: use Green as guide
+                float rRatio = (src[(y-1)*width+x-1]/dst[((y-1)*width+x-1)*3+1] + src[(y-1)*width+x+1]/dst[((y-1)*width+x+1)*3+1] + 
+                                src[(y+1)*width+x-1]/dst[((y+1)*width+x-1)*3+1] + src[(y+1)*width+x+1]/dst[((y+1)*width+x+1)*3+1]) * 0.25f;
+                r = g * rRatio;
+            } else {
+                // Green pixel: need R and B (located at neighbors)
+                bool redRow = (y % 2 == rRow);
+                if (redRow) { // R is H, B is V
+                    r = g * (src[idx-1]/dst[(idx-1)*3+1] + src[idx+1]/dst[(idx+1)*3+1]) * 0.5f;
+                    b = g * (src[idx-width]/dst[(idx-width)*3+1] + src[idx+width]/dst[(idx+width)*3+1]) * 0.5f;
+                } else { // B is H, R is V
+                    b = g * (src[idx-1]/dst[(idx-1)*3+1] + src[idx+1]/dst[(idx+1)*3+1]) * 0.5f;
+                    r = g * (src[idx-width]/dst[(idx-width)*3+1] + src[idx+width]/dst[(idx+width)*3+1]) * 0.5f;
+                }
+            }
+            dst[idx * 3 + 0] = r;
+            dst[idx * 3 + 2] = b;
+        }
+    }
+    
+    output.setMetadata(input.metadata());
+    return true;
 }
 
 //=============================================================================
@@ -468,10 +549,92 @@ bool Debayer::ahd(const ImageBuffer& input, ImageBuffer& output,
 
 bool Debayer::rcd(const ImageBuffer& input, ImageBuffer& output,
                   BayerPattern pattern) {
-    // Ratio-Corrected Demosaicing (RCD)
-    // Currently relying on VNG as a robust alternative until fully implemented.
-    qWarning() << "Debayer: RCD algorithm requested but not yet fully implemented. Falling back to VNG.";
-    return vng(input, output, pattern);
+    if (input.channels() != 1) return false;
+    
+    int width = input.width();
+    int height = input.height();
+    output.resize(width, height, 3);
+    
+    int rRow, rCol, bRow, bCol;
+    getPatternOffsets(pattern, rRow, rCol, bRow, bCol);
+    
+    const float* src = input.data().data();
+    float* dst = output.data().data();
+    
+    // RCD Step 1: High-quality Green interpolation with edge detection
+    #pragma omp parallel for
+    for (int y = 2; y < height - 2; ++y) {
+        for (int x = 2; x < width - 2; ++x) {
+            int idx = y * width + x;
+            float g;
+            if (isGreen(x, y, rRow, rCol, bRow, bCol)) {
+                g = src[idx];
+            } else {
+                // Adaptive interpolation based on local gradients
+                float hGrad = std::abs(src[idx - 1] - src[idx + 1]);
+                float vGrad = std::abs(src[idx - width] - src[idx + width]);
+                
+                if (hGrad < vGrad) {
+                    g = (src[idx - 1] + src[idx + 1]) * 0.5f;
+                } else if (vGrad < hGrad) {
+                    g = (src[idx - width] + src[idx + width]) * 0.5f;
+                } else {
+                    g = (src[idx - 1] + src[idx + 1] + src[idx - width] + src[idx + width]) * 0.25f;
+                }
+            }
+            dst[idx * 3 + 1] = g;
+        }
+    }
+    
+    // RCD Step 2: Red and Blue interpolation with ratio correction
+    #pragma omp parallel for
+    for (int y = 2; y < height - 2; ++y) {
+        for (int x = 2; x < width - 2; ++x) {
+            int idx = y * width + x;
+            float g = dst[idx * 3 + 1];
+            float r, b;
+            
+            if (isRed(x, y, rRow, rCol)) {
+                r = src[idx];
+                // Interpolate blue using neighbor ratios
+                float b00 = src[(y-1)*width + (x-1)] / dst[((y-1)*width + (x-1))*3 + 1];
+                float b01 = src[(y-1)*width + (x+1)] / dst[((y-1)*width + (x+1))*3 + 1];
+                float b10 = src[(y+1)*width + (x-1)] / dst[((y+1)*width + (x-1))*3 + 1];
+                float b11 = src[(y+1)*width + (x+1)] / dst[((y+1)*width + (x+1))*3 + 1];
+                b = g * (b00 + b01 + b10 + b11) * 0.25f;
+            } else if (isBlue(x, y, bRow, bCol)) {
+                b = src[idx];
+                // Interpolate red using neighbor ratios
+                float r00 = src[(y-1)*width + (x-1)] / dst[((y-1)*width + (x-1))*3 + 1];
+                float r01 = src[(y-1)*width + (x+1)] / dst[((y-1)*width + (x+1))*3 + 1];
+                float r10 = src[(y+1)*width + (x-1)] / dst[((y+1)*width + (x-1))*3 + 1];
+                float r11 = src[(y+1)*width + (x+1)] / dst[((y+1)*width + (x+1))*3 + 1];
+                r = g * (r00 + r01 + r10 + r11) * 0.25f;
+            } else {
+                // Green pixel: need R and B
+                if (y % 2 == rRow) { // Row with Red
+                    float rL = src[idx-1] / dst[(idx-1)*3+1];
+                    float rR = src[idx+1] / dst[(idx+1)*3+1];
+                    r = g * (rL + rR) * 0.5f;
+                    float bU = src[idx-width] / dst[(idx-width)*3+1];
+                    float bD = src[idx+width] / dst[(idx+width)*3+1];
+                    b = g * (bU + bD) * 0.5f;
+                } else { // Row with Blue
+                    float bL = src[idx-1] / dst[(idx-1)*3+1];
+                    float bR = src[idx+1] / dst[(idx+1)*3+1];
+                    b = g * (bL + bR) * 0.5f;
+                    float rU = src[idx-width] / dst[(idx-width)*3+1];
+                    float rD = src[idx+width] / dst[(idx+width)*3+1];
+                    r = g * (rU + rD) * 0.5f;
+                }
+            }
+            dst[idx * 3 + 0] = r;
+            dst[idx * 3 + 2] = b;
+        }
+    }
+    
+    output.setMetadata(input.metadata());
+    return true;
 }
 
 } // namespace Preprocessing

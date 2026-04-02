@@ -736,7 +736,7 @@ void RawEditorDialog::onPreviewReady(const QImage& img) {
     // If this preview came from normal parameter changes (not undo/redo),
     // save it to history so user can undo back to this state
     if (!m_inUndoRedo) {
-        // Only save if state has actually changed from last history entry
+        // Only save if state differs from last history entry
         if (m_historyIndex < 0 || m_history[m_historyIndex] != m_params) {
             pushHistory();
         }
