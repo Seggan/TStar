@@ -71,7 +71,6 @@ if(MSVC)
 else()
     # GCC/Clang (used on both macOS and Windows with MinGW)
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
-    add_compile_options(-ffast-math)  # Enable fast math for scientific computing
     
     # LTO Optimization (Conditional)
     option(ENABLE_LTO "Enable Link-Time Optimization" OFF)

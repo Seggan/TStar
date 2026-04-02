@@ -226,21 +226,25 @@ std::vector<int> TriangleMatcher::computeVotes(
     int numStarsA, int numStarsB,
     double minScale, double maxScale)
 {
+    // Clamp dimensions to prevent oversized allocations and ensure caller consistency
+    int clampedA = std::min(numStarsA, AT_MATCH_MAX_VOTE_DIM);
+    int clampedB = std::min(numStarsB, AT_MATCH_MAX_VOTE_DIM);
+
     // Guard against degenerate dimensions
-    if (numStarsA <= 0 || numStarsB <= 0) {
+    if (clampedA <= 0 || clampedB <= 0) {
         return std::vector<int>();
     }
 
-    // Clamp dimensions to prevent oversized allocations
-    numStarsA = std::min(numStarsA, AT_MATCH_MAX_VOTE_DIM);
-    numStarsB = std::min(numStarsB, AT_MATCH_MAX_VOTE_DIM);
-
     std::vector<int> votes;
     try {
-        votes.assign(static_cast<size_t>(numStarsA) * numStarsB, 0);
+        votes.assign(static_cast<size_t>(clampedA) * clampedB, 0);
     } catch (const std::bad_alloc&) {
         return std::vector<int>(); // Return empty on allocation failure
     }
+
+    // Use local clamped values for the rest of this function
+    numStarsA = clampedA;
+    numStarsB = clampedB;
 
     double rad2 = m_triangleRadius * m_triangleRadius;
     bool useScaleFilter = (minScale > 0 && maxScale > 0);
@@ -669,7 +673,11 @@ bool TriangleMatcher::solve(const std::vector<MatchStar>& imgStars,
     }
 
     // === Step 3: Vote matrix ===
-    auto votes = computeVotes(triA, triB, nA, nB, minScale, maxScale);
+    // Use clamped dimensions to match internal limitations of computeVotes
+    const int vA = std::min(nA, AT_MATCH_MAX_VOTE_DIM);
+    const int vB = std::min(nB, AT_MATCH_MAX_VOTE_DIM);
+
+    auto votes = computeVotes(triA, triB, vA, vB, minScale, maxScale);
     if (votes.empty()) {
         m_lastFailStage = 1;
         return false;
@@ -686,9 +694,12 @@ bool TriangleMatcher::solve(const std::vector<MatchStar>& imgStars,
         int max_i = -1;
         int max_j = -1;
 
-        for (int i = 0; i < nA; i++) {
-            for (int j = 0; j < nB; j++) {
-                int voteCount = votes[i * nB + j];
+        for (int i = 0; i < vA; i++) {
+            for (int j = 0; j < vB; j++) {
+                size_t offset = static_cast<size_t>(i) * vB + j;
+                if (offset >= votes.size()) continue;
+
+                int voteCount = votes[offset];
                 if (voteCount > max_vote) {
                     max_vote = voteCount;
                     max_i = i;
@@ -705,11 +716,17 @@ bool TriangleMatcher::solve(const std::vector<MatchStar>& imgStars,
         winnerIndexB[k] = max_j;
 
         // Zero out row and column (star already used)
-        if (max_i >= 0 && max_i < nA) {
-            for (int j = 0; j < nB; j++) votes[max_i * nB + j] = 0;
+        if (max_i >= 0 && max_i < vA) {
+            for (int j = 0; j < vB; j++) {
+                size_t offset = static_cast<size_t>(max_i) * vB + j;
+                if (offset < votes.size()) votes[offset] = 0;
+            }
         }
-        if (max_j >= 0 && max_j < nB) {
-            for (int i = 0; i < nA; i++) votes[i * nB + max_j] = 0;
+        if (max_j >= 0 && max_j < vB) {
+            for (int i = 0; i < vA; i++) {
+                size_t offset = static_cast<size_t>(i) * vB + max_j;
+                if (offset < votes.size()) votes[offset] = 0;
+            }
         }
     }
 

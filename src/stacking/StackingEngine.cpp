@@ -1848,17 +1848,32 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
 
     if (FitsHeaderUtils::hasValidWCS(meta)) {
         FitsHeaderUtils::Metadata fmeta;
-        fmeta.ra      = meta.ra;      fmeta.dec     = meta.dec;
-        fmeta.crpix1  = meta.crpix1 - offsetX;
-        fmeta.crpix2  = meta.crpix2 - offsetY;
-        fmeta.cd1_1   = meta.cd1_1;   fmeta.cd1_2   = meta.cd1_2;
-        fmeta.cd2_1   = meta.cd2_1;   fmeta.cd2_2   = meta.cd2_2;
-        fmeta.ctype1  = meta.ctype1;  fmeta.ctype2  = meta.ctype2;
-        fmeta.equinox = meta.equinox;
-        fmeta.lonpole = meta.lonpole; fmeta.latpole = meta.latpole;
-        fmeta.sipOrderA  = meta.sipOrderA;  fmeta.sipOrderB  = meta.sipOrderB;
-        fmeta.sipOrderAP = meta.sipOrderAP; fmeta.sipOrderBP = meta.sipOrderBP;
+        
+        // Helper to ensure values are finite to prevent NaN propagation
+        auto sanitize = [](double val, double fallback) {
+            return std::isfinite(val) ? val : fallback;
+        };
+
+        fmeta.ra      = sanitize(meta.ra, 0.0);
+        fmeta.dec     = sanitize(meta.dec, 0.0);
+        fmeta.crpix1  = sanitize(meta.crpix1, 0.0) - offsetX;
+        fmeta.crpix2  = sanitize(meta.crpix2, 0.0) - offsetY;
+        fmeta.cd1_1   = sanitize(meta.cd1_1, 0.0);
+        fmeta.cd1_2   = sanitize(meta.cd1_2, 0.0);
+        fmeta.cd2_1   = sanitize(meta.cd2_1, 0.0);
+        fmeta.cd2_2   = sanitize(meta.cd2_2, 0.0);
+        fmeta.ctype1  = meta.ctype1;
+        fmeta.ctype2  = meta.ctype2;
+        fmeta.equinox = sanitize(meta.equinox, 2000.0);
+        fmeta.lonpole = sanitize(meta.lonpole, 180.0);
+        fmeta.latpole = sanitize(meta.latpole, 0.0);
+        
+        fmeta.sipOrderA  = meta.sipOrderA;  
+        fmeta.sipOrderB  = meta.sipOrderB;
+        fmeta.sipOrderAP = meta.sipOrderAP; 
+        fmeta.sipOrderBP = meta.sipOrderBP;
         fmeta.sipCoeffs  = meta.sipCoeffs;
+
         auto wcsCards = FitsHeaderUtils::buildWCSHeader(fmeta);
         for (const auto& wc : wcsCards) {
             ImageBuffer::Metadata::HeaderCard card;
