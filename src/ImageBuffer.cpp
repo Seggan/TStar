@@ -3,8 +3,6 @@
 #include "core/SimdOps.h"
 #include "io/IccProfileExtractor.h"
 #include "core/ColorProfileManager.h"
-
-
 #include "io/SimpleTiffWriter.h"
 #include "io/SimpleTiffReader.h"
 #include <QtConcurrent/QtConcurrent>
@@ -274,8 +272,11 @@ void ImageBuffer::applyWhiteBalance(float r, float g, float b, bool lumaProtecte
     
     if (m_channels < 3) return; // Only for color images
 
-    ImageBuffer original;
-    if (hasMask() || lumaProtected) original = *this;
+    const bool needsBackup = lumaProtected || (hasMask() && !m_mask.data.empty());
+    std::vector<float> originalData;
+    if (needsBackup) {
+        originalData = m_data; // Fast pixel data copy while already holding the lock
+    }
 
     long totalPixels = static_cast<long>(m_width) * m_height;
 
@@ -284,18 +285,14 @@ void ImageBuffer::applyWhiteBalance(float r, float g, float b, bool lumaProtecte
         SimdOps::applyGainRGB(m_data.data(), static_cast<size_t>(totalPixels), r, g, b);
     } else {
         // Luma-protected path: blend gain toward neutral in shadows and highlights.
-            // weight(L) transitions smoothly:
-        //   L = 0.00             -> 0 (full protection)
-        //   L in [0.00, 0.50]    -> 0..1 ramp  (shadow transition)
-        //   L in [0.50, 1.00]    -> 1..0 ramp  (highlight transition)
-        //   L = 1.00             -> 0 (full protection)
-        // This provides an extremely smooth bell-like curve centered at 0.5
         auto smoothstep = [](float edge0, float edge1, float x) -> float {
             float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
             return t * t * (3.0f - 2.0f * t);
         };
-        const float* src = original.m_data.data();
+        
+        const float* src = originalData.data();
         float* dst = m_data.data();
+        
         #pragma omp parallel for
         for (long i = 0; i < totalPixels; ++i) {
             float R = src[i*3+0];
@@ -304,18 +301,40 @@ void ImageBuffer::applyWhiteBalance(float r, float g, float b, bool lumaProtecte
             // Perceived luminance (Rec. 709)
             float L = 0.2126f*R + 0.7152f*G + 0.0722f*B;
             float w = smoothstep(0.00f, 0.50f, L) * (1.0f - smoothstep(0.50f, 1.00f, L));
+            
             // Effective gain: lerp between 1.0 (neutral) and the desired gain
             float er = 1.0f + (r - 1.0f) * w;
             float eg = 1.0f + (g - 1.0f) * w;
             float eb = 1.0f + (b - 1.0f) * w;
+            
             dst[i*3+0] = R * er;
             dst[i*3+1] = G * eg;
             dst[i*3+2] = B * eb;
         }
     }
 
-    if (hasMask()) {
-        blendResult(original);
+    // Apply Mask if present (Manual blend to avoid deadlock-prone blendResult call)
+    if (hasMask() && !m_mask.data.empty() && !originalData.empty()) {
+        const bool maskInverted = m_mask.inverted;
+        const bool protectMode  = (m_mask.mode == "protect");
+        const float opacity     = m_mask.opacity;
+
+        #pragma omp parallel for schedule(static)
+        for (long pi = 0; pi < totalPixels; ++pi) {
+            if ((size_t)pi >= m_mask.data.size()) continue;
+
+            float alpha = m_mask.data[pi];
+            if (maskInverted) alpha = 1.0f - alpha;
+            if (protectMode)  alpha = 1.0f - alpha;
+            alpha *= opacity;
+            const float inv_alpha = 1.0f - alpha;
+
+            size_t base = (size_t)pi * 3;
+            // Result = Processed * alpha + Original * (1 - alpha)
+            m_data[base + 0] = m_data[base + 0] * alpha + originalData[base + 0] * inv_alpha;
+            m_data[base + 1] = m_data[base + 1] * alpha + originalData[base + 1] * inv_alpha;
+            m_data[base + 2] = m_data[base + 2] * alpha + originalData[base + 2] * inv_alpha;
+        }
     }
 }
 

@@ -33,7 +33,6 @@ signals:
 private slots:
     void onSliderChanged();
     void handleApply();
-    void updatePreview();
 
 private:
     QPointer<ImageViewer> m_viewer;
@@ -49,8 +48,6 @@ private:
 
     QCheckBox* m_chkPreview;
     QCheckBox* m_chkProtect;  // Protect shadows/highlights
-
-    QTimer* m_previewTimer;
 
     // Compute RGB gain factors from current slider values
     void computeGain(float& r, float& g, float& b) const;
