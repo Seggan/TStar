@@ -80,10 +80,8 @@ void UpdateChecker::onReplyFinished(QNetworkReply* reply) {
                     m_pendingDownloadUrl = asset["browser_download_url"].toString();
                 }
 #else
-                if (false) {
-                    // Linux: fallback to html_url
+                // Linux: fallback to html_url
 #endif
-                }
             }
             
             // If no platform-specific installer found, fallback to html_url of the release page
