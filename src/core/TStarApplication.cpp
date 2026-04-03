@@ -1,6 +1,12 @@
+// ============================================================================
+// TStarApplication.cpp
+// Exception-safe QApplication event loop wrapper.
+// ============================================================================
+
 #include "TStarApplication.h"
 #include "GlobalExceptionHandler.h"
 #include "Logger.h"
+
 #include <exception>
 
 TStarApplication::TStarApplication(int& argc, char** argv)
@@ -20,7 +26,8 @@ bool TStarApplication::notify(QObject* receiver, QEvent* event)
         GlobalExceptionHandler::handle(e);
         return false;
     } catch (...) {
-        GlobalExceptionHandler::handle(QString("Unknown exception caught in event loop."));
+        GlobalExceptionHandler::handle(
+            QString("Unknown exception caught in event loop."));
         return false;
     }
 }

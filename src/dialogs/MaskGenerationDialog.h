@@ -4,8 +4,10 @@
 #include <QDialog>
 #include <QImage>
 #include <vector>
+
 #include "core/MaskLayer.h"
 #include "../ImageBuffer.h"
+#include "DialogBase.h"
 
 class QComboBox;
 class QSlider;
@@ -13,16 +15,27 @@ class QLabel;
 class QGroupBox;
 class QCheckBox;
 class QPushButton;
+class QVBoxLayout;
 class MaskCanvas;
 class LivePreviewDialog;
-class QVBoxLayout;
 
-#include "DialogBase.h"
-
-class MaskGenerationDialog : public DialogBase {
+// =============================================================================
+// MaskGenerationDialog
+//
+// Provides an interactive UI for defining a mask region (via freehand polygon,
+// ellipse, or full-image selection) and computing a float mask layer from it.
+// Multiple mask types are supported: Binary, Range Selection, Lightness,
+// Chrominance, Star Mask, and per-colour masks.
+// =============================================================================
+class MaskGenerationDialog : public DialogBase
+{
     Q_OBJECT
+
 public:
     explicit MaskGenerationDialog(const ImageBuffer& image, QWidget* parent = nullptr);
+
+    // Generate and return the mask at the requested resolution.
+    // Pass (0, 0) to use the source image's native resolution.
     MaskLayer getGeneratedMask(int requestedW = 0, int requestedH = 0) const;
 
 private slots:
@@ -31,73 +44,76 @@ private slots:
     void generatePreview();
     void clearShapes();
     void setMode(const QString& mode);
-    
+
 private:
     void setupUI();
-    std::vector<float> generateBaseMask(); // From canvas
+
+    // Generate the geometric base mask from the canvas shapes
+    std::vector<float> generateBaseMask();
+
+    // Generate a range-selection mask from the current slider values
     std::vector<float> generateRangeMask(const std::vector<float>& base);
-    
-    // UI Elements
-    MaskCanvas* m_canvas;
-    
+
+    // --- Canvas & core data ---
+    MaskCanvas*    m_canvas;
+    const ImageBuffer& m_sourceImage;
+    MaskLayer      m_resultLayer;
+    LivePreviewDialog* m_livePreview;
+
+    // --- Mask type controls ---
     QComboBox* m_typeCombo;
-    QSlider* m_blurSlider;
-    QLabel* m_blurLabel;
-    
-    // Range Selection
+    QSlider*   m_blurSlider;
+    QLabel*    m_blurLabel;
+
+    // --- Range selection group ---
     QGroupBox* m_rangeGroup;
-    QSlider* m_lowerSl;
-    QSlider* m_upperSl;
-    QSlider* m_fuzzSl;
-    QSlider* m_smoothSl;
-    
-    QLabel* m_lowerLbl;
-    QLabel* m_upperLbl;
-    QLabel* m_fuzzLbl;
-    QLabel* m_smoothLbl;
-    
+    QSlider*   m_lowerSl;
+    QSlider*   m_upperSl;
+    QSlider*   m_fuzzSl;
+    QSlider*   m_smoothSl;
+    QLabel*    m_lowerLbl;
+    QLabel*    m_upperLbl;
+    QLabel*    m_fuzzLbl;
+    QLabel*    m_smoothLbl;
     QCheckBox* m_linkCb;
     QCheckBox* m_screenCb;
-    QCheckBox* m_lightCb; // Use Lightness
+    QCheckBox* m_lightCb;
     QCheckBox* m_invertCb;
 
-    // Color Mask
+    // --- Color mask group ---
     QGroupBox* m_colorGroup;
-    QSlider* m_colorFuzzSl;
-    QLabel* m_colorFuzzLbl;
-    
-    // Preview Visualization
+    QSlider*   m_colorFuzzSl;
+    QLabel*    m_colorFuzzLbl;
+
+    // --- Preview visualization controls ---
     QComboBox* m_previewStretchCombo;
-    QComboBox* m_previewSizeCombo; // 1024, 2048, Full
-    int m_maxPreviewDim = 1024;
-    
+    QComboBox* m_previewSizeCombo;
+    int        m_maxPreviewDim = 1024;
+
+    // --- Mode toolbar buttons ---
     QPushButton* m_freeBtn;
     QPushButton* m_ellipseBtn;
     QPushButton* m_selectBtn;
     QPushButton* m_moveBtn;
-    
-    // Data
-    const ImageBuffer& m_sourceImage;
-    MaskLayer m_resultLayer;
-    LivePreviewDialog* m_livePreview;
-    
-    // Helpers
-    std::vector<float> getComponentLightness() const;
-    std::vector<float> getComponentChrominance() const;
-    std::vector<float> getComponentHue() const;
-    std::vector<float> getStarMask() const;
-    std::vector<float> getStarMask(int w, int h) const;
-    std::vector<float> getChrominance(int w, int h) const;
-    std::vector<float> getColorMask(const QString& color, float fuzzDeg = 0.0f) const;
-    std::vector<float> getColorMask(const QString& color, int w, int h, float fuzzDeg = 0.0f) const;
-    
-    // Downsampled data for fast preview
+
+    // --- Downsampled luma cache for fast preview ---
     std::vector<float> m_smallLuma;
     int m_smallW = 0;
     int m_smallH = 0;
-    
-    // Helper to get lightness (full or small)
-    std::vector<float> getLightness(int w, int h) const;
+
+    // --- Image component helpers ---
+    std::vector<float> getComponentLightness()  const;
+    std::vector<float> getComponentChrominance() const;
+    std::vector<float> getComponentHue()         const;
+    std::vector<float> getStarMask()             const;
+    std::vector<float> getStarMask(int w, int h) const;
+    std::vector<float> getChrominance(int w, int h) const;
+    std::vector<float> getLightness  (int w, int h) const;
+    std::vector<float> getColorMask(const QString& color,
+                                    float fuzzDeg = 0.0f) const;
+    std::vector<float> getColorMask(const QString& color,
+                                    int w, int h,
+                                    float fuzzDeg = 0.0f) const;
 };
 
 #endif // MASKGENERATIONDIALOG_H

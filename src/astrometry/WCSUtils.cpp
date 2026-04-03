@@ -1,207 +1,319 @@
+/**
+ * @file WCSUtils.cpp
+ *
+ * Utility functions for World Coordinate System (WCS) transformations.
+ *
+ * Provides conversions between pixel coordinates and celestial coordinates
+ * (RA/Dec) using the FITS TAN (gnomonic) projection, CD matrix algebra,
+ * and SIP distortion polynomials.
+ *
+ * References:
+ *   - FITS WCS Paper I   (Greisen & Calabretta 2002, A&A 395, 1061)
+ *   - FITS WCS Paper II  (Calabretta & Greisen 2002, A&A 395, 1077)
+ *   - SIP Convention     (Shupe et al. 2005, ASPC 347, 491)
+ */
+
 #include "WCSUtils.h"
 #include <cmath>
 #include <QDebug>
 
-// Constants
+// ---------------------------------------------------------------------------
+// Angular conversion constants
+// ---------------------------------------------------------------------------
 static const double DEG_TO_RAD = M_PI / 180.0;
 static const double RAD_TO_DEG = 180.0 / M_PI;
 
+// ===========================================================================
+// CD / CDELT / PC matrix conversions
+// ===========================================================================
+
+/**
+ * Convert CDELT + PC matrix representation to a CD matrix.
+ *
+ * The FITS standard allows the coordinate transformation to be expressed as
+ *   CD_i_j = CDELT_i * PC_i_j
+ * This helper performs that multiplication for a 2x2 case.
+ */
 void WCSUtils::cdeltPcToCD(double cdelt1, double cdelt2,
-                           double pc1_1, double pc1_2, double pc2_1, double pc2_2,
-                           double& cd1_1, double& cd1_2, double& cd2_1, double& cd2_2) {
+                           double pc1_1, double pc1_2,
+                           double pc2_1, double pc2_2,
+                           double& cd1_1, double& cd1_2,
+                           double& cd2_1, double& cd2_2)
+{
     cd1_1 = pc1_1 * cdelt1;
     cd1_2 = pc1_2 * cdelt1;
     cd2_1 = pc2_1 * cdelt2;
     cd2_2 = pc2_2 * cdelt2;
 }
 
-void WCSUtils::cdToCdeltCrota(double cd1_1, double cd1_2, double cd2_1, double cd2_2,
-                              double& cdelt1, double& cdelt2, double& crota2) {
-    // Calculate scales
-    cdelt1 = -std::sqrt(cd1_1 * cd1_1 + cd2_1 * cd2_1);  // Usually negative for RA
-    cdelt2 = std::sqrt(cd1_2 * cd1_2 + cd2_2 * cd2_2);
-    
-    // Need to determine actual sign from CD matrix structure
+/**
+ * Decompose a CD matrix into CDELT values and a scalar CROTA2 rotation angle.
+ *
+ * The per-axis pixel scales are recovered as the column norms of the CD
+ * matrix.  The sign of CDELT1 is determined by the handedness of the
+ * coordinate system (det(CD)).  The rotation angle is averaged from both
+ * matrix columns for robustness against minor skew.
+ */
+void WCSUtils::cdToCdeltCrota(double cd1_1, double cd1_2,
+                              double cd2_1, double cd2_2,
+                              double& cdelt1, double& cdelt2,
+                              double& crota2)
+{
+    // Compute per-axis scales (RA scale is conventionally negative)
+    cdelt1 = -std::sqrt(cd1_1 * cd1_1 + cd2_1 * cd2_1);
+    cdelt2 =  std::sqrt(cd1_2 * cd1_2 + cd2_2 * cd2_2);
+
+    // Correct sign based on coordinate-system handedness
     double det = cd1_1 * cd2_2 - cd1_2 * cd2_1;
     if (det > 0) {
-        cdelt1 = -cdelt1;  // Flip sign for proper handedness
+        cdelt1 = -cdelt1;
     }
-    
-    // Calculate rotation (average of two methods for robustness)
+
+    // Average rotation angle from both matrix columns
     double rota1 = std::atan2(cd2_1, cd1_1) * RAD_TO_DEG;
     double rota2 = std::atan2(-cd1_2, cd2_2) * RAD_TO_DEG;
     crota2 = (rota1 + rota2) / 2.0;
-    
-    // Normalize to 0-360
-    while (crota2 < 0) crota2 += 360.0;
+
+    // Normalize to [0, 360)
+    while (crota2 < 0.0)    crota2 += 360.0;
     while (crota2 >= 360.0) crota2 -= 360.0;
 }
 
-bool WCSUtils::hasValidWCS(const Metadata& meta) {
-    // A non-degenerate CD matrix is the primary requirement for valid WCS.
-    // We intentionally do NOT require non-zero RA/Dec because RA=0 and Dec=0
-    // are perfectly valid astronomical coordinates (vernal equinox / celestial equator).
+// ===========================================================================
+// WCS validity and derived quantities
+// ===========================================================================
+
+/**
+ * Determine whether the metadata contains a usable WCS solution.
+ *
+ * A valid WCS requires:
+ *   1. A non-degenerate CD matrix (non-zero determinant).
+ *   2. At least one non-zero CRPIX component.
+ *
+ * Note: RA = 0 and Dec = 0 are valid astronomical coordinates (the vernal
+ * equinox on the celestial equator), so zero values are explicitly allowed.
+ */
+bool WCSUtils::hasValidWCS(const Metadata& meta)
+{
     double det = meta.cd1_1 * meta.cd2_2 - meta.cd1_2 * meta.cd2_1;
     bool hasMatrix = std::abs(det) > 1e-20;
-    // CRPIX must have been parsed (at least one non-zero component)
-    bool hasCrpix = (meta.crpix1 != 0.0 || meta.crpix2 != 0.0);
+    bool hasCrpix  = (meta.crpix1 != 0.0 || meta.crpix2 != 0.0);
     return hasMatrix && hasCrpix;
 }
 
-double WCSUtils::pixelScale(const Metadata& meta) {
+/**
+ * Compute the average pixel scale in arcseconds per pixel.
+ *
+ * The scale along each axis is the norm of the corresponding CD matrix
+ * column, converted from degrees to arcseconds.
+ */
+double WCSUtils::pixelScale(const Metadata& meta)
+{
     if (!hasValidWCS(meta)) return 0.0;
-    
-    // Average of scales in both directions
+
     double scale1 = std::sqrt(meta.cd1_1 * meta.cd1_1 + meta.cd2_1 * meta.cd2_1);
     double scale2 = std::sqrt(meta.cd1_2 * meta.cd1_2 + meta.cd2_2 * meta.cd2_2);
     double avgScale = (scale1 + scale2) / 2.0;
-    
-    // Convert from degrees to arcseconds
+
     return avgScale * 3600.0;
 }
 
-double WCSUtils::imageRotation(const Metadata& meta) {
+/**
+ * Compute the image rotation angle (degrees) from the CD matrix.
+ *
+ * This returns the rotation of the pixel X-axis relative to celestial North,
+ * normalized to [0, 360).
+ */
+double WCSUtils::imageRotation(const Metadata& meta)
+{
     if (!hasValidWCS(meta)) return 0.0;
-    
-    // Calculate rotation from CD matrix
+
     double crota = std::atan2(meta.cd2_1, meta.cd1_1) * RAD_TO_DEG;
-    
-    // Normalize to 0-360
-    while (crota < 0) crota += 360.0;
+
+    while (crota < 0.0)    crota += 360.0;
     while (crota >= 360.0) crota -= 360.0;
-    
+
     return crota;
 }
 
-double WCSUtils::positionAngle(const Metadata& meta) {
+/**
+ * Compute the position angle (East of North) in degrees.
+ *
+ * The internal CD matrix has its Y-axis terms (CD1_2, CD2_2) negated to
+ * accommodate the top-down memory layout produced by AstapSolver.  This
+ * method restores the standard FITS signs before computing the angle so
+ * that the result matches external conventions (e.g. hips2fits).
+ *
+ * The returned angle is normalized to (-180, 180].
+ */
+double WCSUtils::positionAngle(const Metadata& meta)
+{
     if (!hasValidWCS(meta)) return 0.0;
-    
-    // AstapSolver negates the Y-axis CD terms (CD1_2 and CD2_2) to handle
-    // the top-down memory layout of the raw image. We must restore their
-    // standard FITS signs to compute the correct East-of-North rotation
-    // angle expected by external services like hips2fits.
+
+    // Restore standard FITS Y-axis signs
     double std_cd1_2 = -meta.cd1_2;
     double std_cd2_2 = -meta.cd2_2;
-    
+
     double pa = std::atan2(std_cd1_2, std_cd2_2) * RAD_TO_DEG;
-    
+
     // Normalize to (-180, 180]
     while (pa >  180.0) pa -= 360.0;
     while (pa <= -180.0) pa += 360.0;
-    
+
     return pa;
 }
 
-bool WCSUtils::isParityFlipped(const Metadata& meta) {
+/**
+ * Determine whether the image parity is flipped (mirrored).
+ *
+ * Standard astronomical orientation (East-left) normally yields det(CD) < 0
+ * in FITS.  Because the internal CD matrix has negated Y-axis terms, the
+ * sign convention is inverted: det > 0 is normal, det < 0 is mirrored.
+ */
+bool WCSUtils::isParityFlipped(const Metadata& meta)
+{
     if (!hasValidWCS(meta)) return false;
-    
+
     double det = meta.cd1_1 * meta.cd2_2 - meta.cd1_2 * meta.cd2_1;
-    
-    // Standard astronomical orientation (East-left) normally has det < 0.
-    // However, because our internal CD matrix has its Y-axis terms negated
-    // (for top-down image memory), the determinant's mathematical sign is inverted.
-    // Therefore, in our system: det > 0 is NORMAL, and det < 0 means MIRRORED.
     return det < 0.0;
 }
 
+// ===========================================================================
+// TAN (gnomonic) projection and deprojection
+// ===========================================================================
+
+/**
+ * Forward gnomonic (TAN) projection: celestial (RA, Dec) to tangent plane
+ * (xi, eta) in degrees.
+ *
+ * @param ra, dec   Input celestial coordinates (degrees).
+ * @param ra0, dec0 Tangent-point (projection centre) coordinates (degrees).
+ * @param xi, eta   Output tangent-plane offsets (degrees).
+ * @return false if the point is more than ~90 degrees from the tangent point.
+ */
 bool WCSUtils::tanProject(double ra, double dec, double ra0, double dec0,
-                          double& xi, double& eta) {
-    // Gnomonic (TAN) projection: world to native plane
-    double ra_rad = ra * DEG_TO_RAD;
-    double dec_rad = dec * DEG_TO_RAD;
-    double ra0_rad = ra0 * DEG_TO_RAD;
+                          double& xi, double& eta)
+{
+    double ra_rad   = ra   * DEG_TO_RAD;
+    double dec_rad  = dec  * DEG_TO_RAD;
+    double ra0_rad  = ra0  * DEG_TO_RAD;
     double dec0_rad = dec0 * DEG_TO_RAD;
-    
-    double cosD = std::cos(dec_rad);
-    double sinD = std::sin(dec_rad);
+
+    double cosD  = std::cos(dec_rad);
+    double sinD  = std::sin(dec_rad);
     double cosD0 = std::cos(dec0_rad);
     double sinD0 = std::sin(dec0_rad);
     double cosDR = std::cos(ra_rad - ra0_rad);
     double sinDR = std::sin(ra_rad - ra0_rad);
-    
+
     double denom = sinD * sinD0 + cosD * cosD0 * cosDR;
-    
+
     if (denom <= 1e-10) {
-        // Point is beyond 90 degrees from tangent point (or too close to horizon)
-        xi = 0;
-        eta = 0;
+        xi  = 0.0;
+        eta = 0.0;
         return false;
     }
-    
-    xi = (cosD * sinDR) / denom;
-    eta = (sinD * cosD0 - cosD * sinD0 * cosDR) / denom;
-    
-    // Convert from radians to degrees
-    xi *= RAD_TO_DEG;
-    eta *= RAD_TO_DEG;
+
+    xi  = (cosD * sinDR) / denom * RAD_TO_DEG;
+    eta = (sinD * cosD0 - cosD * sinD0 * cosDR) / denom * RAD_TO_DEG;
+
     return true;
 }
 
+/**
+ * Inverse gnomonic (TAN) deprojection: tangent plane (xi, eta) in degrees
+ * to celestial (RA, Dec) in degrees.
+ *
+ * @param xi, eta   Input tangent-plane offsets (degrees).
+ * @param ra0, dec0 Tangent-point (projection centre) coordinates (degrees).
+ * @param ra, dec   Output celestial coordinates (degrees, RA in [0, 360)).
+ */
 void WCSUtils::tanDeproject(double xi, double eta, double ra0, double dec0,
-                            double& ra, double& dec) {
-    // Gnomonic (TAN) deprojection: native plane to world
-    double xi_rad = xi * DEG_TO_RAD;
-    double eta_rad = eta * DEG_TO_RAD;
-    double ra0_rad = ra0 * DEG_TO_RAD;
+                            double& ra, double& dec)
+{
+    double xi_rad   = xi   * DEG_TO_RAD;
+    double eta_rad  = eta  * DEG_TO_RAD;
+    double ra0_rad  = ra0  * DEG_TO_RAD;
     double dec0_rad = dec0 * DEG_TO_RAD;
-    
+
     double cosD0 = std::cos(dec0_rad);
     double sinD0 = std::sin(dec0_rad);
-    
-    double rho = std::sqrt(xi_rad * xi_rad + eta_rad * eta_rad);
-    double c = std::atan(rho);
-    
+
+    double rho  = std::sqrt(xi_rad * xi_rad + eta_rad * eta_rad);
+    double c    = std::atan(rho);
     double cosC = std::cos(c);
     double sinC = std::sin(c);
-    
+
+    // Compute declination
     double dec_rad;
     if (rho < 1e-10) {
         dec_rad = dec0_rad;
     } else {
         dec_rad = std::asin(cosC * sinD0 + (eta_rad * sinC * cosD0) / rho);
     }
-    
+
+    // Compute right ascension
     double ra_rad;
     if (std::abs(cosD0) < 1e-10) {
-        // At poles
+        // Special case: tangent point at a celestial pole
         ra_rad = ra0_rad + std::atan2(xi_rad, -eta_rad * sinD0 / std::abs(sinD0));
     } else {
-        ra_rad = ra0_rad + std::atan2(xi_rad * sinC, rho * cosD0 * cosC - eta_rad * sinD0 * sinC);
+        ra_rad = ra0_rad + std::atan2(xi_rad * sinC,
+                                      rho * cosD0 * cosC - eta_rad * sinD0 * sinC);
     }
-    
-    ra = ra_rad * RAD_TO_DEG;
+
+    ra  = ra_rad  * RAD_TO_DEG;
     dec = dec_rad * RAD_TO_DEG;
-    
-    // Normalize RA to 0-360
-    while (ra < 0) ra += 360.0;
+
+    // Normalize RA to [0, 360)
+    while (ra < 0.0)    ra += 360.0;
     while (ra >= 360.0) ra -= 360.0;
 }
 
-double WCSUtils::getSIPCoeff(const Metadata& meta, const QString& prefix, int i, int j) {
+// ===========================================================================
+// SIP distortion polynomials
+// ===========================================================================
+
+/**
+ * Look up a single SIP coefficient from the metadata map.
+ *
+ * @param prefix  One of "A_", "B_", "AP_", "BP_".
+ * @param i, j    Polynomial powers.
+ * @return Coefficient value, or 0.0 if absent.
+ */
+double WCSUtils::getSIPCoeff(const Metadata& meta,
+                             const QString& prefix, int i, int j)
+{
     QString key = QString("%1%2_%3").arg(prefix).arg(i).arg(j);
     return meta.sipCoeffs.value(key, 0.0);
 }
 
+/**
+ * Evaluate the forward SIP distortion correction (A and B polynomials).
+ *
+ * Given relative pixel offsets (u, v), compute the additive distortion
+ * (du, dv) so that the corrected position is (u + du, v + dv).
+ */
 void WCSUtils::applySIP(const Metadata& meta, double u, double v,
-                        double& du, double& dv) {
+                        double& du, double& dv)
+{
     du = 0.0;
     dv = 0.0;
-    
+
     int orderA = meta.sipOrderA;
     int orderB = meta.sipOrderB;
-    
     if (orderA <= 0 && orderB <= 0) return;
-    
-    // A polynomial: du = sum(A_i_j * u^i * v^j)
+
+    // Evaluate A polynomial: du = sum_ij( A_i_j * u^i * v^j )
     for (int i = 0; i <= orderA; ++i) {
         for (int j = 0; j <= orderA - i; ++j) {
-            if (i == 0 && j == 0) continue;  // No constant term
+            if (i == 0 && j == 0) continue;
             double coeff = getSIPCoeff(meta, "A_", i, j);
             du += coeff * std::pow(u, i) * std::pow(v, j);
         }
     }
-    
-    // B polynomial: dv = sum(B_i_j * u^i * v^j)
+
+    // Evaluate B polynomial: dv = sum_ij( B_i_j * u^i * v^j )
     for (int i = 0; i <= orderB; ++i) {
         for (int j = 0; j <= orderB - i; ++j) {
             if (i == 0 && j == 0) continue;
@@ -211,151 +323,190 @@ void WCSUtils::applySIP(const Metadata& meta, double u, double v,
     }
 }
 
+/**
+ * Evaluate the inverse SIP distortion correction (AP / BP polynomials),
+ * or solve iteratively if inverse coefficients are not available.
+ *
+ * Given distorted intermediate coordinates (u, v), recover the undistorted
+ * pixel offsets (u0, v0).
+ */
 void WCSUtils::applySIPInverse(const Metadata& meta, double u, double v,
-                               double& u0, double& v0) {
-    // If we have inverse coefficients (AP, BP), use them
+                               double& u0, double& v0)
+{
+    // --- Path 1: use stored inverse coefficients (AP, BP) if present ---------
     if (meta.sipOrderAP > 0 || meta.sipOrderBP > 0) {
         double du = 0.0;
         double dv = 0.0;
-        
-        int orderAP = meta.sipOrderAP;
-        int orderBP = meta.sipOrderBP;
-        
-        for (int i = 0; i <= orderAP; ++i) {
-            for (int j = 0; j <= orderAP - i; ++j) {
+
+        for (int i = 0; i <= meta.sipOrderAP; ++i) {
+            for (int j = 0; j <= meta.sipOrderAP - i; ++j) {
                 if (i == 0 && j == 0) continue;
                 double coeff = getSIPCoeff(meta, "AP_", i, j);
                 du += coeff * std::pow(u, i) * std::pow(v, j);
             }
         }
-        
-        for (int i = 0; i <= orderBP; ++i) {
-            for (int j = 0; j <= orderBP - i; ++j) {
+
+        for (int i = 0; i <= meta.sipOrderBP; ++i) {
+            for (int j = 0; j <= meta.sipOrderBP - i; ++j) {
                 if (i == 0 && j == 0) continue;
                 double coeff = getSIPCoeff(meta, "BP_", i, j);
                 dv += coeff * std::pow(u, i) * std::pow(v, j);
             }
         }
-        
+
         u0 = u + du;
         v0 = v + dv;
         return;
     }
-    
-    // Otherwise, use iterative method
-    // Start with u0 = u, v0 = v and iterate
+
+    // --- Path 2: fixed-point iteration to invert forward SIP -----------------
     u0 = u;
     v0 = v;
-    
+
     for (int iter = 0; iter < 10; ++iter) {
         double du, dv;
         applySIP(meta, u0, v0, du, dv);
-        
+
         double u_pred = u0 + du;
         double v_pred = v0 + dv;
-        
-        // Adjust
+
         u0 = u - du;
         v0 = v - dv;
-        
-        // Check convergence
+
         if (std::abs(u_pred - u) < 1e-10 && std::abs(v_pred - v) < 1e-10) {
             break;
         }
     }
 }
 
+// ===========================================================================
+// High-level pixel <-> world coordinate transformations
+// ===========================================================================
+
+/**
+ * Convert 0-indexed pixel coordinates to celestial (RA, Dec) coordinates.
+ *
+ * The transformation chain is:
+ *   pixel -> relative offset (u, v) -> SIP correction -> CD matrix
+ *   -> intermediate world coords (xi, eta) -> TAN deprojection -> (RA, Dec)
+ *
+ * FITS CRPIX is 1-indexed; the +1 offset accounts for the 0-indexed pixel
+ * convention used internally.
+ */
 bool WCSUtils::pixelToWorld(const Metadata& meta, double px, double py,
-                            double& ra, double& dec) {
+                            double& ra, double& dec)
+{
     if (!hasValidWCS(meta)) {
-        ra = 0;
-        dec = 0;
+        ra  = 0.0;
+        dec = 0.0;
         return false;
     }
-    
-    // Relative pixel coordinates (0-indexed to CRPIX)
-    double u = px - meta.crpix1 + 1.0; 
+
+    // Relative pixel coordinates (0-indexed to CRPIX, with FITS 1-index offset)
+    double u = px - meta.crpix1 + 1.0;
     double v = py - meta.crpix2 + 1.0;
-    
-    // Apply SIP distortion if present
+
+    // Apply forward SIP distortion if present
     if (meta.sipOrderA > 0 || meta.sipOrderB > 0) {
         double du, dv;
         applySIP(meta, u, v, du, dv);
         u += du;
         v += dv;
     }
-    
-    // Apply CD matrix to get intermediate world coordinates
-    double xi = meta.cd1_1 * u + meta.cd1_2 * v;
+
+    // Apply CD matrix to obtain intermediate world coordinates (degrees)
+    double xi  = meta.cd1_1 * u + meta.cd1_2 * v;
     double eta = meta.cd2_1 * u + meta.cd2_2 * v;
-    
-    // Deproject from native plane to world coordinates
+
+    // Deproject from tangent plane to celestial sphere
     tanDeproject(xi, eta, meta.ra, meta.dec, ra, dec);
-    
+
     return true;
 }
 
+/**
+ * Convert celestial (RA, Dec) coordinates to 0-indexed pixel coordinates.
+ *
+ * The transformation chain is:
+ *   (RA, Dec) -> TAN projection -> intermediate world coords (xi, eta)
+ *   -> inverse CD matrix -> inverse SIP -> relative offset (u, v) -> pixel
+ */
 bool WCSUtils::worldToPixel(const Metadata& meta, double ra, double dec,
-                            double& px, double& py) {
+                            double& px, double& py)
+{
     if (!hasValidWCS(meta)) {
-        px = 0;
-        py = 0;
+        px = 0.0;
+        py = 0.0;
         return false;
     }
-    
-    // Project to native plane
+
+    // Project celestial coordinates onto the tangent plane
     double xi, eta;
     if (!tanProject(ra, dec, meta.ra, meta.dec, xi, eta)) {
-        px = 0;
-        py = 0;
+        px = 0.0;
+        py = 0.0;
         return false;
     }
-    
-    // Invert CD matrix: [u, v] = CD^-1 * [xi, eta]
+
+    // Invert the CD matrix: [u, v] = CD^-1 * [xi, eta]
     double det = meta.cd1_1 * meta.cd2_2 - meta.cd1_2 * meta.cd2_1;
     if (std::abs(det) < 1e-20) {
-        px = 0;
-        py = 0;
+        px = 0.0;
+        py = 0.0;
         return false;
     }
-    
-    double u = (meta.cd2_2 * xi - meta.cd1_2 * eta) / det;
+
+    double u = ( meta.cd2_2 * xi - meta.cd1_2 * eta) / det;
     double v = (-meta.cd2_1 * xi + meta.cd1_1 * eta) / det;
-    
-    // Apply inverse SIP if present
+
+    // Apply inverse SIP distortion if any SIP data is present
     if (meta.sipOrderA > 0 || meta.sipOrderB > 0 ||
-        meta.sipOrderAP > 0 || meta.sipOrderBP > 0) {
+        meta.sipOrderAP > 0 || meta.sipOrderBP > 0)
+    {
         double u0, v0;
         applySIPInverse(meta, u, v, u0, v0);
         u = u0;
         v = v0;
     }
-    
-    // Convert back to pixel coordinates (0-indexed)
-    px = u + meta.crpix1 - 1.0; 
+
+    // Convert relative offset back to 0-indexed pixel coordinates
+    px = u + meta.crpix1 - 1.0;
     py = v + meta.crpix2 - 1.0;
-    
+
     return true;
 }
 
+// ===========================================================================
+// Field geometry helpers
+// ===========================================================================
+
+/**
+ * Compute the celestial coordinates of the image centre.
+ */
 bool WCSUtils::getFieldCenter(const Metadata& meta, int width, int height,
-                              double& ra, double& dec) {
-    // Convert center pixel to world coordinates
+                              double& ra, double& dec)
+{
     return pixelToWorld(meta, width / 2.0, height / 2.0, ra, dec);
 }
 
+/**
+ * Estimate the field of view in degrees along each image axis.
+ *
+ * This is an approximate calculation based on the average pixel scale and
+ * does not account for distortion or projection curvature across the field.
+ */
 bool WCSUtils::getFieldOfView(const Metadata& meta, int width, int height,
-                              double& fovX, double& fovY) {
+                              double& fovX, double& fovY)
+{
     if (!hasValidWCS(meta)) {
-        fovX = 0;
-        fovY = 0;
+        fovX = 0.0;
+        fovY = 0.0;
         return false;
     }
-    
-    // Simple calculation using pixel scale
-    double scale = pixelScale(meta);  // arcsec/pixel
-    fovX = width * scale / 3600.0;   // degrees
-    fovY = height * scale / 3600.0;  // degrees
-    
+
+    double scale = pixelScale(meta);       // arcsec / pixel
+    fovX = width  * scale / 3600.0;        // degrees
+    fovY = height * scale / 3600.0;        // degrees
+
     return true;
 }

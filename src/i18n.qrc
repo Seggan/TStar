@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Qt Resource Collection: Internationalization translation files -->
 <RCC>
     <qresource prefix="/translations">
         <file>tstar_it.qm</file>

@@ -1,155 +1,227 @@
+// =============================================================================
+// ImageViewer.h
+//
+// QGraphicsView-based image viewer widget for TStar. Provides pan, zoom,
+// interactive crop, ABE polygon selection, point/region picking, mask overlay,
+// view linking across MDI windows, and undo/redo history management.
+// =============================================================================
+
 #ifndef IMAGEVIEWER_H
 #define IMAGEVIEWER_H
 
+// ---- Qt headers -------------------------------------------------------------
 #include <QGraphicsView>
 #include <QGraphicsScene>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsRectItem>
+#include <QScrollBar>
+
+// ---- Standard library -------------------------------------------------------
 #include <vector>
-#include <QVector>
-#include <QPolygonF>
-#include <QScrollBar> // Added
-#include "ImageBuffer.h"
-#include <functional> // Added for callbacks
+#include <functional>
 #include <memory>
 
+// ---- Qt containers ----------------------------------------------------------
+#include <QVector>
+#include <QPolygonF>
 
-class ImageHistoryManager;  // Forward declaration
+// ---- Project headers --------------------------------------------------------
+#include "ImageBuffer.h"
+
+// Forward declarations
+class ImageHistoryManager;
+
+// =============================================================================
+// ImageViewer class
+// =============================================================================
 
 class ImageViewer : public QGraphicsView {
     Q_OBJECT
+
 public:
     explicit ImageViewer(QWidget* parent = nullptr);
     virtual ~ImageViewer();
-    
+
+    // ---- Image display ------------------------------------------------------
+
+    /// Set a pre-rendered QImage for display.
     void setImage(const QImage& image, bool preserveView = false);
+
+    /// Replace a downscaled preview image while keeping scene geometry intact.
+    void setPreviewImage(const QImage& img);
+
+    // ---- Zoom controls ------------------------------------------------------
+
     void zoomIn();
     void zoomOut();
-    void zoom1to1(); // New 1:1 Zoom
+    void zoom1to1();
     void fitToWindow();
 
-    // MDI / History Support
-    ImageBuffer& getBuffer() { return m_buffer; }
-    const ImageBuffer& getBuffer() const { return m_buffer; }
-    QString getHeaderValue(const QString &key) const { return m_buffer.getHeaderValue(key); }
-    void setBuffer(const ImageBuffer& buffer, const QString& name = QString(), bool preserveView = false);
-    void refreshDisplay(bool preserveView = true);
-    void refresh() { refreshDisplay(true); } // Alias
+    // ---- Buffer access & MDI support ----------------------------------------
 
-    // Mask Support
-    void setMaskOverlay(bool show) { m_showMaskOverlay = show; refreshDisplay(true); }
+    ImageBuffer&       getBuffer()       { return m_buffer; }
+    const ImageBuffer& getBuffer() const { return m_buffer; }
+
+    QString getHeaderValue(const QString& key) const {
+        return m_buffer.getHeaderValue(key);
+    }
+
+    void setBuffer(const ImageBuffer& buffer,
+                   const QString& name = QString(),
+                   bool preserveView = false);
+
+    void refreshDisplay(bool preserveView = true);
+    void refresh() { refreshDisplay(true); }
+
+    // ---- Mask overlay -------------------------------------------------------
+
+    void setMaskOverlay(bool show) {
+        m_showMaskOverlay = show;
+        refreshDisplay(true);
+    }
     bool isMaskOverlayEnabled() const { return m_showMaskOverlay; }
+
+    // ---- Undo / redo --------------------------------------------------------
 
     void pushUndo(const QString& description = QString());
     void undo();
     void redo();
-    bool canUndo() const;
-    bool canRedo() const;
+    bool    canUndo() const;
+    bool    canRedo() const;
     QString getUndoDescription() const;
     QString getRedoDescription() const;
 
-    // Crop Mode
+    // ---- Crop mode ----------------------------------------------------------
+
     void setCropMode(bool active);
     void setCropAngle(float angle);
     void setAspectRatio(float ratio);
     void getCropState(float& cx, float& cy, float& w, float& h, float& angle) const;
 
-    // ABE Mode
+    // ---- ABE (Automatic Background Extraction) mode -------------------------
+
     void setAbeMode(bool enable);
     void clearAbePolygons();
     std::vector<QPolygonF> getAbePolygons() const;
-    
+
+    // ---- Background sample points -------------------------------------------
+
     void setBackgroundSamples(const std::vector<QPointF>& points);
-    std::vector<QPointF> getBackgroundSamples() const; // New accessor
+    std::vector<QPointF> getBackgroundSamples() const;
     void clearBackgroundSamples();
-    
-    // Pick Mode
+
+    // ---- Point / region picking ---------------------------------------------
+
     void setPickMode(bool active);
-    void setRectQueryMode(bool active); // For Area Mean
-    
-    // Callback Support (Bypassing MOC)
+    void setRectQueryMode(bool active);
+
+    // ---- Callback for region selection (bypasses MOC) ------------------------
+
     using RegionCallback = std::function<void(QRectF)>;
     void setRegionSelectedCallback(RegionCallback cb) { m_regionCallback = cb; }
 
+    // ---- Interaction modes --------------------------------------------------
+
     enum InteractionMode {
-        Mode_PanZoom,   // Default: Drag=Pan, Wheel=Zoom
-        Mode_Selection, // Drag=Rect Select, Ctrl+Drag=Pan
+        Mode_PanZoom,     ///< Default: drag = pan, wheel = zoom
+        Mode_Selection,   ///< Drag = rectangular selection, Ctrl+Drag = pan
         Mode_Crop,
         Mode_ABE
     };
     void setInteractionMode(InteractionMode mode);
-    // Fast Preview (Downscaled)
-    void setPreviewImage(const QImage& img); // Replaces display but maintains scene rect
-    
-    // GHS Preview
-    void setPreviewLUT(const std::vector<std::vector<float>>& luts); // 3 channels x 65536
+
+    // ---- GHS / LUT preview --------------------------------------------------
+
+    /// Set a per-channel preview LUT (3 channels x 65536 entries).
+    void setPreviewLUT(const std::vector<std::vector<float>>& luts);
     void clearPreviewLUT();
-    
-    // Display State
-    ImageBuffer::DisplayMode getDisplayMode() const { return m_displayMode; }
-    bool isDisplayLinked() const { return m_displayLinked; }
-    bool isDisplayInverted() const { return m_displayInverted; }
-    bool isDisplayFalseColor() const { return m_displayFalseColor; }
+
+    // ---- Display state accessors --------------------------------------------
+
+    ImageBuffer::DisplayMode getDisplayMode()    const { return m_displayMode; }
+    bool  isDisplayLinked()      const { return m_displayLinked; }
+    bool  isDisplayInverted()    const { return m_displayInverted; }
+    bool  isDisplayFalseColor()  const { return m_displayFalseColor; }
     float getAutoStretchMedian() const { return m_autoStretchMedian; }
     ImageBuffer::ChannelView channelView() const { return m_channelView; }
+
     void setDisplayState(ImageBuffer::DisplayMode mode, bool linked);
     void setAutoStretchMedian(float median);
     void setInverted(bool inverted);
     void setFalseColor(bool falseColor);
     void setChannelView(ImageBuffer::ChannelView cv);
-    
-    // Consolidated restoration to avoid multiple refreshes
-    void restoreState(const ImageBuffer& buffer, ImageBuffer::DisplayMode mode, bool linked);
+
+    /// Restore buffer and display state in a single call to avoid redundant refreshes.
+    void restoreState(const ImageBuffer& buffer,
+                      ImageBuffer::DisplayMode mode, bool linked);
 
     QImage getCurrentDisplayImage() const { return m_displayImage; }
 
-    // Source path tracking (used by workspace project persistence)
-    QString filePath() const { return m_filePath; }
-    void setFilePath(const QString& path) { m_filePath = path; }
+    // ---- Source path tracking ------------------------------------------------
 
-    // Snapshot accessors for project-level history persistence
+    QString filePath() const             { return m_filePath; }
+    void    setFilePath(const QString& path) { m_filePath = path; }
+
+    // ---- Snapshot accessors for project persistence -------------------------
+
     QVector<ImageBuffer> undoHistory() const;
     QVector<ImageBuffer> redoHistory() const;
-    void setHistory(const QVector<ImageBuffer>& undoHistory, const QVector<ImageBuffer>& redoHistory);
-    
-    // Modification State
+    void setHistory(const QVector<ImageBuffer>& undoHistory,
+                    const QVector<ImageBuffer>& redoHistory);
+
+    // ---- Modification state -------------------------------------------------
+
     bool isModified() const { return m_isModified; }
     void setModified(bool modified);
-    
-    void clearSelection();
-    QRectF getSelectionRect() const; // Returns current selection in scene coords
-    
+
+    // ---- Selection ----------------------------------------------------------
+
+    void   clearSelection();
+    QRectF getSelectionRect() const;
+
+    // ---- View linking -------------------------------------------------------
+
+    bool isLinked() const { return m_isLinked; }
+    void setLinked(bool linked);
+
+    // ---- Zoom & scroll accessors (for view synchronization) -----------------
+
+    float getScale()   const { return static_cast<float>(m_scaleFactor); }
+    int   getHBarLoc() const;
+    int   getVBarLoc() const;
+
+    // ---- Annotation support -------------------------------------------------
+
+    double  zoomFactor()  const { return m_scaleFactor; }
+    double  pixelScale()  const;  ///< arcsec/pixel from WCS metadata
+    QPointF mapToScene(const QPoint& widgetPos) const {
+        return QGraphicsView::mapToScene(widgetPos);
+    }
+    QPointF mapFromScene(const QPointF& scenePos) const {
+        return QGraphicsView::mapFromScene(scenePos).toPointF();
+    }
+
 signals:
-    void pointPicked(QPointF p); // Scene coordinates (pixels)
-    // void regionSelected(QRectF r); // REMOVED to bypass MOC crash
-    void samplesMoved(const std::vector<QPointF>& points); // Emitted when samples are dragged
+    void pointPicked(QPointF p);                               ///< Scene coordinates
+    void samplesMoved(const std::vector<QPointF>& points);     ///< After sample drag
     void requestNewView(const ImageBuffer& img, const QString& title);
-    void bufferChanged(); // buffer content updated (e.g. undo/redo)
-    void historyChanged(); // New: undo/redo stacks updated
-    void resized(); // Emitted when widget is resized
-    
-    // Linking Signals
+    void bufferChanged();                                       ///< Buffer content updated
+    void historyChanged();                                      ///< Undo/redo stacks changed
+    void resized();                                             ///< Widget geometry changed
+
+    // View linking signals
     void viewChanged(float scale, float hVal, float vVal);
     void unlinked();
     void modifiedChanged(bool modified);
-    void pixelInfoUpdated(const QString& info); // New
-    
+    void pixelInfoUpdated(const QString& info);
+
 public slots:
+    /// Synchronize this viewer's zoom and scroll to match another viewer.
     void syncView(float scale, float hVal, float vVal);
-    
-public:
-    // Accessors for Initial Sync
-    float getScale() const { return (float)m_scaleFactor; }
-    int getHBarLoc() const;
-    int getVBarLoc() const;
-    
-    // Annotation Support
-    double zoomFactor() const { return m_scaleFactor; }
-    double pixelScale() const;  // arcsec/pixel from WCS
-    QPointF mapToScene(const QPoint& widgetPos) const { return QGraphicsView::mapToScene(widgetPos); }
-    QPointF mapFromScene(const QPointF& scenePos) const { return QGraphicsView::mapFromScene(scenePos).toPointF(); } 
 
 protected:
+    // ---- Event overrides ----------------------------------------------------
+
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -163,55 +235,58 @@ protected:
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
 
-public:
-    bool isLinked() const { return m_isLinked; }
-    void setLinked(bool linked);
-
 private:
-    QGraphicsScene* m_scene;
-    QGraphicsPixmapItem* m_imageItem;
-    QGraphicsRectItem* m_cropItem = nullptr;
-    
-    // Link State
+    // ---- Scene items --------------------------------------------------------
+
+    QGraphicsScene*       m_scene;
+    QGraphicsPixmapItem*  m_imageItem;
+    QGraphicsRectItem*    m_cropItem = nullptr;
+
+    // ---- Link state ---------------------------------------------------------
+
     bool m_isLinked = false;
-    
-    // Data & History
+
+    // ---- Image data & history -----------------------------------------------
+
     ImageBuffer m_buffer;
-    std::vector<ImageBuffer> m_undoStack;  // Backward-compat: stores full copies (legacy mode)
-    std::vector<ImageBuffer> m_redoStack;  // Backward-compat: stores full copies (legacy mode)
-    std::vector<QString> m_undoDescriptions; // For legacy stack
-    std::vector<QString> m_redoDescriptions; // For legacy stack
-    
-    // Delta-based history (new, memory-efficient)
+
+    // Legacy full-copy history (backward compatibility)
+    std::vector<ImageBuffer> m_undoStack;
+    std::vector<ImageBuffer> m_redoStack;
+    std::vector<QString>     m_undoDescriptions;
+    std::vector<QString>     m_redoDescriptions;
+
+    // Delta-compressed history (preferred, memory-efficient)
     std::unique_ptr<ImageHistoryManager> m_historyManager;
-    bool m_useDeltaHistory = true;  // Feature flag: use delta compression
+    bool m_useDeltaHistory = true;
+
+    // ---- Display state ------------------------------------------------------
 
     QImage m_displayImage;
     double m_scaleFactor = 1.0;
-    
-    float m_zoom = 1.0f;
-    
-    float m_panX = 0.0f, m_panY = 0.0f;
-    QPointF m_lastMousePos;
-    bool m_dragging = false;
+    float  m_zoom        = 1.0f;
 
-    // Crop State
-    bool m_cropMode = false;
-    // ... (Crop members)
-    QPointF m_startPoint;
-    QPointF m_endPoint;
-    bool m_drawing = false;
-    bool m_previewActive = false;
-    
-    RegionCallback m_regionCallback;
-    bool m_pickMode = false;
-    bool m_rectQueryMode = false;
-    QGraphicsRectItem* m_queryRectItem = nullptr;
-    
-    // Advanced Crop
-    bool m_moving = false;
-    QPointF m_lastPos; // Used for moving crop box
-    
+    // ---- Pan / drag state ---------------------------------------------------
+
+    float    m_panX = 0.0f;
+    float    m_panY = 0.0f;
+    QPointF  m_lastMousePos;
+    bool     m_dragging = false;
+
+    // ---- Crop state ---------------------------------------------------------
+
+    bool     m_cropMode    = false;
+    float    m_cropAngle   = 0.0f;
+    float    m_aspectRatio = -1.0f;  ///< -1 = free aspect ratio
+
+    QPointF  m_startPoint;
+    QPointF  m_endPoint;
+    bool     m_drawing        = false;
+    bool     m_previewActive  = false;
+
+    bool     m_moving = false;
+    QPointF  m_lastPos;
+
     enum CropDragMode {
         CropDrag_None,
         CropDrag_Move,
@@ -224,47 +299,67 @@ private:
         CropDrag_BottomLeft,
         CropDrag_BottomRight
     };
+
     CropDragMode m_cropDragMode = CropDrag_None;
-    CropDragMode getCropDragMode(const QPointF& itemPos, const QRectF& rect, float tolerance = 10.0f) const;
+
+    CropDragMode getCropDragMode(const QPointF& itemPos,
+                                 const QRectF& rect,
+                                 float tolerance = 10.0f) const;
     void updateCropCursor(CropDragMode mode, float rotation);
 
-    
-    float m_cropAngle = 0.0f;
-    
-    // ABE State
-    bool m_abeMode = false;
-    std::vector<class QGraphicsPolygonItem*> m_abeItems;
-    class QGraphicsPolygonItem* m_currentLassoItem = nullptr;
-    QPolygonF m_currentLassoPoly;
-    bool m_lassoDrawing = false;
-    
-    // Background Samples
-    std::vector<class QGraphicsEllipseItem*> m_sampleItems;
-    QGraphicsEllipseItem* m_movingSample = nullptr;
-    
-    float m_aspectRatio = -1.0f; // -1 = Free
-    
+    // ---- Pick / selection state ---------------------------------------------
+
+    RegionCallback       m_regionCallback;
+    bool                 m_pickMode      = false;
+    bool                 m_rectQueryMode = false;
+    QGraphicsRectItem*   m_queryRectItem = nullptr;
+
+    // ---- ABE state ----------------------------------------------------------
+
+    bool                                            m_abeMode       = false;
+    std::vector<class QGraphicsPolygonItem*>         m_abeItems;
+    class QGraphicsPolygonItem*                      m_currentLassoItem = nullptr;
+    QPolygonF                                        m_currentLassoPoly;
+    bool                                            m_lassoDrawing  = false;
+
+    // ---- Background sample state --------------------------------------------
+
+    std::vector<class QGraphicsEllipseItem*>  m_sampleItems;
+    QGraphicsEllipseItem*                     m_movingSample = nullptr;
+
+    // ---- Interaction mode ---------------------------------------------------
+
     InteractionMode m_interactionMode = Mode_PanZoom;
-    std::vector<std::vector<float>> m_previewLUT; // Empty if no preview
-    
-    // Smooth Zoom (AnchorUnderMouse handles centering, just need the limits)
-    static constexpr double ZOOM_MIN = 0.01;  // 1% minimum
-    static constexpr double ZOOM_MAX = 120.0; // 12000% maximum
-    
-    // Magnifier: 50x50, floating top-right of cursor
-    bool m_magnifierVisible = false;
-    bool m_cursorOverViewport = false;  // True only when cursor is over this viewport
-    QPointF m_magnifierScenePos;    // Scene coords under cursor (what to zoom into)
-    QPoint  m_magnifierViewportPos; // Viewport coords of cursor (where to anchor the loupe)
-    
-    ImageBuffer::DisplayMode m_displayMode = ImageBuffer::Display_Linear;
-    bool m_displayLinked = true;
-    bool m_displayInverted = false;
-    bool m_displayFalseColor = false;
-    float m_autoStretchMedian = 0.25f;  // Target median for AutoStretch display
-    ImageBuffer::ChannelView m_channelView = ImageBuffer::ChannelRGB;
-    bool m_isModified = false;
-    bool m_showMaskOverlay = true;
+
+    // ---- Preview LUT --------------------------------------------------------
+
+    std::vector<std::vector<float>> m_previewLUT;
+
+    // ---- Zoom limits --------------------------------------------------------
+
+    static constexpr double ZOOM_MIN = 0.01;    ///< 1 % minimum zoom
+    static constexpr double ZOOM_MAX = 120.0;   ///< 12000 % maximum zoom
+
+    // ---- Magnifier state ----------------------------------------------------
+
+    bool     m_magnifierVisible    = false;
+    bool     m_cursorOverViewport  = false;
+    QPointF  m_magnifierScenePos;
+    QPoint   m_magnifierViewportPos;
+
+    // ---- Display configuration ----------------------------------------------
+
+    ImageBuffer::DisplayMode  m_displayMode       = ImageBuffer::Display_Linear;
+    bool                      m_displayLinked      = true;
+    bool                      m_displayInverted    = false;
+    bool                      m_displayFalseColor  = false;
+    float                     m_autoStretchMedian  = 0.25f;
+    ImageBuffer::ChannelView  m_channelView        = ImageBuffer::ChannelRGB;
+
+    // ---- Modification tracking ----------------------------------------------
+
+    bool    m_isModified      = false;
+    bool    m_showMaskOverlay = true;
     QString m_filePath;
 };
 

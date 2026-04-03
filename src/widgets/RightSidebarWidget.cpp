@@ -11,76 +11,99 @@
 #include <QPainter>
 #include <QSettings>
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ThumbnailItem: fixed-size preview tile with elided title label
-// ─────────────────────────────────────────────────────────────────────────────
-class ThumbnailItem : public QWidget {
+
+// ============================================================================
+// ThumbnailItem - internal widget: fixed-size preview tile with elided title
+// ============================================================================
+
+class ThumbnailItem : public QWidget
+{
     Q_OBJECT
+
 public:
-    ThumbnailItem(const QPixmap& thumb, const QString& title,
-                  CustomMdiSubWindow* sub, int creationIdx = -1, QWidget* parent = nullptr)
-        : QWidget(parent), m_sub(sub), m_creationIndex(creationIdx)
+    ThumbnailItem(const QPixmap& thumb,
+                  const QString& title,
+                  CustomMdiSubWindow* sub,
+                  int creationIdx  = -1,
+                  QWidget* parent  = nullptr)
+        : QWidget(parent)
+        , m_sub(sub)
+        , m_creationIndex(creationIdx)
     {
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         setAttribute(Qt::WA_StyledBackground, true);
         setStyleSheet("background: transparent;");
         setCursor(Qt::PointingHandCursor);
 
-        QVBoxLayout* vl = new QVBoxLayout(this);
+        auto* vl = new QVBoxLayout(this);
         vl->setContentsMargins(4, 4, 4, 4);
         vl->setSpacing(3);
 
-        // ── Thumbnail (fixed safe-zone size) ──────────────────────────────
+        // Thumbnail image label - fixed height to prevent layout jitter
         m_thumbLabel = new QLabel(this);
         m_thumbLabel->setFixedHeight(RightSidebarWidget::THUMB_H);
         m_thumbLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         m_thumbLabel->setAlignment(Qt::AlignCenter);
-        m_thumbLabel->setStyleSheet("background: transparent; border: 1px solid #000000ff;");
+        m_thumbLabel->setStyleSheet(
+            "background: transparent; border: 1px solid #000000ff;");
         setThumb(thumb);
         vl->addWidget(m_thumbLabel);
 
-        // ── Title (safe zone: fixed height, text elided to fit) ───────────
+        // Title label - fixed height with text elision to prevent overflow
         m_titleLabel = new QLabel(this);
         m_titleLabel->setFixedHeight(18);
         m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         m_titleLabel->setAlignment(Qt::AlignCenter);
-        m_titleLabel->setStyleSheet("color: #ccc; font-size: 10px; background: transparent;");
+        m_titleLabel->setStyleSheet(
+            "color: #ccc; font-size: 10px; background: transparent;");
         setTitle(title);
         vl->addWidget(m_titleLabel);
     }
 
-    void setThumb(const QPixmap& px) {
+    void setThumb(const QPixmap& px)
+    {
         if (px.isNull()) {
             m_thumbLabel->clear();
         } else {
             m_thumbLabel->setPixmap(
-                px.scaled(RightSidebarWidget::THUMB_W, RightSidebarWidget::THUMB_H,
-                          Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                px.scaled(RightSidebarWidget::THUMB_W,
+                          RightSidebarWidget::THUMB_H,
+                          Qt::KeepAspectRatio,
+                          Qt::SmoothTransformation));
         }
     }
 
-    void setTitle(const QString& title) {
+    void setTitle(const QString& title)
+    {
         QFontMetrics fm(m_titleLabel->font());
-        m_titleLabel->setText(fm.elidedText(title, Qt::ElideRight, RightSidebarWidget::THUMB_W - 4));
+        m_titleLabel->setText(
+            fm.elidedText(title, Qt::ElideRight,
+                          RightSidebarWidget::THUMB_W - 4));
         m_titleLabel->setToolTip(title);
     }
 
-    CustomMdiSubWindow* sub() const { return m_sub; }
-    int creationIndex() const { return m_creationIndex; }
+    CustomMdiSubWindow* sub()          const { return m_sub; }
+    int                 creationIndex() const { return m_creationIndex; }
 
 signals:
     void clicked(CustomMdiSubWindow* sub);
 
 protected:
-    void mousePressEvent(QMouseEvent* e) override {
-        if (e->button() == Qt::LeftButton) emit clicked(m_sub);
+    void mousePressEvent(QMouseEvent* e) override
+    {
+        if (e->button() == Qt::LeftButton)
+            emit clicked(m_sub);
         QWidget::mousePressEvent(e);
     }
-    void enterEvent(QEnterEvent* e) override {
+
+    void enterEvent(QEnterEvent* e) override
+    {
         setStyleSheet("background: #333; border-radius: 3px;");
         QWidget::enterEvent(e);
     }
-    void leaveEvent(QEvent* e) override {
+
+    void leaveEvent(QEvent* e) override
+    {
         setStyleSheet("background: transparent;");
         QWidget::leaveEvent(e);
     }
@@ -92,22 +115,35 @@ private:
     QLabel*             m_titleLabel;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VerticalButton: rotated text button for sidebar
-// ─────────────────────────────────────────────────────────────────────────────
-class VerticalButton : public QPushButton {
+
+// ============================================================================
+// VerticalButton - internal widget: tab button with rotated text label
+// ============================================================================
+
+class VerticalButton : public QPushButton
+{
 public:
-    VerticalButton(const QString& text, QWidget* parent = nullptr) : QPushButton(text, parent) {}
-    QSize sizeHint() const override {
+    VerticalButton(const QString& text, QWidget* parent = nullptr)
+        : QPushButton(text, parent)
+    {}
+
+    QSize sizeHint() const override
+    {
         QSize s = QPushButton::sizeHint();
         return QSize(s.height(), s.width());
     }
+
 protected:
-    void paintEvent(QPaintEvent*) override {
+    void paintEvent(QPaintEvent*) override
+    {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
-        if (isChecked()) p.fillRect(rect(), QColor("#0055aa"));
-        else if (underMouse()) p.fillRect(rect(), QColor("#444"));
+
+        if (isChecked())
+            p.fillRect(rect(), QColor("#0055aa"));
+        else if (underMouse())
+            p.fillRect(rect(), QColor("#444"));
+
         p.save();
         p.translate(width(), 0);
         p.rotate(90);
@@ -117,55 +153,66 @@ protected:
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+
+// ============================================================================
 // RightSidebarWidget
-// ─────────────────────────────────────────────────────────────────────────────
+// ============================================================================
+
 RightSidebarWidget::RightSidebarWidget(QWidget* parent)
     : QWidget(parent)
 {
-    QHBoxLayout* mainLayout = new QHBoxLayout(this);
+    auto* mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
     setStyleSheet("background-color: transparent;");
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
 
-    // 1. Content area (left of tab, slides horizontally)
+    // ------------------------------------------------------------------
+    // Content area (slides in from the right when the panel is expanded)
+    // ------------------------------------------------------------------
     m_contentWrapper = new QWidget(this);
-    m_contentWrapper->setFixedWidth(0);
+    m_contentWrapper->setFixedWidth(0); // Start collapsed
     m_contentWrapper->setStyleSheet("background-color: rgba(0, 0, 0, 128);");
-    
-    QVBoxLayout* wrapperLayout = new QVBoxLayout(m_contentWrapper);
+
+    auto* wrapperLayout = new QVBoxLayout(m_contentWrapper);
     wrapperLayout->setContentsMargins(0, 0, 0, 0);
     wrapperLayout->setSpacing(0);
-    
-    // Top Bar (Hide Minimized Views Checkbox)
+
+    // Top bar containing the "Hide minimized views" checkbox
     m_topContainer = new QWidget(m_contentWrapper);
     m_topContainer->setFixedHeight(26);
     m_topContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_topContainer->setStyleSheet("background-color: #202020; border-bottom: 1px solid #1a1a1a; border-left: none; border-right: none; border-top: none;");
-    
-    QHBoxLayout* topLayout = new QHBoxLayout(m_topContainer);
+    m_topContainer->setStyleSheet(
+        "background-color: #202020;"
+        "border-bottom: 1px solid #1a1a1a;"
+        "border-left: none; border-right: none; border-top: none;");
+
+    auto* topLayout = new QHBoxLayout(m_topContainer);
     topLayout->setContentsMargins(8, 0, 8, 0);
     topLayout->setSpacing(0);
-    
+
     m_hideMinimizedViewsCb = new QCheckBox(tr("Hide minimized views"), m_topContainer);
-    m_hideMinimizedViewsCb->setStyleSheet("QCheckBox { color: #aaa; font-size: 11px; } QCheckBox::indicator { width: 12px; height: 12px; }");
-    
+    m_hideMinimizedViewsCb->setStyleSheet(
+        "QCheckBox { color: #aaa; font-size: 11px; }"
+        "QCheckBox::indicator { width: 12px; height: 12px; }");
+
+    // Restore persisted checkbox state
     QSettings settings;
     m_hideMinimizedViews = settings.value("RightSidebar/hideMinimizedViews", false).toBool();
     m_hideMinimizedViewsCb->setChecked(m_hideMinimizedViews);
-    
-    connect(m_hideMinimizedViewsCb, &QCheckBox::toggled, [this](bool checked){
+
+    connect(m_hideMinimizedViewsCb, &QCheckBox::toggled, [this](bool checked) {
         m_hideMinimizedViews = checked;
-        QSettings settings;
-        settings.setValue("RightSidebar/hideMinimizedViews", checked);
+        QSettings s;
+        s.setValue("RightSidebar/hideMinimizedViews", checked);
         emit hideMinimizedViewsToggled(checked);
     });
-    
+
     topLayout->addWidget(m_hideMinimizedViewsCb);
     wrapperLayout->addWidget(m_topContainer);
 
+    // Scrollable thumbnail list
     m_contentContainer = new QScrollArea(m_contentWrapper);
     m_contentContainer->setStyleSheet("background-color: transparent; border: none;");
     m_contentContainer->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -179,17 +226,20 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
 
     m_listWidget->setMinimumWidth(m_expandedWidth);
     m_listWidget->setStyleSheet("background: transparent;");
+
     m_contentContainer->setWidget(m_listWidget);
     m_contentContainer->setWidgetResizable(true);
-    
     wrapperLayout->addWidget(m_contentContainer);
 
-    // 2. Tab strip (right edge)
+    // ------------------------------------------------------------------
+    // Tab strip (fixed narrow column on the right edge)
+    // ------------------------------------------------------------------
     m_tabContainer = new QWidget(this);
     m_tabContainer->setFixedWidth(32);
-    m_tabContainer->setStyleSheet("background-color: #252525; border-left: 1px solid #1a1a1a;");
+    m_tabContainer->setStyleSheet(
+        "background-color: #252525; border-left: 1px solid #1a1a1a;");
 
-    QVBoxLayout* tabLayout = new QVBoxLayout(m_tabContainer);
+    auto* tabLayout = new QVBoxLayout(m_tabContainer);
     tabLayout->setContentsMargins(2, 5, 2, 5);
     tabLayout->setSpacing(5);
 
@@ -198,7 +248,8 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
     m_tabBtn->setFixedSize(30, 100);
     m_tabBtn->setToolTip(tr("Collapsed Views"));
     m_tabBtn->setStyleSheet("border: none;");
-    connect(m_tabBtn, &QPushButton::clicked, this, &RightSidebarWidget::onTabClicked);
+    connect(m_tabBtn, &QPushButton::clicked,
+            this, &RightSidebarWidget::onTabClicked);
 
     tabLayout->addStretch();
     tabLayout->addWidget(m_tabBtn);
@@ -207,38 +258,46 @@ RightSidebarWidget::RightSidebarWidget(QWidget* parent)
     mainLayout->addWidget(m_contentWrapper);
     mainLayout->addWidget(m_tabContainer);
 
-    // Animation
+    // ------------------------------------------------------------------
+    // Slide animation for the content wrapper width
+    // ------------------------------------------------------------------
     m_widthAnim = new QVariantAnimation(this);
     m_widthAnim->setDuration(250);
     m_widthAnim->setEasingCurve(QEasingCurve::OutQuad);
-    connect(m_widthAnim, &QVariantAnimation::valueChanged, [this](const QVariant& val) {
+
+    connect(m_widthAnim, &QVariantAnimation::valueChanged,
+            [this](const QVariant& val) {
         m_contentWrapper->setFixedWidth(val.toInt());
-        int newW = totalVisibleWidth(); // Note: we need totalVisibleWidth to use contentWrapper width
+        int newW = totalVisibleWidth();
         resize(newW, height());
-        // Keep the right edge anchored
-        if (m_anchorRight >= 0) {
+
+        // Keep the right edge anchored to the viewport boundary
+        if (m_anchorRight >= 0)
             move(m_anchorRight - newW + 1, y());
-        }
     });
 }
 
-int RightSidebarWidget::totalVisibleWidth() const {
+int RightSidebarWidget::totalVisibleWidth() const
+{
     return m_tabContainer->width() + m_contentWrapper->width();
 }
 
-void RightSidebarWidget::setAnchorGeometry(int rightX, int topY, int h) {
+void RightSidebarWidget::setAnchorGeometry(int rightX, int topY, int h)
+{
     m_anchorRight = rightX;
     int newW = totalVisibleWidth();
     move(rightX - newW + 1, topY);
     resize(newW, h);
 }
 
-void RightSidebarWidget::onTabClicked() {
+void RightSidebarWidget::onTabClicked()
+{
     setExpanded(!m_expanded);
     m_tabBtn->setChecked(m_expanded);
 }
 
-void RightSidebarWidget::setExpanded(bool expanded) {
+void RightSidebarWidget::setExpanded(bool expanded)
+{
     if (m_expanded == expanded) return;
     m_expanded = expanded;
     emit expandedToggled(expanded);
@@ -249,47 +308,52 @@ void RightSidebarWidget::setExpanded(bool expanded) {
     m_widthAnim->start();
 }
 
-void RightSidebarWidget::addThumbnail(CustomMdiSubWindow* sub, const QPixmap& thumb, const QString& title, int creationSortIndex) {
+void RightSidebarWidget::addThumbnail(CustomMdiSubWindow* sub,
+                                      const QPixmap& thumb,
+                                      const QString& title,
+                                      int creationSortIndex)
+{
     if (!sub || m_items.contains(sub)) return;
 
     auto* item = new ThumbnailItem(thumb, title, sub, creationSortIndex, m_listWidget);
-    connect(item, &ThumbnailItem::clicked, this, &RightSidebarWidget::thumbnailActivated);
+    connect(item, &ThumbnailItem::clicked,
+            this, &RightSidebarWidget::thumbnailActivated);
 
-    // Insert according to creationSortIndex
+    // Insert the tile at the correct position according to creationSortIndex
     int insertIdx = 0;
-    int count = m_listLayout->count() - 1; // don't count the trailing stretch
+    int count     = m_listLayout->count() - 1; // Exclude the trailing stretch
     for (; insertIdx < count; ++insertIdx) {
-        if (auto* existingItem = qobject_cast<ThumbnailItem*>(m_listLayout->itemAt(insertIdx)->widget())) {
-            if (creationSortIndex != -1 && existingItem->creationIndex() > creationSortIndex) {
-                break;
-            }
-        }
+        auto* existing = qobject_cast<ThumbnailItem*>(
+            m_listLayout->itemAt(insertIdx)->widget());
+        if (existing && creationSortIndex != -1 &&
+            existing->creationIndex() > creationSortIndex)
+            break;
     }
-    
+
     m_listLayout->insertWidget(insertIdx, item);
     m_items[sub] = item;
 
-    // Auto-open if first thumbnail added
+    // Auto-expand when the first thumbnail is added
     if (m_items.size() == 1 && !m_expanded) {
         setExpanded(true);
         m_tabBtn->setChecked(true);
     }
 }
 
-void RightSidebarWidget::removeThumbnail(CustomMdiSubWindow* sub) {
+void RightSidebarWidget::removeThumbnail(CustomMdiSubWindow* sub)
+{
     if (!sub || !m_items.contains(sub)) return;
 
     QWidget* w = m_items.take(sub);
     m_listLayout->removeWidget(w);
     w->deleteLater();
 
-    // Auto-collapse when empty
+    // Auto-collapse when the list becomes empty
     if (m_items.isEmpty() && m_expanded) {
         setExpanded(false);
         m_tabBtn->setChecked(false);
     }
 }
 
-// Required for AUTOMOC to process the Q_OBJECT class defined in this .cpp file
+// Required for Qt's AUTOMOC to process Q_OBJECT classes defined in this .cpp file
 #include "RightSidebarWidget.moc"
-

@@ -1,3 +1,13 @@
+/**
+ * @file Preprocessing.cpp
+ * @brief Implementation of the image calibration pipeline engine.
+ *
+ * Implements single-image and batch calibration including bias/dark/flat
+ * subtraction, sensor artefact fixes, cosmetic correction, and CFA
+ * demosaicing.  Also implements the PreprocessingWorker thread wrapper.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
 
 #include "Preprocessing.h"
 #include "Debayer.h"
@@ -5,21 +15,23 @@
 #include "../calibration/CalibrationC.h"
 #include "../io/FitsWrapper.h"
 #include "../stacking/Statistics.h"
+#include "../core/ResourceManager.h"
+
 #include <QtConcurrent>
 #include <QAtomicInt>
-#include <mutex>
-#include <omp.h>
 #include <QFileInfo>
 #include <QDir>
-#include <cmath>
+
 #include <algorithm>
-#include "../core/ResourceManager.h"
+#include <cmath>
+#include <mutex>
+#include <omp.h>
 
 namespace Preprocessing {
 
-//=============================================================================
-// CONSTRUCTOR / DESTRUCTOR
-//=============================================================================
+// ============================================================================
+//  Construction / Destruction
+// ============================================================================
 
 PreprocessingEngine::PreprocessingEngine(QObject* parent)
     : QObject(parent)
@@ -28,124 +40,142 @@ PreprocessingEngine::PreprocessingEngine(QObject* parent)
 
 PreprocessingEngine::~PreprocessingEngine() = default;
 
-//=============================================================================
-// CONFIGURATION
-//=============================================================================
+// ============================================================================
+//  Configuration
+// ============================================================================
 
-void PreprocessingEngine::setParams(const PreprocessParams& params) {
+void PreprocessingEngine::setParams(const PreprocessParams& params)
+{
     m_params = params;
     m_deviantPixels.clear();
-    
-    // Load master frames if paths are provided
+
+    // --- Load master bias ---
+    // A synthetic bias (constant ADU value) bypasses the master file entirely,
+    // so only load a file when biasLevel is at its sentinel default (> 1e20).
     if (!params.masterBias.isEmpty() && params.useBias && params.biasLevel > 1e20) {
         m_masters.load(MasterType::Bias, params.masterBias);
     }
+
+    // --- Load master dark and (optionally) build a defect map ---
     if (!params.masterDark.isEmpty() && params.useDark) {
         m_masters.load(MasterType::Dark, params.masterDark);
-        
-        // Automated bad pixel mapping from dark
+
         if (params.cosmetic.type == CosmeticType::FromMaster) {
             ImageBuffer* dark = m_masters.get(MasterType::Dark);
             if (dark && dark->isValid()) {
                 m_deviantPixels = Calibration::CalibrationEngine::findDeviantPixels(
                     *dark, params.cosmetic.hotSigma, params.cosmetic.coldSigma);
-                emit logMessage(tr("Detected %1 deviant pixels in master dark").arg(m_deviantPixels.size()), "neutral");
+                emit logMessage(
+                    tr("Detected %1 deviant pixels in master dark").arg(m_deviantPixels.size()),
+                    "neutral");
             }
         }
     }
+
+    // --- Load master flat and apply optional pre-calibrations ---
     if (!params.masterFlat.isEmpty() && params.useFlat) {
         m_masters.load(MasterType::Flat, params.masterFlat);
-        
+
         ImageBuffer* flat = m_masters.get(MasterType::Flat);
         if (flat && flat->isValid()) {
-            // Channel equalization
+
+            // Per-channel CFA equalisation (optional).
             if (params.equalizeFlat) {
                 Calibration::CalibrationEngine::equalizeCFAChannels(*flat, params.bayerPattern);
                 emit logMessage(tr("Equalized CFA channels in master flat"), "neutral");
             }
 
-            // If we have a DarkFlat, subtract it from the flat
+            // Subtract a dark-for-flat if one was provided...
             if (!params.masterDarkFlat.isEmpty()) {
                 m_masters.load(MasterType::DarkFlat, params.masterDarkFlat);
                 const ImageBuffer* darkFlat = m_masters.get(MasterType::DarkFlat);
                 if (darkFlat && darkFlat->isValid()) {
-                    float* fData = flat->data().data();
+                    float*       fData  = flat->data().data();
                     const float* dfData = darkFlat->data().data();
-                    size_t size = flat->size();
+                    const size_t size   = flat->size();
                     for (size_t i = 0; i < size; ++i) {
                         fData[i] -= dfData[i];
                     }
                 }
             } else {
-                // If no DarkFlat is provided, calibrate the MasterFlat with Bias (synthetic or master)
+                // ...otherwise calibrate the flat with bias (synthetic or master).
                 if (params.useBias && params.biasLevel < 1e20) {
-                    float b = static_cast<float>(params.biasLevel);
-                    float* fData = flat->data().data();
-                    size_t size = flat->size();
+                    const float b     = static_cast<float>(params.biasLevel);
+                    float*      fData = flat->data().data();
+                    const size_t size = flat->size();
                     for (size_t i = 0; i < size; ++i) {
                         fData[i] -= b;
                     }
-                    emit logMessage(tr("Calibrated Master Flat using synthetic bias %1").arg(b), "neutral");
+                    emit logMessage(
+                        tr("Calibrated Master Flat using synthetic bias %1").arg(b), "neutral");
+
                 } else if (params.useBias && m_masters.isLoaded(MasterType::Bias)) {
                     const ImageBuffer* bias = m_masters.get(MasterType::Bias);
                     if (bias && bias->isValid()) {
-                        float* fData = flat->data().data();
+                        float*       fData = flat->data().data();
                         const float* bData = bias->data().data();
-                        size_t size = flat->size();
+                        const size_t size  = flat->size();
                         for (size_t i = 0; i < size; ++i) {
                             fData[i] -= bData[i];
                         }
-                        emit logMessage(tr("Calibrated Master Flat using Master Bias"), "neutral");
+                        emit logMessage(
+                            tr("Calibrated Master Flat using Master Bias"), "neutral");
                     }
                 }
             }
         }
     }
-    
-    // Cache flat normalization factor if flat is loaded
+
+    // --- Cache flat normalisation factor ---
     m_flatNormalization = 1.0;
     if (m_params.useFlat && m_masters.isLoaded(MasterType::Flat)) {
         const ImageBuffer* flat = m_masters.get(MasterType::Flat);
         m_flatNormalization = Calibration::CalibrationEngine::computeFlatNormalization(*flat);
-        
-        QString pattern = "None/Mono";
+
+        QString patternStr = "None/Mono";
         if (m_params.bayerPattern != BayerPattern::None) {
-            switch(m_params.bayerPattern) {
-                case BayerPattern::RGGB: pattern = "RGGB"; break;
-                case BayerPattern::BGGR: pattern = "BGGR"; break;
-                case BayerPattern::GBRG: pattern = "GBRG"; break;
-                case BayerPattern::GRBG: pattern = "GRBG"; break;
-                default: pattern = "Auto/Unknown"; break;
+            switch (m_params.bayerPattern) {
+                case BayerPattern::RGGB: patternStr = "RGGB"; break;
+                case BayerPattern::BGGR: patternStr = "BGGR"; break;
+                case BayerPattern::GBRG: patternStr = "GBRG"; break;
+                case BayerPattern::GRBG: patternStr = "GRBG"; break;
+                default:                 patternStr = "Auto/Unknown"; break;
             }
         }
-        emit logMessage(tr("Master Flat loaded (Norm: %1, Pattern: %2)").arg(m_flatNormalization, 0, 'f', 4).arg(pattern), "neutral");
+        emit logMessage(
+            tr("Master Flat loaded (Norm: %1, Pattern: %2)")
+                .arg(m_flatNormalization, 0, 'f', 4)
+                .arg(patternStr),
+            "neutral");
     }
 }
 
-//=============================================================================
-// SINGLE IMAGE PROCESSING
-//=============================================================================
+// ============================================================================
+//  Single-Image Processing
+// ============================================================================
 
-bool PreprocessingEngine::preprocessImage(const ImageBuffer& input, ImageBuffer& output) {
-    // Make a working copy
+bool PreprocessingEngine::preprocessImage(const ImageBuffer& input,
+                                          ImageBuffer& output)
+{
+    // Start with a working copy of the input.
     output = input;
-    
-    // Validate compatibility
-    QString error = m_masters.validateCompatibility(output);
+
+    // Validate dimensional compatibility with loaded master frames.
+    const QString error = m_masters.validateCompatibility(output);
     if (!error.isEmpty()) {
         emit logMessage(error, "red");
         return false;
     }
-    
-    // 1. Bias subtraction
+
+    // ---- Step 1: Bias subtraction ----
     if (isCancelled()) return false;
     if (m_params.useBias && m_masters.isLoaded(MasterType::Bias)) {
         if (!subtractBias(output)) {
             emit logMessage(tr("Bias subtraction failed"), "salmon");
         }
     }
-    
-    // 2. Dark subtraction (with optional optimization)
+
+    // ---- Step 2: Dark subtraction (with optional scaling optimisation) ----
     if (isCancelled()) return false;
     double darkK = 1.0;
     if (m_params.useDark && m_masters.isLoaded(MasterType::Dark)) {
@@ -153,20 +183,20 @@ bool PreprocessingEngine::preprocessImage(const ImageBuffer& input, ImageBuffer&
             emit logMessage(tr("Dark subtraction failed"), "salmon");
         }
     }
-    
-    // 3. Flat field correction
+
+    // ---- Step 3: Flat-field correction ----
     if (isCancelled()) return false;
     if (m_params.useFlat && m_masters.isLoaded(MasterType::Flat)) {
         const ImageBuffer* flat = m_masters.get(MasterType::Flat);
-        // Use cached normalization
         if (Calibration::CalibrationEngine::applyFlat(output, *flat, m_flatNormalization)) {
-            addHistory(output, QString("Calibration: applied master flat (norm: %1)").arg(m_flatNormalization));
+            addHistory(output, QString("Calibration: applied master flat (norm: %1)")
+                                   .arg(m_flatNormalization));
         } else {
             emit logMessage(tr("Flat correction failed"), "salmon");
         }
     }
-    
-    // 4. Sensor fixes
+
+    // ---- Step 4: Sensor-specific artefact fixes ----
     if (m_params.fixBanding) {
         Calibration::CalibrationEngine::fixBanding(output);
         addHistory(output, "Fix: sensor banding reduction");
@@ -176,348 +206,382 @@ bool PreprocessingEngine::preprocessImage(const ImageBuffer& input, ImageBuffer&
         addHistory(output, "Fix: bad CCD lines correction");
     }
     if (m_params.fixXTrans) {
-        QString rowOrder = output.getHeaderValue("ROW-ORDER");
-        bool needsFlip = (rowOrder.contains("BOTTOM-UP", Qt::CaseInsensitive));
-        
+        // X-Trans AF correction requires top-down row order.
+        const QString rowOrder = output.getHeaderValue("ROW-ORDER");
+        const bool needsFlip = rowOrder.contains("BOTTOM-UP", Qt::CaseInsensitive);
+
         if (needsFlip) output.mirrorY();
         Calibration::CalibrationEngine::fixXTransArtifacts(output);
         if (needsFlip) output.mirrorY();
-        
+
         addHistory(output, "Fix: X-Trans AF pixel artifacts");
     }
-    
-    // 5. Cosmetic correction
+
+    // ---- Step 5: Cosmetic (hot / cold pixel) correction ----
     int hotCorrected = 0, coldCorrected = 0;
     if (m_params.cosmetic.type != CosmeticType::None) {
         applyCosmeticCorrection(output, hotCorrected, coldCorrected);
     }
-    
-    // 5. Debayering
+
+    // ---- Step 6: CFA demosaicing ----
     if (m_params.debayer && m_params.bayerPattern != BayerPattern::None) {
         if (!debayer(output)) {
             emit logMessage(tr("Debayering failed"), "salmon");
         }
     }
-    
-    // Update statistics
+
+    // ---- Update cumulative run statistics ----
     m_stats.imagesProcessed++;
-    m_stats.avgDarkOptimK = (m_stats.avgDarkOptimK * (m_stats.imagesProcessed - 1) + darkK) 
-                            / m_stats.imagesProcessed;
-    m_stats.hotPixelsCorrected += hotCorrected;
+    m_stats.avgDarkOptimK =
+        (m_stats.avgDarkOptimK * (m_stats.imagesProcessed - 1) + darkK)
+        / m_stats.imagesProcessed;
+    m_stats.hotPixelsCorrected  += hotCorrected;
     m_stats.coldPixelsCorrected += coldCorrected;
-    
+
     return true;
 }
 
-bool PreprocessingEngine::preprocessFile(const QString& inputPath, const QString& outputPath) {
-    // Load input
+bool PreprocessingEngine::preprocessFile(const QString& inputPath,
+                                         const QString& outputPath)
+{
+    // Load the source FITS file.
     ImageBuffer input;
     if (!Stacking::FitsIO::read(inputPath, input)) {
         emit logMessage(tr("Failed to read: %1").arg(inputPath), "red");
         m_stats.imagesFailed++;
         return false;
     }
-    
-    // Process
+
+    // Run the calibration pipeline.
     ImageBuffer output;
     if (!preprocessImage(input, output)) {
         m_stats.imagesFailed++;
         return false;
     }
-    
-    // Save output
-    if (!Stacking::FitsIO::write(outputPath, output, m_params.outputFloat ? 32 : 16)) {
+
+    // Write the calibrated output.
+    const int bitDepth = m_params.outputFloat ? 32 : 16;
+    if (!Stacking::FitsIO::write(outputPath, output, bitDepth)) {
         emit logMessage(tr("Failed to write: %1").arg(outputPath), "red");
         m_stats.imagesFailed++;
         return false;
     }
-    
+
     emit imageProcessed(inputPath, true);
     return true;
 }
 
-//=============================================================================
-// BATCH PROCESSING
-//=============================================================================
+// ============================================================================
+//  Batch Processing
+// ============================================================================
 
-int PreprocessingEngine::preprocessBatch(
-    const QStringList& inputFiles,
-    const QString& outputDir,
-    ProgressCallback progress)
+int PreprocessingEngine::preprocessBatch(const QStringList& inputFiles,
+                                         const QString& outputDir,
+                                         ProgressCallback progress)
 {
     m_cancelled = false;
-    m_stats = CalibrationStats();
-    
+    m_stats     = CalibrationStats();
+
     QDir outDir(outputDir);
     if (!outDir.exists()) {
         outDir.mkpath(".");
     }
-    
-    int total = inputFiles.size();
+
+    const int total = inputFiles.size();
     QAtomicInt processed(0);
     std::mutex progressMutex;
-    
-    emit logMessage(tr("Preprocessing %1 files using %2 threads...").arg(total).arg(ResourceManager::instance().maxThreads()), "neutral");
+
+    emit logMessage(
+        tr("Preprocessing %1 files using %2 threads...")
+            .arg(total)
+            .arg(ResourceManager::instance().maxThreads()),
+        "neutral");
 
     QtConcurrent::blockingMap(inputFiles, [&](const QString& inputPath) {
         if (m_cancelled) return;
-        
+
         QFileInfo fi(inputPath);
-        
-        // Memory safety check
-        // Conservative estimate: FileSize * 20 (approx 25MB Raw -> 500MB RAM during processing)
-        size_t estimatedMem = fi.size() * 20;
+
+        // Conservative memory safety check before allocating buffers.
+        const size_t estimatedMem = fi.size() * 20;
         if (!ResourceManager::instance().isMemorySafe(estimatedMem)) {
-            emit logMessage(tr("Skipped %1: Insufficient memory (current usage > 90%)").arg(fi.fileName()), "red");
+            emit logMessage(
+                tr("Skipped %1: Insufficient memory (current usage > 90%)")
+                    .arg(fi.fileName()),
+                "red");
             return;
         }
 
-        QString outputName = m_params.outputPrefix + fi.completeBaseName() + ".fit";
-        QString outputPath = outDir.filePath(outputName);
-        
+        const QString outputName = m_params.outputPrefix + fi.completeBaseName() + ".fit";
+        const QString outputPath = outDir.filePath(outputName);
+
         if (preprocessFile(inputPath, outputPath)) {
             processed.fetchAndAddRelaxed(1);
-            
-            // Log after successful processing to show accurate count
-            {
-                std::lock_guard<std::mutex> lock(progressMutex);
-                if (progress) {
-                    progress(tr("Calibrating image %1 (%2/%3)...")
-                            .arg(fi.fileName()).arg(processed.loadRelaxed()).arg(total),
-                            static_cast<double>(processed.loadRelaxed()) / total);
-                }
+
+            std::lock_guard<std::mutex> lock(progressMutex);
+            if (progress) {
+                progress(tr("Calibrating image %1 (%2/%3)...")
+                             .arg(fi.fileName())
+                             .arg(processed.loadRelaxed())
+                             .arg(total),
+                         static_cast<double>(processed.loadRelaxed()) / total);
             }
         }
     });
-    
+
     if (progress) {
-        progress(tr("Complete: %1/%2 images processed").arg(processed.loadRelaxed()).arg(total), 1.0);
+        progress(tr("Complete: %1/%2 images processed")
+                     .arg(processed.loadRelaxed())
+                     .arg(total),
+                 1.0);
     }
-    
+
     return processed.loadRelaxed();
 }
 
-//=============================================================================
-// BIAS SUBTRACTION
-//=============================================================================
+// ============================================================================
+//  Bias Subtraction
+// ============================================================================
 
-bool PreprocessingEngine::subtractBias(ImageBuffer& image) {
-    // 1. Check for synthetic bias (constant level)
+bool PreprocessingEngine::subtractBias(ImageBuffer& image)
+{
+    // Option 1: Synthetic (constant-value) bias.
     if (m_params.biasLevel < 1e20) {
-        float b = static_cast<float>(m_params.biasLevel);
-        float* data = image.data().data();
-        size_t size = image.size();
+        const float  b    = static_cast<float>(m_params.biasLevel);
+        float*       data = image.data().data();
+        const size_t size = image.size();
+
         #pragma omp parallel for
-        for (long long i = 0; i < (long long)size; ++i) {
+        for (long long i = 0; i < static_cast<long long>(size); ++i) {
             data[i] -= b;
         }
+
         addHistory(image, QString("Calibration: subtracted synthetic bias %1").arg(b));
         return true;
     }
 
-    // 2. Otherwise use master file
+    // Option 2: Master bias frame.
     const ImageBuffer* bias = m_masters.get(MasterType::Bias);
     if (!bias || !bias->isValid()) {
         return false;
     }
-    
-    float* imgData = image.data().data();
+
+    float*       imgData  = image.data().data();
     const float* biasData = bias->data().data();
-    size_t size = image.size();
-    
+    const size_t size     = image.size();
+
     subtract_bias_c(imgData, biasData, size, omp_get_max_threads());
-    
+
     addHistory(image, QString("Calibration: subtracted master bias"));
     return true;
 }
 
-//=============================================================================
-// DARK SUBTRACTION WITH OPTIMIZATION
-//=============================================================================
+// ============================================================================
+//  Dark Subtraction with Optional Optimisation
+// ============================================================================
 
-bool PreprocessingEngine::subtractDark(ImageBuffer& image, double& K) {
+bool PreprocessingEngine::subtractDark(ImageBuffer& image, double& K)
+{
     const ImageBuffer* dark = m_masters.get(MasterType::Dark);
     if (!dark || !dark->isValid()) {
         return false;
     }
-    
-    // Default to 1.0
+
     K = 1.0;
-    
-    // Use exposure ratio if both exposure times are available
-    double lightExptime = image.metadata().exposure;
-    double darkExptime = m_masters.stats(MasterType::Dark).exposure;
-    
+
+    // Compute the exposure-time ratio if both values are available.
+    const double lightExptime = image.metadata().exposure;
+    const double darkExptime  = m_masters.stats(MasterType::Dark).exposure;
+
     if (lightExptime > 0.0 && darkExptime > 0.0) {
         K = lightExptime / darkExptime;
-    } else {
-        // If metadata is missing, we can't use ratio. 
-        // We log a warning but continue with 1.0 (or whatever optimization finds).
-        if (m_params.darkOptim.enabled) {
-            // Optimization remains valid even without metadata
-        } else {
-             emit logMessage(tr("Warning: Missing exposure time metadata. Using scaling factor 1.0."), "orange");
-        }
+    } else if (!m_params.darkOptim.enabled) {
+        emit logMessage(
+            tr("Warning: Missing exposure time metadata. Using scaling factor 1.0."),
+            "orange");
     }
-    
-    // Optionally optimize dark scaling
+
+    // Numerical optimisation overrides the simple ratio.
     if (m_params.darkOptim.enabled) {
-        // Use K (exposure ratio) as a hint (K_min/K_max) and log the selected range.
-        K = Calibration::CalibrationEngine::findOptimalDarkScale(image, *dark, m_params.darkOptim);
-        emit logMessage(tr("Numerical dark optimization found factor K = %1").arg(K, 0, 'f', 4), "neutral");
+        K = Calibration::CalibrationEngine::findOptimalDarkScale(
+                image, *dark, m_params.darkOptim);
+        emit logMessage(
+            tr("Numerical dark optimization found factor K = %1").arg(K, 0, 'f', 4),
+            "neutral");
     } else if (lightExptime > 0.0 && darkExptime > 0.0) {
-        emit logMessage(tr("Scaling dark by exposure ratio K = %1 (%2s / %3s)").arg(K, 0, 'f', 4).arg(lightExptime).arg(darkExptime), "neutral");
+        emit logMessage(
+            tr("Scaling dark by exposure ratio K = %1 (%2s / %3s)")
+                .arg(K, 0, 'f', 4)
+                .arg(lightExptime)
+                .arg(darkExptime),
+            "neutral");
     }
-    
-    // Apply dark subtraction and add pedestal
-    float* imgData = image.data().data();
+
+    // Apply: image = image - K * dark + pedestal
+    float*       imgData  = image.data().data();
     const float* darkData = dark->data().data();
-    size_t size = image.size();
-    
-    float kf = static_cast<float>(K);
-    float p = static_cast<float>(m_params.pedestal);
+    const size_t size     = image.size();
+
+    const float kf = static_cast<float>(K);
+    const float p  = static_cast<float>(m_params.pedestal);
 
     subtract_dark_c(imgData, darkData, size, kf, p, omp_get_max_threads());
-    
+
     QString history = QString("Calibration: subtracted master dark (factor: %1)").arg(K);
-    if (p != 0.0f) history += QString(", added pedestal %1").arg(p);
+    if (p != 0.0f) {
+        history += QString(", added pedestal %1").arg(p);
+    }
     addHistory(image, history);
 
     return true;
 }
 
-//=============================================================================
-// COSMETIC CORRECTION
-//=============================================================================
+// ============================================================================
+//  Cosmetic Correction
+// ============================================================================
 
 void PreprocessingEngine::applyCosmeticCorrection(ImageBuffer& image,
-                                                   int& hotCorrected,
-                                                   int& coldCorrected) {
-    hotCorrected = 0;
+                                                  int& hotCorrected,
+                                                  int& coldCorrected)
+{
+    hotCorrected  = 0;
     coldCorrected = 0;
-    
+
     if (m_params.cosmetic.type == CosmeticType::None) {
         return;
     }
-    
-    int w = image.width();
-    int h = image.height();
-    int channels = image.channels();
-    float* data = image.data().data();
-    
-    // 1. Deviant pixel list from master dark (CFA/X-Trans aware)
+
+    const int w        = image.width();
+    const int h        = image.height();
+    const int channels = image.channels();
+    float*    data     = image.data().data();
+
+    // ---- Strategy 1: Defect map from master dark ----
     if (m_params.cosmetic.type == CosmeticType::FromMaster && !m_deviantPixels.empty()) {
+
         #pragma omp parallel for reduction(+:hotCorrected)
-        for (int i = 0; i < (int)m_deviantPixels.size(); ++i) {
+        for (int i = 0; i < static_cast<int>(m_deviantPixels.size()); ++i) {
             const QPoint& pt = m_deviantPixels[i];
-            int x = pt.x();
-            int y = pt.y();
-            // CFA path uses ±2 offsets, so boundary must protect ±2
+            const int x = pt.x();
+            const int y = pt.y();
+
+            // CFA-aware replacement uses +/-2 offsets, so guard a 2-pixel border.
             if (x < 2 || y < 2 || x >= w - 2 || y >= h - 2) continue;
 
             for (int c = 0; c < channels; ++c) {
-                float* layerData = data + c * w * h;
-                int idx = y * w + x;
-                
-                // Replace with median of neighbors (8 for mono/debayered, 
-                // but for CFA we should ideally use same-color neighbors).
-                // For simplicity, we use the average of same-color neighbors if CFA.
+                float*    layerData = data + c * w * h;
+                const int idx       = y * w + x;
+
                 if (m_params.bayerPattern != BayerPattern::None && channels == 1) {
-                    // CFA median (2 pixels distance)
-                    float neighbors[4] = {
-                        layerData[(y-2)*w + x], layerData[(y+2)*w + x],
-                        layerData[y*w + (x-2)], layerData[y*w + (x+2)]
-                    };
-                    layerData[idx] = (neighbors[0] + neighbors[1] + neighbors[2] + neighbors[3]) / 4.0f;
+                    // CFA data: average of 4 same-colour neighbours at +/-2 distance.
+                    const float n0 = layerData[(y - 2) * w + x];
+                    const float n1 = layerData[(y + 2) * w + x];
+                    const float n2 = layerData[y * w + (x - 2)];
+                    const float n3 = layerData[y * w + (x + 2)];
+                    layerData[idx] = (n0 + n1 + n2 + n3) * 0.25f;
                 } else {
-                    float neighbors[8] = {
+                    // Mono / debayered data: median of 8-connected neighbours.
+                    float neighbours[8] = {
                         layerData[(y-1)*w + (x-1)], layerData[(y-1)*w + x], layerData[(y-1)*w + (x+1)],
-                        layerData[y*w + (x-1)],                             layerData[y*w + (x+1)],
+                        layerData[ y   *w + (x-1)],                         layerData[ y   *w + (x+1)],
                         layerData[(y+1)*w + (x-1)], layerData[(y+1)*w + x], layerData[(y+1)*w + (x+1)]
                     };
-                    std::sort(neighbors, neighbors + 8);
-                    layerData[idx] = (neighbors[3] + neighbors[4]) / 2.0f;
+                    std::sort(neighbours, neighbours + 8);
+                    layerData[idx] = (neighbours[3] + neighbours[4]) * 0.5f;
                 }
                 hotCorrected++;
             }
         }
-        addHistory(image, QString("Cosmetic: corrected %1 pixels from master dark").arg(hotCorrected));
+
+        addHistory(image,
+                   QString("Cosmetic: corrected %1 pixels from master dark").arg(hotCorrected));
     }
-    // 2. Statistical detection (sigma-clipping)
+
+    // ---- Strategy 2: Statistical sigma-clipping detection ----
     else if (m_params.cosmetic.type == CosmeticType::Sigma) {
+
         for (int c = 0; c < channels; ++c) {
             float* layerData = data + c * w * h;
-            
-            // Compute median and MAD
+
+            // Compute robust statistics (median and MAD).
             std::vector<float> copy(layerData, layerData + w * h);
-            float median = Stacking::Statistics::quickMedian(copy);
-            double mad = Stacking::Statistics::mad(copy.data(), copy.size(), median);
-            double sigma = 1.4826 * mad;
-            
-            float coldThresh = median - m_params.cosmetic.coldSigma * static_cast<float>(sigma);
-            float hotThresh = median + m_params.cosmetic.hotSigma * static_cast<float>(sigma);
-            
-            // Detect and fix bad pixels
+            const float  median = Stacking::Statistics::quickMedian(copy);
+            const double mad    = Stacking::Statistics::mad(copy.data(), copy.size(), median);
+            const double sigma  = 1.4826 * mad;
+
+            const float coldThresh = median - m_params.cosmetic.coldSigma * static_cast<float>(sigma);
+            const float hotThresh  = median + m_params.cosmetic.hotSigma  * static_cast<float>(sigma);
+
             #pragma omp parallel for reduction(+:hotCorrected, coldCorrected)
             for (int y = 1; y < h - 1; ++y) {
                 for (int x = 1; x < w - 1; ++x) {
-                    int idx = y * w + x;
-                    float val = layerData[idx];
-                    
-                    bool isBad = false;
-                    if (val < coldThresh) {
-                        isBad = true;
-                    } else if (val > hotThresh) {
-                        isBad = true;
-                    }
-                    
-                    if (isBad) {
-                        // Median fix
-                        float neighbors[8] = {
+
+                    const int   idx = y * w + x;
+                    const float val = layerData[idx];
+
+                    const bool isCold = (val < coldThresh);
+                    const bool isHot  = (val > hotThresh);
+
+                    if (isCold || isHot) {
+                        // Replace with median of 8-connected neighbours.
+                        float neighbours[8] = {
                             layerData[(y-1)*w + (x-1)], layerData[(y-1)*w + x], layerData[(y-1)*w + (x+1)],
-                            layerData[y*w + (x-1)],                             layerData[y*w + (x+1)],
+                            layerData[ y   *w + (x-1)],                         layerData[ y   *w + (x+1)],
                             layerData[(y+1)*w + (x-1)], layerData[(y+1)*w + x], layerData[(y+1)*w + (x+1)]
                         };
-                        std::sort(neighbors, neighbors + 8);
-                        layerData[idx] = (neighbors[3] + neighbors[4]) / 2.0f;
-                        
-                        if (val < coldThresh) coldCorrected++;
-                        else hotCorrected++;
+                        std::sort(neighbours, neighbours + 8);
+                        layerData[idx] = (neighbours[3] + neighbours[4]) * 0.5f;
+
+                        if (isCold) coldCorrected++;
+                        else        hotCorrected++;
                     }
                 }
             }
         }
-        addHistory(image, QString("Cosmetic: sigma correction (hot:%1, cold:%2)").arg(hotCorrected).arg(coldCorrected));
+
+        addHistory(image,
+                   QString("Cosmetic: sigma correction (hot:%1, cold:%2)")
+                       .arg(hotCorrected)
+                       .arg(coldCorrected));
     }
 }
 
-//=============================================================================
-// DEBAYERING
-//=============================================================================
+// ============================================================================
+//  Demosaicing (Debayering)
+// ============================================================================
 
-bool PreprocessingEngine::debayer(ImageBuffer& image) {
-    if ((m_params.bayerPattern == BayerPattern::None && m_params.bayerPattern != BayerPattern::Auto) || image.channels() != 1) {
+bool PreprocessingEngine::debayer(ImageBuffer& image)
+{
+    // Must be a single-channel CFA image with a valid Bayer pattern.
+    if ((m_params.bayerPattern == BayerPattern::None &&
+         m_params.bayerPattern != BayerPattern::Auto) ||
+        image.channels() != 1)
+    {
         return false;
     }
 
     BayerPattern pattern = m_params.bayerPattern;
-    
-    // Resolve Auto Pattern
+
+    // Resolve Auto pattern from the FITS header.
     if (pattern == BayerPattern::Auto) {
-         QString bpStr = image.metadata().bayerPattern;
-         if (bpStr.contains("RGGB", Qt::CaseInsensitive)) pattern = BayerPattern::RGGB;
-         else if (bpStr.contains("BGGR", Qt::CaseInsensitive)) pattern = BayerPattern::BGGR;
-         else if (bpStr.contains("GBRG", Qt::CaseInsensitive)) pattern = BayerPattern::GBRG;
-         else if (bpStr.contains("GRBG", Qt::CaseInsensitive)) pattern = BayerPattern::GRBG;
-         else {
-             emit logMessage(tr("Warning: Auto-detect Bayer Pattern failed (Header: '%1'). Defaulting to RGGB.").arg(bpStr), "orange");
-             pattern = BayerPattern::RGGB;
-         }
+        const QString bpStr = image.metadata().bayerPattern;
+        if      (bpStr.contains("RGGB", Qt::CaseInsensitive)) pattern = BayerPattern::RGGB;
+        else if (bpStr.contains("BGGR", Qt::CaseInsensitive)) pattern = BayerPattern::BGGR;
+        else if (bpStr.contains("GBRG", Qt::CaseInsensitive)) pattern = BayerPattern::GBRG;
+        else if (bpStr.contains("GRBG", Qt::CaseInsensitive)) pattern = BayerPattern::GRBG;
+        else {
+            emit logMessage(
+                tr("Warning: Auto-detect Bayer Pattern failed (Header: '%1'). "
+                   "Defaulting to RGGB.").arg(bpStr),
+                "orange");
+            pattern = BayerPattern::RGGB;
+        }
     }
-    
+
+    // Dispatch to the selected algorithm.
     ImageBuffer output;
     bool success = false;
-    
+
     switch (m_params.debayerAlgorithm) {
         case DebayerAlgorithm::Bilinear:
             success = Debayer::bilinear(image, output, pattern);
@@ -529,69 +593,69 @@ bool PreprocessingEngine::debayer(ImageBuffer& image) {
             success = Debayer::superpixel(image, output, pattern);
             break;
         case DebayerAlgorithm::RCD:
-            // FIXME: RCD is not yet implemented; falls back to VNG internally
-            // (see Debayer::rcd() stub in Debayer.cpp)
             success = Debayer::rcd(image, output, pattern);
             break;
         case DebayerAlgorithm::AHD:
-             // AHD not yet implemented; fall back to VNG interpolation
-             success = Debayer::vng(image, output, pattern);
-             break;
+            // AHD falls back to VNG until a dedicated implementation is available.
+            success = Debayer::vng(image, output, pattern);
+            break;
         default:
             success = Debayer::bilinear(image, output, pattern);
             break;
     }
-    
+
     if (success) {
-        // Critical: Preserve metadata!
-        // The output buffer is fresh and has no metadata.
-        // We must copy it from the input before replacing the input.
+        // Preserve all metadata from the original CFA frame.
         output.setMetadata(image.metadata());
-        
-        // Now it is RGB — clear CFA-related metadata to prevent
-        // downstream code from treating it as CFA again.
+
+        // Clear CFA-specific metadata so downstream code treats the
+        // image as a fully-interpolated RGB frame.
         output.metadata().isMono = false;
         output.metadata().bayerPattern.clear();
         output.metadata().xisfProperties.remove("BayerPattern");
-        // Remove BAYERPAT from raw headers to prevent re-debayering
+
         auto& headers = output.metadata().rawHeaders;
-        headers.erase(std::remove_if(headers.begin(), headers.end(),
-            [](const auto& h) { return h.key == "BAYERPAT"; }), headers.end());
-        
+        headers.erase(
+            std::remove_if(headers.begin(), headers.end(),
+                           [](const auto& h) { return h.key == "BAYERPAT"; }),
+            headers.end());
+
         image = std::move(output);
         return true;
     }
+
     return false;
 }
 
-int PreprocessingEngine::getBayerColor(int x, int y) const {
-    // Returns: 0=R, 1=G, 2=B
-    int xEven = (x % 2 == 0);
-    int yEven = (y % 2 == 0);
-    
+// ============================================================================
+//  Debayering Algorithm Wrappers
+// ============================================================================
+
+int PreprocessingEngine::getBayerColor(int x, int y) const
+{
+    const int xEven = (x % 2 == 0);
+    const int yEven = (y % 2 == 0);
+
     switch (m_params.bayerPattern) {
         case BayerPattern::RGGB:
-            if (yEven) return xEven ? 0 : 1;  // R G
-            else return xEven ? 1 : 2;         // G B
-            
+            return yEven ? (xEven ? 0 : 1)    // R G
+                         : (xEven ? 1 : 2);   // G B
         case BayerPattern::BGGR:
-            if (yEven) return xEven ? 2 : 1;  // B G
-            else return xEven ? 1 : 0;         // G R
-            
+            return yEven ? (xEven ? 2 : 1)    // B G
+                         : (xEven ? 1 : 0);   // G R
         case BayerPattern::GBRG:
-            if (yEven) return xEven ? 1 : 2;  // G B
-            else return xEven ? 0 : 1;         // R G
-            
+            return yEven ? (xEven ? 1 : 2)    // G B
+                         : (xEven ? 0 : 1);   // R G
         case BayerPattern::GRBG:
-            if (yEven) return xEven ? 1 : 0;  // G R
-            else return xEven ? 2 : 1;         // B G
-            
+            return yEven ? (xEven ? 1 : 0)    // G R
+                         : (xEven ? 2 : 1);   // B G
         default:
-            return 1;  // Green
+            return 1; // Assume green for unknown patterns.
     }
 }
 
-bool PreprocessingEngine::debayerBilinear(ImageBuffer& image) {
+bool PreprocessingEngine::debayerBilinear(ImageBuffer& image)
+{
     ImageBuffer output;
     if (Debayer::bilinear(image, output, m_params.bayerPattern)) {
         image = std::move(output);
@@ -600,7 +664,8 @@ bool PreprocessingEngine::debayerBilinear(ImageBuffer& image) {
     return false;
 }
 
-bool PreprocessingEngine::debayerVNG(ImageBuffer& image) {
+bool PreprocessingEngine::debayerVNG(ImageBuffer& image)
+{
     ImageBuffer output;
     if (Debayer::vng(image, output, m_params.bayerPattern)) {
         image = std::move(output);
@@ -609,7 +674,8 @@ bool PreprocessingEngine::debayerVNG(ImageBuffer& image) {
     return false;
 }
 
-bool PreprocessingEngine::debayerSuperpixel(ImageBuffer& image) {
+bool PreprocessingEngine::debayerSuperpixel(ImageBuffer& image)
+{
     ImageBuffer output;
     if (Debayer::superpixel(image, output, m_params.bayerPattern)) {
         image = std::move(output);
@@ -618,45 +684,51 @@ bool PreprocessingEngine::debayerSuperpixel(ImageBuffer& image) {
     return false;
 }
 
-//=============================================================================
-// WORKER THREAD
-//=============================================================================
+// ============================================================================
+//  FITS Header History Helper
+// ============================================================================
+
+void PreprocessingEngine::addHistory(ImageBuffer& image, const QString& message)
+{
+    image.metadata().rawHeaders.push_back({"HISTORY", message, ""});
+}
+
+// ============================================================================
+//  Worker Thread Implementation
+// ============================================================================
 
 PreprocessingWorker::PreprocessingWorker(const PreprocessParams& params,
-                                          const QStringList& files,
-                                          const QString& outputDir,
-                                          QObject* parent)
+                                        const QStringList& files,
+                                        const QString& outputDir,
+                                        QObject* parent)
     : QThread(parent)
     , m_files(files)
     , m_outputDir(outputDir)
 {
     m_engine.setParams(params);
-    
+
     connect(&m_engine, &PreprocessingEngine::progressChanged,
-            this, &PreprocessingWorker::progressChanged);
+            this,      &PreprocessingWorker::progressChanged);
     connect(&m_engine, &PreprocessingEngine::logMessage,
-            this, &PreprocessingWorker::logMessage);
+            this,      &PreprocessingWorker::logMessage);
     connect(&m_engine, &PreprocessingEngine::imageProcessed,
-            this, &PreprocessingWorker::imageProcessed);
+            this,      &PreprocessingWorker::imageProcessed);
 }
 
-void PreprocessingWorker::run() {
-    int processed = m_engine.preprocessBatch(
+void PreprocessingWorker::run()
+{
+    const int processed = m_engine.preprocessBatch(
         m_files, m_outputDir,
         [this](const QString& msg, double pct) {
             emit progressChanged(msg, pct);
-        }
-    );
-    
+        });
+
     emit finished(processed == m_files.size());
 }
 
-void PreprocessingWorker::requestCancel() {
+void PreprocessingWorker::requestCancel()
+{
     m_engine.requestCancel();
-}
-
-void PreprocessingEngine::addHistory(ImageBuffer& image, const QString& message) {
-    image.metadata().rawHeaders.push_back({ "HISTORY", message, "" });
 }
 
 } // namespace Preprocessing

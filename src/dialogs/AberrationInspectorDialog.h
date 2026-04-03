@@ -2,27 +2,45 @@
 #define ABERRATIONINSPECTORDIALOG_H
 
 #include <array>
-#include "../ImageBuffer.h"
+
 #include "DialogBase.h"
+#include "../ImageBuffer.h"
 
 class QLabel;
 
-class AberrationInspectorDialog : public DialogBase {
+/**
+ * @brief Dialog that displays a 3x3 grid of cropped image regions for
+ *        evaluating optical aberrations across the field of view.
+ *
+ * Each panel shows a fixed-size crop centred on one of nine equally-spaced
+ * positions (corners, edges, and centre). All crops are auto-stretched for
+ * visibility and scaled to a fixed display size.
+ */
+class AberrationInspectorDialog : public DialogBase
+{
     Q_OBJECT
+
 public:
-    explicit AberrationInspectorDialog(const ImageBuffer& img, QWidget* parent = nullptr);
+    explicit AberrationInspectorDialog(const ImageBuffer& img,
+                                       QWidget* parent = nullptr);
 
     void setSource(const ImageBuffer& img);
 
 private:
-    void setupUi();
-    void updatePanels();
+    void   setupUi();
+    void   updatePanels();
 
-    // Returns a QImage cropped (size x size) centred on (cx, cy), clamped to bounds.
+    /**
+     * @brief Extracts a square crop of @p size pixels centred on (@p cx, @p cy),
+     *        clamped so the crop stays within the image boundaries.
+     * @return Auto-stretched QImage of the cropped region.
+     */
     QImage cropToQImage(int cx, int cy, int size);
 
-    ImageBuffer m_source;
-    std::array<QLabel*, 9> m_panels; // TL TC TR / ML MC MR / BL BC BR
+    ImageBuffer              m_source;
+
+    // Nine panel labels arranged as: TL TC TR / ML MC MR / BL BC BR
+    std::array<QLabel*, 9>   m_panels;
 };
 
 #endif // ABERRATIONINSPECTORDIALOG_H

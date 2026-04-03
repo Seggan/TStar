@@ -1,10 +1,21 @@
 /**
  * @file StackingCommands.h
- * @brief Script commands for stacking and preprocessing operations
- * 
- * Defines all commands related to stacking and preprocessing
- * that can be used in TStar scripts.
- * 
+ * @brief Script command implementations for image stacking and preprocessing.
+ *
+ * This class registers all stacking, calibration, and image-processing
+ * commands with the ScriptRunner and provides the static handler
+ * functions invoked during script execution.
+ *
+ * Key command groups:
+ *   - File I/O        : load, save, close, convert, convertall
+ *   - Calibration     : calibrate, setmaster
+ *   - Registration    : register, seqapplyreg
+ *   - Stacking        : stack, autostack, newproject
+ *   - Processing      : debayer, background, starnet, pixelmath, rgbcomp,
+ *                        linear_match, mirror, rotate, resample, crop,
+ *                        threshold, math, stat, update_key
+ *   - CFA Extraction  : seqextract_Ha, seqextract_HaOIII
+ *
  * Copyright (C) 2024-2026 TStar Team
  */
 
@@ -19,67 +30,74 @@
 #include "../stacking/SequenceFile.h"
 #include "../preprocessing/Preprocessing.h"
 #include "../stacking/PixelMath.h"
+
 #include <QString>
 
 namespace Scripting {
 
-/**
- * @brief Stacking-related script commands
- * 
- * Provides commands for:
- * - cd: Change working directory
- * - convert: Convert files to FITS format
- * - register: Register images
- * - stack: Stack images
- * - calibrate: Calibrate images with masters
- * - load/save/close: File operations
- */
 class StackingCommands {
 public:
-    /**
-     * @brief Register all stacking commands with a runner
-     */
-    static void registerCommands(ScriptRunner& runner);
-    
-    /**
-     * @brief Get current sequence
-     */
-    static Stacking::ImageSequence* currentSequence() { return s_sequence.get(); }
-    
-    /**
-     * @brief Get current preprocessing engine
-     */
-    static Preprocessing::PreprocessingEngine* preprocessor() { return &s_preprocessor; }
+    // ========================================================================
+    // Registration
+    // ========================================================================
 
     /**
-     * @brief Initialize the script's current image from an external buffer.
+     * @brief Register all stacking-related commands with the given runner.
+     * @param runner  The ScriptRunner that will own the command definitions.
+     */
+    static void registerCommands(ScriptRunner& runner);
+
+    // ========================================================================
+    // Accessors
+    // ========================================================================
+
+    /** @brief Return the currently loaded image sequence, or nullptr. */
+    static Stacking::ImageSequence* currentSequence()
+    { return s_sequence.get(); }
+
+    /** @brief Return the preprocessing engine instance. */
+    static Preprocessing::PreprocessingEngine* preprocessor()
+    { return &s_preprocessor; }
+
+    /**
+     * @brief Seed the script's current image from an external buffer.
      *
-     * Call this before running a script so that commands like @c save and
-     * @c starnet operate on the image currently displayed in the main window
-     * rather than an empty buffer.
+     * Call this before executing a script so that commands such as
+     * @c save and @c starnet operate on the image displayed in the main
+     * window rather than on an empty buffer.
      */
     static void initCurrentImage(const ImageBuffer& image);
-    
-    /**
-     * @brief Get the current image loaded by script commands
-     */
-    static const ImageBuffer* getCurrentImage() { return s_currentImage.get(); }
-    
+
+    /** @brief Return a read-only pointer to the script's current image. */
+    static const ImageBuffer* getCurrentImage()
+    { return s_currentImage.get(); }
+
 private:
-    // Command handlers
+    // ========================================================================
+    // Command handlers -- file I/O
+    // ========================================================================
+
     static bool cmdCd(const ScriptCommand& cmd);
     static bool cmdConvert(const ScriptCommand& cmd);
     static bool cmdLoad(const ScriptCommand& cmd);
     static bool cmdSave(const ScriptCommand& cmd);
     static bool cmdClose(const ScriptCommand& cmd);
-    
+
+    // ========================================================================
+    // Command handlers -- stacking pipeline
+    // ========================================================================
+
     static bool cmdStack(const ScriptCommand& cmd);
     static bool cmdCalibrate(const ScriptCommand& cmd);
     static bool cmdRegister(const ScriptCommand& cmd);
     static bool cmdNewProject(const ScriptCommand& cmd);
     static bool cmdConvertAll(const ScriptCommand& cmd);
     static bool cmdAutoStack(const ScriptCommand& cmd);
-    
+
+    // ========================================================================
+    // Command handlers -- preprocessing and processing
+    // ========================================================================
+
     static bool cmdSetMaster(const ScriptCommand& cmd);
     static bool cmdDebayer(const ScriptCommand& cmd);
     static bool cmdSeqExtract(const ScriptCommand& cmd);
@@ -89,8 +107,11 @@ private:
     static bool cmdLinearMatch(const ScriptCommand& cmd);
     static bool cmdPixelMath(const ScriptCommand& cmd);
     static bool cmdStarNet(const ScriptCommand& cmd);
-    
-    // Project commands
+
+    // ========================================================================
+    // Command handlers -- geometry and metadata
+    // ========================================================================
+
     static bool cmdSeqApplyReg(const ScriptCommand& cmd);
     static bool cmdRotate(const ScriptCommand& cmd);
     static bool cmdResample(const ScriptCommand& cmd);
@@ -99,21 +120,36 @@ private:
     static bool cmdStat(const ScriptCommand& cmd);
     static bool cmdThreshold(const ScriptCommand& cmd);
     static bool cmdMath(const ScriptCommand& cmd);
-    
+
+    // ========================================================================
     // Helper functions
+    // ========================================================================
+
+    /** @brief Resolve a possibly-relative path against the working directory. */
     static QString resolvePath(const QString& path);
+
+    /** @brief Parse a stacking method name string to its enumeration value. */
     static Stacking::Method parseMethod(const QString& str);
+
+    /** @brief Parse a rejection algorithm name to its enumeration value. */
     static Stacking::Rejection parseRejection(const QString& str);
+
+    /** @brief Parse a normalization method name to its enumeration value. */
     static Stacking::NormalizationMethod parseNormalization(const QString& str);
+
+    /** @brief Parse a weighting type name to its enumeration value. */
     static Stacking::WeightingType parseWeighting(const QString& str);
-    
-    // State
-    static std::unique_ptr<Stacking::ImageSequence> s_sequence;
-    static std::unique_ptr<ImageBuffer> s_currentImage;
-    static QString s_currentFilename;    ///< Basename of the last loaded/saved file
-    static Preprocessing::PreprocessingEngine s_preprocessor;
-    static QString s_workingDir;
-    static ScriptRunner* s_runner;
+
+    // ========================================================================
+    // Static state
+    // ========================================================================
+
+    static std::unique_ptr<Stacking::ImageSequence>  s_sequence;
+    static std::unique_ptr<ImageBuffer>              s_currentImage;
+    static QString                                   s_currentFilename;  ///< Basename of last loaded/saved file.
+    static Preprocessing::PreprocessingEngine         s_preprocessor;
+    static QString                                   s_workingDir;
+    static ScriptRunner*                             s_runner;
 };
 
 } // namespace Scripting

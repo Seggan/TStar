@@ -1,4 +1,5 @@
 #include "SidebarWidget.h"
+
 #include <QIcon>
 #include <QLabel>
 #include <QHBoxLayout>
@@ -15,206 +16,262 @@
 #include <QSettings>
 #include <QTextFrame>
 
-SidebarWidget::SidebarWidget(QWidget* parent) : QWidget(parent) {
-    QHBoxLayout* mainLayout = new QHBoxLayout(this);
+
+// ============================================================================
+// SidebarWidget - constructor
+// ============================================================================
+
+SidebarWidget::SidebarWidget(QWidget* parent)
+    : QWidget(parent)
+{
+    auto* mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
-    
-    // Core property
-    setStyleSheet("background-color: transparent;"); // Prevent gray box
+
+    // Transparent background prevents a grey box from appearing behind the overlay
+    setStyleSheet("background-color: transparent;");
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    
-    // 1. Tab Strip (Left)
+
+    // ------------------------------------------------------------------
+    // 1. Tab strip (narrow left column with vertical tab buttons)
+    // ------------------------------------------------------------------
     m_tabContainer = new QWidget(this);
-    m_tabContainer->setFixedWidth(36); // Narrow strip
-    m_tabContainer->setStyleSheet("background-color: #252525; border-right: 1px solid #1a1a1a;");
-    
+    m_tabContainer->setFixedWidth(36);
+    m_tabContainer->setStyleSheet(
+        "background-color: #252525; border-right: 1px solid #1a1a1a;");
+
     m_tabLayout = new QVBoxLayout(m_tabContainer);
-    m_tabLayout->setContentsMargins(2, 5, 2, 5); // Symmetric left/right margins to center buttons
+    m_tabLayout->setContentsMargins(2, 5, 2, 5);
     m_tabLayout->setSpacing(5);
-    m_tabLayout->setAlignment(Qt::AlignHCenter); // Ensure all children are horizontally centered
+    m_tabLayout->setAlignment(Qt::AlignHCenter);
     m_tabLayout->addStretch();
-    
-    // 2. Content Area (Right) - Use ScrollArea for Clipping/Slide Effect
-    // m_contentContainer in header is QWidget*, so we cast or assign compatible type.
-    QScrollArea* scrollArea = new QScrollArea(this);
-    m_contentContainer = scrollArea; 
-    
-    scrollArea->setFixedWidth(0); // Start collapsed
+
+    // ------------------------------------------------------------------
+    // 2. Content area (QScrollArea used for its horizontal clipping, which
+    //    enables the slide-in animation without content overflowing)
+    // ------------------------------------------------------------------
+    auto* scrollArea = new QScrollArea(this);
+    m_contentContainer = scrollArea;
+
+    scrollArea->setFixedWidth(0); // Start in collapsed state
     scrollArea->setStyleSheet("background-color: rgba(0, 0, 0, 128); border: none;");
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Essential for clipping
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    
+
     m_stack = new QStackedWidget();
-    // CRITICAL: Content must have fixed/min width equal to expanded width to prevent compression
-    m_stack->setMinimumWidth(m_expandedWidth); 
-    
+    // The stack must maintain the full expanded width to prevent content
+    // compression as the container animates from 0 to m_expandedWidth
+    m_stack->setMinimumWidth(m_expandedWidth);
+
     scrollArea->setWidget(m_stack);
-    scrollArea->setWidgetResizable(true); 
-    
+    scrollArea->setWidgetResizable(true);
+
     mainLayout->addWidget(m_tabContainer);
     mainLayout->addWidget(m_contentContainer);
+
+    // Drag handle placed to the right of the content area
     m_resizeHandle = new ResizeHandle(this);
-    mainLayout->addWidget(m_resizeHandle); 
-    
-    // Animation
+    mainLayout->addWidget(m_resizeHandle);
+
+    // ------------------------------------------------------------------
+    // Slide animation for the content container width
+    // ------------------------------------------------------------------
     m_widthAnim = new QVariantAnimation(this);
     m_widthAnim->setDuration(250);
     m_widthAnim->setEasingCurve(QEasingCurve::OutQuad);
-    connect(m_widthAnim, &QVariantAnimation::valueChanged, [this](const QVariant& val){
-        int w = val.toInt();
-        m_contentContainer->setFixedWidth(w);
-        // Important: Since we are overlay/absolute, we must resize ourself to fit content
+
+    connect(m_widthAnim, &QVariantAnimation::valueChanged,
+            [this](const QVariant& val) {
+        m_contentContainer->setFixedWidth(val.toInt());
         resize(totalVisibleWidth(), height());
-        
-        // macOS: Force a repaint and layout update to prevent black/blank boxes during animation
-        if (m_stack) m_stack->update();
+
+        // Force repaint on all child widgets to prevent blank rectangles
+        // during animation (particularly noticeable on macOS)
+        if (m_stack)   m_stack->update();
         if (m_console) m_console->update();
         m_contentContainer->update();
         update();
     });
-    
+
     m_tabGroup = new QButtonGroup(this);
     m_tabGroup->setExclusive(true);
-    connect(m_tabGroup, &QButtonGroup::idClicked, this, &SidebarWidget::onTabClicked);
+    connect(m_tabGroup, &QButtonGroup::idClicked,
+            this, &SidebarWidget::onTabClicked);
 }
 
-int SidebarWidget::totalVisibleWidth() const {
+
+// ============================================================================
+// Layout helpers
+// ============================================================================
+
+int SidebarWidget::totalVisibleWidth() const
+{
     int w = m_tabContainer->width() + m_contentContainer->width();
     if (m_resizeHandle) w += m_resizeHandle->width();
     return w;
 }
 
-void SidebarWidget::addPanel(const QString& name, const QString& iconPath, QWidget* panel) {
+
+// ============================================================================
+// Panel management
+// ============================================================================
+
+void SidebarWidget::addPanel(const QString& name,
+                             const QString& iconPath,
+                             QWidget*       panel)
+{
     if (!panel) return;
-    
+
     QWidget* widgetToAdd = panel;
-    
-    // Special case for Console: Wrap it with a top bar
+
+    // Special handling for the Console panel: wrap it with a top bar
+    // containing the "Auto-open console on log" preference checkbox.
     if (name == "Console" || name == tr("Console")) {
         m_console = panel->findChild<QTextEdit*>();
         if (!m_console) m_console = qobject_cast<QTextEdit*>(panel);
 
         if (m_console) {
-            // Container Widget
-            QWidget* container = new QWidget();
-            QVBoxLayout* layout = new QVBoxLayout(container);
+            auto* container = new QWidget();
+            auto* layout    = new QVBoxLayout(container);
             layout->setContentsMargins(0, 0, 0, 0);
             layout->setSpacing(0);
-            
-            // Top Bar (Auto-open Checkbox)
-            QWidget* topContainer = new QWidget(container);
+
+            // Top bar with the auto-open preference checkbox
+            auto* topContainer = new QWidget(container);
             topContainer->setFixedHeight(26);
-            topContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); // Enforce fixed height
-            topContainer->setStyleSheet("background-color: #202020; border-bottom: 1px solid #1a1a1a;");
-            
-            QHBoxLayout* topLayout = new QHBoxLayout(topContainer);
+            topContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            topContainer->setStyleSheet(
+                "background-color: #202020; border-bottom: 1px solid #1a1a1a;");
+
+            auto* topLayout = new QHBoxLayout(topContainer);
             topLayout->setContentsMargins(8, 0, 8, 0);
             topLayout->setSpacing(0);
-            
-            QCheckBox* chk = new QCheckBox(tr("Auto-open console on log"), topContainer);
-            chk->setStyleSheet("QCheckBox { color: #aaa; font-size: 11px; } QCheckBox::indicator { width: 12px; height: 12px; }");
-            
-            // Load state
+
+            auto* chk = new QCheckBox(tr("Auto-open console on log"), topContainer);
+            chk->setStyleSheet(
+                "QCheckBox { color: #aaa; font-size: 11px; }"
+                "QCheckBox::indicator { width: 12px; height: 12px; }");
+
             QSettings settings;
             m_autoOpenConsole = settings.value("Console/autoOpen", true).toBool();
             chk->setChecked(m_autoOpenConsole);
-            
-            connect(chk, &QCheckBox::toggled, [this](bool checked){
+
+            connect(chk, &QCheckBox::toggled, [this](bool checked) {
                 m_autoOpenConsole = checked;
-                QSettings settings;
-                settings.setValue("Console/autoOpen", checked);
+                QSettings s;
+                s.setValue("Console/autoOpen", checked);
                 emit autoOpenToggled(checked);
             });
-            
+
             topLayout->addWidget(chk);
             topLayout->addStretch();
-            
-            // Add to container layout
-            layout->addWidget(topContainer, 0, Qt::AlignTop); // Distinctly at top
-            
-            // Console Panel
-            panel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-            // Ensure no margins on the panel itself if possible
-            if (panel->layout()) panel->layout()->setContentsMargins(0, 0, 0, 0);
-            
-            layout->addWidget(panel, 1); // Expand to fill rest
 
+            layout->addWidget(topContainer, 0, Qt::AlignTop);
+
+            // Ensure the console panel fills the remaining space
+            panel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+            if (panel->layout())
+                panel->layout()->setContentsMargins(0, 0, 0, 0);
+
+            layout->addWidget(panel, 1);
             widgetToAdd = container;
         }
     }
-    
+
     int id = m_stack->count();
     m_stack->addWidget(widgetToAdd);
-    
+
     createTab(name, iconPath, id);
-    m_idToName[id] = name;
+    m_idToName[id]   = name;
     m_nameToId[name] = id;
 
-    // Keep stable lookup keys for call sites that use hardcoded English names.
+    // Register additional lookup keys for call sites that use hard-coded English names,
+    // ensuring lookups are stable regardless of the application locale.
     if (name == "Console" || name == tr("Console")) {
-        m_nameToId["Console"] = id;
-        m_nameToId[tr("Console")] = id;
+        m_nameToId["Console"]       = id;
+        m_nameToId[tr("Console")]   = id;
     } else if (name == "Header" || name == tr("Header")) {
-        m_nameToId["Header"] = id;
-        m_nameToId[tr("Header")] = id;
+        m_nameToId["Header"]        = id;
+        m_nameToId[tr("Header")]    = id;
     }
 }
 
-void SidebarWidget::createTab(const QString& name, [[maybe_unused]] const QString& iconPath, int id) {
-    // Vertical button with text
-    VerticalButton* btn = new VerticalButton(name, this);
+void SidebarWidget::createTab(const QString& name,
+                              [[maybe_unused]] const QString& iconPath,
+                              int id)
+{
+    auto* btn = new VerticalButton(name, this);
     btn->setCheckable(true);
     btn->setToolTip(name);
-    
-    // 32px width fits exactly inside the container accounting for symmetric margins (2+2)
-    btn->setFixedSize(32, 120); // Taller for vertical text, 32px width to fill container
-    
-    // Disable styled background so paintEvent has full control over rendering
+    btn->setFixedSize(32, 120);
+
+    // Disable styled background so the custom paintEvent has full rendering control
     btn->setAttribute(Qt::WA_StyledBackground, false);
 
     m_tabGroup->addButton(btn, id);
-    m_tabLayout->insertWidget(m_tabLayout->count() - 1, btn, 0, Qt::AlignHCenter); // Insert before stretch, centered
+    // Insert before the trailing stretch, centred horizontally
+    m_tabLayout->insertWidget(m_tabLayout->count() - 1, btn, 0, Qt::AlignHCenter);
 }
 
-void SidebarWidget::onTabClicked(int id) {
+
+// ============================================================================
+// Tab click handling
+// ============================================================================
+
+void SidebarWidget::onTabClicked(int id)
+{
     bool sameTab = (id == m_currentId) && m_expanded;
-    
+
     if (sameTab) {
-        // Collapse
+        // Clicking the active tab again collapses the panel
         setExpanded(false);
         m_tabGroup->button(id)->setChecked(false);
         m_currentId = -1;
     } else {
-        // Switch or Open
+        // Switch to the new panel (expand if currently collapsed)
         m_stack->setCurrentIndex(id);
         m_currentId = id;
         if (!m_expanded) setExpanded(true);
     }
 }
 
-void SidebarWidget::addBottomAction(const QIcon& icon, const QString& tooltip, std::function<void()> callback) {
-    QPushButton* btn = new QPushButton(this);
+
+// ============================================================================
+// Bottom action buttons
+// ============================================================================
+
+void SidebarWidget::addBottomAction(const QIcon& icon,
+                                    const QString& tooltip,
+                                    std::function<void()> callback)
+{
+    auto* btn = new QPushButton(this);
     btn->setIcon(icon);
     btn->setIconSize(QSize(24, 24));
-    btn->setFixedSize(32, 32); // Match tab button width for visual consistency
+    btn->setFixedSize(32, 32);
     btn->setToolTip(tooltip);
     btn->setFlat(true);
     btn->setCursor(Qt::PointingHandCursor);
-    btn->setStyleSheet("QPushButton { background-color: transparent; border: none; } "
-                       "QPushButton:hover { background-color: #3d3d3d; border-radius: 4px; }");
-    
-    m_tabLayout->addWidget(btn, 0, Qt::AlignHCenter); // Centered to match tab buttons above
+    btn->setStyleSheet(
+        "QPushButton { background-color: transparent; border: none; }"
+        "QPushButton:hover { background-color: #3d3d3d; border-radius: 4px; }");
+
+    m_tabLayout->addWidget(btn, 0, Qt::AlignHCenter);
     connect(btn, &QPushButton::clicked, callback);
 }
 
-void SidebarWidget::setExpanded(bool expanded) {
+
+// ============================================================================
+// Expand / collapse
+// ============================================================================
+
+void SidebarWidget::setExpanded(bool expanded)
+{
     if (m_expanded == expanded) return;
     m_expanded = expanded;
     emit expandedToggled(expanded);
-    
+
     if (!expanded) {
-        // When collapsing, ensure no button is visually active/checked
+        // Uncheck the active tab button when collapsing programmatically
         if (m_tabGroup->checkedButton()) {
             m_tabGroup->setExclusive(false);
             m_tabGroup->checkedButton()->setChecked(false);
@@ -222,111 +279,140 @@ void SidebarWidget::setExpanded(bool expanded) {
         }
         m_currentId = -1;
     }
-    
+
     m_widthAnim->stop();
     m_widthAnim->setStartValue(m_contentContainer->width());
     m_widthAnim->setEndValue(expanded ? m_expandedWidth : 0);
     m_widthAnim->start();
 }
 
-void SidebarWidget::onAnimationFinished() {
-    // Optional cleanup
+void SidebarWidget::onAnimationFinished()
+{
+    // Reserved for any post-animation cleanup if needed in future
 }
 
-void SidebarWidget::openPanel(const QString& name) {
+
+// ============================================================================
+// Programmatic panel access
+// ============================================================================
+
+void SidebarWidget::openPanel(const QString& name)
+{
     if (!m_nameToId.contains(name)) return;
     int id = m_nameToId[name];
-    
-    // Programmatic open: avoid toggle logic in onTabClicked
+
     m_stack->setCurrentIndex(id);
     m_currentId = id;
-    
-    if (m_tabGroup->button(id)) {
+
+    if (m_tabGroup->button(id))
         m_tabGroup->button(id)->setChecked(true);
-    }
-    
-    if (!m_expanded) {
+
+    if (!m_expanded)
         setExpanded(true);
-    }
 }
 
-QWidget* SidebarWidget::getPanel(const QString& name) {
+QWidget* SidebarWidget::getPanel(const QString& name)
+{
     if (!m_nameToId.contains(name)) return nullptr;
     return m_stack->widget(m_nameToId[name]);
 }
 
-void SidebarWidget::setExpandedWidth(int width) {
-    if (width < 100) width = 100;
-    if (width > 800) width = 800;
+
+// ============================================================================
+// Resize handle integration
+// ============================================================================
+
+void SidebarWidget::setExpandedWidth(int width)
+{
+    width = std::clamp(width, 100, 800);
     m_expandedWidth = width;
+
     if (m_expanded) {
         m_contentContainer->setFixedWidth(m_expandedWidth);
-        // CRITICAL Fix: Resize the parent widget immediately to avoid clipping
         resize(totalVisibleWidth(), height());
-        if (m_stack) m_stack->update();
+
+        if (m_stack)   m_stack->update();
         if (m_console) m_console->update();
         m_contentContainer->update();
         update();
     }
-    // Sync stack width to ensure "slide" effect works
+
+    // Synchronise the stack minimum width so the slide effect remains correct
     if (m_stack) {
         m_stack->setMinimumWidth(m_expandedWidth);
         m_stack->update();
     }
 }
 
-bool SidebarWidget::isInteracting() const {
-    // Check if the cursor is anywhere within the sidebar's current area
-    // We use global position to be cross-platform/reliable regardless of focus
-    QPoint globalCursor = QCursor::pos();
-    QRect globalRect = QRect(mapToGlobal(QPoint(0, 0)), size());
-    
-    bool underMouse = globalRect.contains(globalCursor);
-    bool hasFocusedChild = hasFocus() || (m_console && m_console->hasFocus());
 
-    if (underMouse) return true;
-    
-    // Fallback: check focus
-    if (hasFocusedChild) return true;
-    
+// ============================================================================
+// Interaction state detection
+// ============================================================================
+
+bool SidebarWidget::isInteracting() const
+{
+    // Use global cursor position for cross-platform reliability
+    QPoint globalCursor = QCursor::pos();
+    QRect  globalRect   = QRect(mapToGlobal(QPoint(0, 0)), size());
+
+    if (globalRect.contains(globalCursor))
+        return true;
+
+    if (hasFocus() || (m_console && m_console->hasFocus()))
+        return true;
+
     return false;
 }
 
-void SidebarWidget::enterEvent(QEnterEvent* event) {
+void SidebarWidget::enterEvent(QEnterEvent* event)
+{
     emit interactionStarted();
     QWidget::enterEvent(event);
 }
 
-void SidebarWidget::leaveEvent(QEvent* event) {
+void SidebarWidget::leaveEvent(QEvent* event)
+{
     emit interactionEnded();
     QWidget::leaveEvent(event);
 }
 
-QString SidebarWidget::currentPanel() const {
-    if (m_currentId != -1 && m_idToName.contains(m_currentId)) {
+
+// ============================================================================
+// Accessors
+// ============================================================================
+
+QString SidebarWidget::currentPanel() const
+{
+    if (m_currentId != -1 && m_idToName.contains(m_currentId))
         return m_idToName[m_currentId];
-    }
     return QString();
 }
 
-void SidebarWidget::logToConsole(const QString& htmlMsg) {
+
+// ============================================================================
+// Console output helpers
+// ============================================================================
+
+void SidebarWidget::logToConsole(const QString& htmlMsg)
+{
     if (!m_console) return;
-    
-    // Ensure padding to allow scrolling past the last line via document frame
+
+    // Ensure a bottom margin so the user can scroll past the last visible line
     QTextFrameFormat fmt = m_console->document()->rootFrame()->frameFormat();
     if (fmt.bottomMargin() != 150) {
         fmt.setBottomMargin(150);
         m_console->document()->rootFrame()->setFrameFormat(fmt);
     }
-    
+
     m_console->append(htmlMsg);
-    m_console->verticalScrollBar()->setValue(m_console->verticalScrollBar()->maximum());
+    m_console->verticalScrollBar()->setValue(
+        m_console->verticalScrollBar()->maximum());
 }
 
-void SidebarWidget::updateLastLogLine(const QString& htmlMsg) {
+void SidebarWidget::updateLastLogLine(const QString& htmlMsg)
+{
     if (!m_console) return;
-    
-    // Ensure padding to allow scrolling past the last line via document frame
+
     QTextFrameFormat fmt = m_console->document()->rootFrame()->frameFormat();
     if (fmt.bottomMargin() != 150) {
         fmt.setBottomMargin(150);
@@ -335,61 +421,65 @@ void SidebarWidget::updateLastLogLine(const QString& htmlMsg) {
 
     QTextCursor cursor = m_console->textCursor();
     cursor.movePosition(QTextCursor::End);
-    
+
     if (m_console->document()->isEmpty()) {
         m_console->append(htmlMsg);
     } else {
-        // Select the entire current line (block)
+        // Replace the content of the current (last) block in-place
         cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
         cursor.removeSelectedText();
-        // Insert and ensure it's on the same logic level
         cursor.insertHtml(htmlMsg);
     }
-    
-    m_console->verticalScrollBar()->setValue(m_console->verticalScrollBar()->maximum());
+
+    m_console->verticalScrollBar()->setValue(
+        m_console->verticalScrollBar()->maximum());
 }
+
+
+// ============================================================================
+// VerticalButton implementation
+// ============================================================================
 
 SidebarWidget::VerticalButton::VerticalButton(const QString& text, QWidget* parent)
     : QPushButton(text, parent)
 {
-    // Fixed policy: size is explicitly set via setFixedSize, no expansion needed
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 }
 
-QSize SidebarWidget::VerticalButton::sizeHint() const {
-    // Return the fixed size directly, consistent with setFixedSize(32, 120) in createTab
+QSize SidebarWidget::VerticalButton::sizeHint() const
+{
     return QSize(32, 120);
 }
 
-void SidebarWidget::VerticalButton::paintEvent(QPaintEvent*) {
+void SidebarWidget::VerticalButton::paintEvent(QPaintEvent*)
+{
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    
-    // Find SidebarWidget iteratively to handle layout re-parenting
-    SidebarWidget* sb = nullptr;
-    QWidget* current = parentWidget();
+
+    // Walk up the parent hierarchy to find the owning SidebarWidget
+    SidebarWidget* sb      = nullptr;
+    QWidget*       current = parentWidget();
     while (current) {
         sb = qobject_cast<SidebarWidget*>(current);
         if (sb) break;
         current = current->parentWidget();
     }
-    
+
     bool isSidebarExpanded = sb ? sb->m_expanded : false;
 
-    // Background
+    // Draw background based on checked / hover state
     if (isChecked() && isSidebarExpanded)
         p.fillRect(rect(), QColor("#0055aa"));
     else if (underMouse())
         p.fillRect(rect(), QColor("#444"));
 
-    // Save painter state before transform to prevent artifacts on subsequent repaints
+    // Rotate the painter -90 degrees to draw vertical text.
+    // After rotation, width and height are swapped in the text rectangle.
     p.save();
     p.translate(0, height());
     p.rotate(-90);
-    
+
     p.setPen((isChecked() && isSidebarExpanded) ? Qt::white : QColor("#ccc"));
-    // After -90° rotation width and height are swapped, so text rect must reflect that
-    QRect textRect(0, 0, height(), width());
-    p.drawText(textRect, Qt::AlignCenter, text());
+    p.drawText(QRect(0, 0, height(), width()), Qt::AlignCenter, text());
     p.restore();
 }

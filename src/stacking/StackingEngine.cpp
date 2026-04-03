@@ -1,14 +1,27 @@
+/**
+ * @file StackingEngine.cpp
+ * @brief Core stacking engine implementation
+ *
+ * Implements the complete image stacking pipeline including mean, median,
+ * sum, min/max, and drizzle stacking methods. Supports pixel rejection,
+ * normalization, weighting, comet alignment, cosmetic correction, and
+ * multi-threaded block-based processing with preloaded images.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
 
 #include "StackingEngine.h"
 #include "../io/FitsHeaderUtils.h"
 
 #include <QDateTime>
-#include <set>
 #include <QDir>
 #include <QFileInfo>
+
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
+#include <set>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -22,10 +35,10 @@
 #include "StackingInterpolation.h"
 #include "InlineRejection.h"
 #include "../core/ThreadState.h"
+
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <emmintrin.h>
 #endif
-
 
 namespace Stacking {
 
@@ -43,301 +56,175 @@ StackingEngine::StackingEngine(QObject* parent)
 StackingEngine::~StackingEngine() = default;
 
 //=============================================================================
+// MASTER FRAME CONFIGURATION HELPERS
+//=============================================================================
+
+/**
+ * @brief Configure stacking parameters optimized for master bias generation.
+ *
+ * Bias frames contain only read noise with negligible signal variance.
+ * Configuration: Mean combination, Winsorized rejection with tight bounds,
+ * no normalization, no alignment.
+ */
+void StackingEngine::configureForMasterBias(StackingArgs& args)
+{
+    args.params.method        = Method::Mean;
+    args.params.rejection     = Rejection::Winsorized;
+    args.params.normalization = NormalizationMethod::None;
+    args.params.weighting     = WeightingType::None;
+
+    args.params.sigmaLow  = 3.0f;
+    args.params.sigmaHigh = 3.0f;
+
+    args.params.maximizeFraming   = false;
+    args.params.upscaleAtStacking = false;
+    args.params.drizzle           = false;
+}
+
+/**
+ * @brief Configure stacking parameters optimized for master dark generation.
+ *
+ * Dark frames are dominated by thermal noise and hot pixels. Winsorized
+ * rejection effectively removes hot pixel outliers on the high end.
+ * Configuration: Mean combination, Winsorized rejection, no normalization.
+ */
+void StackingEngine::configureForMasterDark(StackingArgs& args)
+{
+    args.params.method        = Method::Mean;
+    args.params.rejection     = Rejection::Winsorized;
+    args.params.normalization = NormalizationMethod::None;
+    args.params.weighting     = WeightingType::None;
+
+    args.params.sigmaLow  = 3.0f;
+    args.params.sigmaHigh = 3.0f;
+
+    args.params.maximizeFraming   = false;
+    args.params.upscaleAtStacking = false;
+    args.params.drizzle           = false;
+}
+
+/**
+ * @brief Configure stacking parameters optimized for master flat generation.
+ *
+ * Flat frames require multiplicative normalization to account for varying
+ * illumination intensity across exposures. Winsorized rejection removes
+ * dust mote artifacts and sensor defects.
+ */
+void StackingEngine::configureForMasterFlat(StackingArgs& args)
+{
+    args.params.method        = Method::Mean;
+    args.params.rejection     = Rejection::Winsorized;
+    args.params.normalization = NormalizationMethod::Multiplicative;
+    args.params.weighting     = WeightingType::None;
+
+    args.params.sigmaLow  = 3.0f;
+    args.params.sigmaHigh = 3.0f;
+
+    args.params.maximizeFraming   = false;
+    args.params.upscaleAtStacking = false;
+    args.params.drizzle           = false;
+}
+
+//=============================================================================
 // MAIN ENTRY POINT
 //=============================================================================
 
-void StackingEngine::configureForMasterBias(StackingArgs& args) {
-    args.params.method = Method::Mean;
-    args.params.rejection = Rejection::Winsorized;
-    args.params.normalization = NormalizationMethod::None;
-    args.params.weighting = WeightingType::None;
-    
-    // Bias frames usually have very little signal variance, so standard sigma clipping
-    // or winsorized with tighter bounds is best.
-    args.params.sigmaLow = 3.0f;
-    args.params.sigmaHigh = 3.0f;
-    
-    // No alignment/registration for calibration frames
-    args.params.maximizeFraming = false;
-    args.params.upscaleAtStacking = false;
-    args.params.drizzle = false;
-}
-
-void StackingEngine::configureForMasterDark(StackingArgs& args) {
-    args.params.method = Method::Mean;
-    args.params.rejection = Rejection::Winsorized; // Essential for hot pixel rejection
-    args.params.normalization = NormalizationMethod::None; // Never normalize Darks
-    args.params.weighting = WeightingType::None; // Exposure weighting is irrelevant for same-exposure darks
-    
-    // Darks are prone to hot pixels (high outliers)
-    // Low sigma can be loose (thermal noise), High sigma strict (hot pixels)
-    args.params.sigmaLow = 3.0f;
-    args.params.sigmaHigh = 3.0f; 
-    
-    args.params.maximizeFraming = false;
-    args.params.upscaleAtStacking = false;
-    args.params.drizzle = false;
-}
-
-void StackingEngine::configureForMasterFlat(StackingArgs& args) {
-    args.params.method = Method::Mean;
-    args.params.rejection = Rejection::Winsorized;
-    
-    // Flats MUST be normalized to account for varying light source intensity
-    args.params.normalization = NormalizationMethod::Multiplicative; 
-    
-    args.params.weighting = WeightingType::None;
-    
-    args.params.sigmaLow = 3.0f;
-    args.params.sigmaHigh = 3.0f;
-    
-    args.params.maximizeFraming = false;
-    args.params.upscaleAtStacking = false;
-    args.params.drizzle = false;
-}
-
-StackResult StackingEngine::execute(StackingArgs& args) {
+/**
+ * @brief Execute the complete stacking pipeline.
+ *
+ * Orchestrates the entire stacking workflow:
+ *   1. Validate and filter input images
+ *   2. Prepare comet alignment transforms (if enabled)
+ *   3. Compute normalization coefficients
+ *   4. Compute image quality weights
+ *   5. Auto-detect Bayer pattern (if debayering)
+ *   6. Build cosmetic correction map (if enabled)
+ *   7. Initialize rejection maps (if requested)
+ *   8. Dispatch to the appropriate stacking method
+ *   9. Apply post-processing (output normalization, RGB equalization)
+ *  10. Update output metadata and generate summary
+ *
+ * @param args  Stacking arguments containing all configuration and runtime state.
+ *              Modified in place with the stacking result.
+ * @return StackResult status code indicating success or failure reason.
+ */
+StackResult StackingEngine::execute(StackingArgs& args)
+{
     m_cancelled = false;
-    
-    // Validate inputs
+
+    // ---- Step 1: Validate input sequence ----
+
     if (!args.sequence || !args.sequence->isValid()) {
         args.log(tr("Error: Invalid or empty sequence"), "red");
         return StackResult::SequenceError;
     }
-    
-    // Filter images
+
     if (!filterImages(args)) {
         args.log(tr("Error: No images selected for stacking"), "red");
         return StackResult::GenericError;
     }
+
     args.log(tr("Stacking %1 images using %2 method...")
-            .arg(args.nbImagesToStack)
-            .arg(methodToString(args.params.method)), "green");
-    
+                 .arg(args.nbImagesToStack)
+                 .arg(methodToString(args.params.method)),
+             "green");
+
+    // ---- Step 2: Comet alignment ----
 
     if (args.params.useCometMode) {
-        emit logMessage(tr("Preparing Comet Alignment..."), "neutral");
-        
-        // Ensure effectiveRegs is resized
-        int totalImages = args.sequence->count();
-        args.effectiveRegs.resize(totalImages);
-        
-        // Get Reference Comet Position
-        // If Ref Image has explicit comet position, use it.
-        // Otherwise we define the Reference Comet Position as "where it would be at Ref Date" (usually 0 shift relative to stars if we pick Ref Frame as Ref)
-        
-        double refCometX = 0.0;
-        double refCometY = 0.0;
-        bool hasRefPos = false;
-        
-        const auto& refImg = args.sequence->image(args.params.refImageIndex);
-        if (refImg.registration.cometX > 0 && refImg.registration.cometY > 0) {
-            refCometX = refImg.registration.cometX;
-            refCometY = refImg.registration.cometY;
-            hasRefPos = true;
-        }
-
-        // Velocity fallback data
-        QDateTime refDate = QDateTime::fromString(args.params.refDate, Qt::ISODate);
-        if (!refDate.isValid()) {
-             refDate = QDateTime::fromString(refImg.metadata.dateObs, Qt::ISODate); 
-        }
-
-        for (int idx : args.imageIndices) {
-             RegistrationData reg = args.sequence->image(idx).registration;
-             const auto& imgInfo = args.sequence->image(idx);
-             
-             // Strategy:
-             // 1. If we have explicit comet positions (Position Mode):
-             //    - Project Image Comet (raw) -> Ref Frame (using H_star)
-             //    - Calculate Delta = RefComet - ProjectedComet
-             //    - Add Delta to H_star translation
-             
-             // 2. If no positions, use Velocity (Velocity Mode):
-             //    - Calculate Delta based on (Time - RefTime) * Velocity
-             //    - Subtract Delta from H_star to align comet position across frames
-             //      Wait. If Comet moves +10px. To keep it centered, we must shift the image -10px. 
-             //      So subtract shift.
-             
-             bool usedPosition = false;
-             
-             if (hasRefPos && reg.cometX > 0 && reg.cometY > 0) {
-                 // Project current comet position to Reference Frame using Star Alignment
-                 QPointF projected = reg.transform(reg.cometX, reg.cometY);
-                 
-                 // We want Projected to be at RefCometX/Y
-                 // Shift = Target - Current
-                 double dx = refCometX - projected.x();
-                 double dy = refCometY - projected.y();
-                 
-                 // Apply shift to Homography (translation components are [0][2] and [1][2])
-                 // H' = T(dx,dy) * H
-                 reg.H[0][2] += dx;
-                 reg.H[1][2] += dy;
-                 reg.shiftX += dx;
-                 reg.shiftY += dy;
-                 
-                 usedPosition = true;
-             }
-             
-             if (!usedPosition) {
-                 // Fallback to velocity
-                 QDateTime imgDate = QDateTime::fromString(imgInfo.metadata.dateObs, Qt::ISODate);
-                 
-                 if (imgDate.isValid() && refDate.isValid()) {
-                     qint64 secs = refDate.secsTo(imgDate);
-                     double hours = secs / 3600.0;
-                     
-                     // Comet displacement relative to stars
-                     double comDisX = hours * args.params.cometVx;
-                     double comDisY = hours * args.params.cometVy;
-                     
-                     // To align on comet, shift image so comet stays fixed.
-                     // If comet moves +X, we shift image -X relative to star-aligned.
-                     reg.H[0][2] -= comDisX;
-                     reg.H[1][2] -= comDisY;
-                     reg.shiftX -= comDisX;
-                     reg.shiftY -= comDisY;
-                 }
-             }
-             
-             args.effectiveRegs[idx] = reg;
-        }
+        prepareCometAlignment(args);
     } else {
         args.effectiveRegs.clear();
     }
 
-    // Compute normalization if needed
+    // ---- Step 3: Normalization ----
+
     if (args.params.hasNormalization()) {
         if (!computeNormalization(args)) {
             if (m_cancelled) return StackResult::CancelledError;
             args.log(tr("Warning: Normalization computation failed, continuing without"), "salmon");
         }
     }
-    
+
     if (m_cancelled) return StackResult::CancelledError;
-    
-    // Compute weights if enabled
+
+    // ---- Step 4: Image weighting ----
+
     if (args.params.weighting != WeightingType::None) {
         args.progress(tr("Computing image weights..."), -1);
-        if (!Weighting::computeWeights(*args.sequence, args.params.weighting, args.coefficients, args.weights)) {
-             args.log(tr("Warning: Weight computation failed, continuing without weighting"), "salmon");
-             args.weights.clear();
+        if (!Weighting::computeWeights(*args.sequence, args.params.weighting,
+                                       args.coefficients, args.weights)) {
+            args.log(tr("Warning: Weight computation failed, continuing without weighting"), "salmon");
+            args.weights.clear();
         }
     }
 
-    // 4. Auto-detect Bayer Pattern if needed
-    if (args.params.debayer && (args.params.bayerPattern == Preprocessing::BayerPattern::Auto || 
-                                args.params.bayerPattern == Preprocessing::BayerPattern::None)) {
-        // Try to get pattern from reference image
-        auto refInfo = args.sequence->image(args.params.refImageIndex);
-        QString patternStr = refInfo.metadata.bayerPattern;
-        
-        if (patternStr.isEmpty()) {
-            // Check headers directly if metadata is empty
-            patternStr = refInfo.metadata.xisfProperties.value("BayerPattern").toString();
-        }
+    // ---- Step 5: Auto-detect Bayer pattern ----
 
-        if (!patternStr.isEmpty()) {
-            if (patternStr == "RGGB") args.params.bayerPattern = Preprocessing::BayerPattern::RGGB;
-            else if (patternStr == "BGGR") args.params.bayerPattern = Preprocessing::BayerPattern::BGGR;
-            else if (patternStr == "GBRG") args.params.bayerPattern = Preprocessing::BayerPattern::GBRG;
-            else if (patternStr == "GRBG") args.params.bayerPattern = Preprocessing::BayerPattern::GRBG;
-            
-            if (args.params.bayerPattern != Preprocessing::BayerPattern::None) {
-                args.log(tr("Auto-detected Bayer pattern: %1").arg(patternStr), "blue");
-            }
-        }
+    if (args.params.debayer &&
+        (args.params.bayerPattern == Preprocessing::BayerPattern::Auto ||
+         args.params.bayerPattern == Preprocessing::BayerPattern::None)) {
+        autoDetectBayerPattern(args);
     }
+
+    // ---- Step 6: Cosmetic correction ----
 
     if (args.params.useCosmetic) {
-        args.progress(tr("Computing Cosmetic Correction Map..."), -1);
-        
-        // Check if we have a pre-computed bad pixel map file
-        if (!args.params.cosmeticMapFile.isEmpty()) {
-            // Load map from file - expected format: master dark FITS/TIFF
-            ImageBuffer masterDark;
-            QString ext = QFileInfo(args.params.cosmeticMapFile).suffix().toLower();
-            bool loaded = false;
-            
-            if (ext == "fit" || ext == "fits" || ext == "fts") {
-                loaded = FitsLoader::load(args.params.cosmeticMapFile, masterDark);
-            }
-            // Add other formats if needed
-            
-            if (loaded && masterDark.isValid()) {
-                args.cosmeticMap = CosmeticCorrection::findDefects(
-                    masterDark,
-                    args.params.cosmeticHotSigma,
-                    args.params.cosmeticColdSigma,
-                    args.params.cosmeticIsCFA
-                );
-                
-                if (args.cosmeticMap.isValid()) {
-                    args.log(tr("Cosmetic Correction: Found %1 defects in master dark")
-                            .arg(args.cosmeticMap.count), "blue");
-                } else {
-                    args.log(tr("Warning: No defects found in master dark, cosmetic correction disabled"), "salmon");
-                    args.params.useCosmetic = false;
-                }
-            } else {
-                args.log(tr("Warning: Could not load cosmetic map file: %1")
-                        .arg(args.params.cosmeticMapFile), "salmon");
-                args.params.useCosmetic = false;
-            }
-        } else {
-            args.log(tr("Warning: Cosmetic correction enabled but no master dark provided"), "salmon");
-            args.params.useCosmetic = false;
-        }
+        prepareCosmeticCorrection(args);
     }
-    
-    // Initialize rejection maps if requested
+
+    // ---- Step 7: Rejection maps ----
+
     if (args.params.createRejectionMaps) {
-         int width, height, offsetX, offsetY;
-         computeOutputDimensions(args, width, height, offsetX, offsetY);
-         args.rejectionMaps.initialize(width, height, args.sequence->channels(),
-                                      true, true);
+        int width, height, offsetX, offsetY;
+        computeOutputDimensions(args, width, height, offsetX, offsetY);
+        args.rejectionMaps.initialize(width, height, args.sequence->channels(), true, true);
     }
-    
-    // Drizzle Integration
-    if (args.params.drizzle) {
-        if (args.params.hasRejection()) {
-            args.log(tr("Drizzle enabled: Running first pass for rejection..."), "blue");
-            args.params.createRejectionMaps = true;
-            
-            // Run mean stacking to get rejection maps and reference
-            StackResult res = stackMean(args);
-            if (res != StackResult::OK) return res;
-            
-            if (m_cancelled) return StackResult::CancelledError;
-        }
-        
-        args.log(tr("Starting Drizzle stacking (Scale: %1x, PixFrac: %2)...")
-                .arg(args.params.drizzleScale)
-                .arg(args.params.drizzlePixFrac), "blue");
-        return stackDrizzle(args);
-    }
-    
-    // Execute appropriate stacking method
-    StackResult result;
-    switch (args.params.method) {
-        case Method::Sum:
-            result = stackSum(args);
-            break;
-        case Method::Mean:
-        case Method::Median: // Median now uses the optimized block engine
-            result = stackMean(args);
-            break;
-        case Method::Max:
-            result = stackMax(args);
-            break;
-        case Method::Min:
-            result = stackMin(args);
-            break;
-        default:
-            result = StackResult::GenericError;
-    }
-    
+
+    // ---- Step 8: Dispatch stacking method ----
+
+    StackResult result = dispatchStacking(args);
+
     if (result != StackResult::OK) {
         if (m_cancelled) {
             args.log(tr("Stacking cancelled by user"), "salmon");
@@ -346,277 +233,558 @@ StackResult StackingEngine::execute(StackingArgs& args) {
         }
         return result;
     }
-    
-    // Post-processing
+
+    // ---- Step 9: Post-processing ----
+
     if (args.params.outputNormalization) {
         args.progress(tr("Normalizing output..."), -1);
         Normalization::normalizeOutput(args.result);
     }
-    
+
     if (args.params.equalizeRGB && args.result.channels() >= 3) {
         args.progress(tr("Equalizing RGB channels..."), -1);
         Normalization::equalizeRGB(args.result);
     }
-    
-    // Update metadata using final framing offsets to adjust WCS
+
+    // ---- Step 10: Metadata and summary ----
+
     int width, height, offsetX, offsetY;
     computeOutputDimensions(args, width, height, offsetX, offsetY);
     updateMetadata(args, offsetX, offsetY);
-    
-    // Generate summary
+
     QString summary = generateSummary(args);
     args.log(summary, "green");
-    
+
     emit finished(true);
     return StackResult::OK;
 }
 
-void StackingEngine::requestCancel() {
+void StackingEngine::requestCancel()
+{
     m_cancelled = true;
+}
+
+//=============================================================================
+// COMET ALIGNMENT (private helper extracted from execute)
+//=============================================================================
+
+/**
+ * @brief Prepare per-frame registration transforms for comet-aligned stacking.
+ *
+ * Two strategies are supported:
+ *   - Position mode: explicit comet (x,y) positions in each frame are projected
+ *     through the star-alignment homography and the residual offset is applied.
+ *   - Velocity mode: a constant comet velocity (px/hour) is used to compute
+ *     the time-dependent displacement relative to the reference frame.
+ *
+ * The result is stored in args.effectiveRegs[], one modified RegistrationData
+ * per frame, with translation components adjusted so the comet stays fixed
+ * in the output.
+ */
+void StackingEngine::prepareCometAlignment(StackingArgs& args)
+{
+    emit logMessage(tr("Preparing Comet Alignment..."), "neutral");
+
+    const int totalImages = args.sequence->count();
+    args.effectiveRegs.resize(totalImages);
+
+    // Determine reference comet position (if available)
+    const auto& refImg = args.sequence->image(args.params.refImageIndex);
+
+    double refCometX = 0.0;
+    double refCometY = 0.0;
+    bool   hasRefPos = false;
+
+    if (refImg.registration.cometX > 0 && refImg.registration.cometY > 0) {
+        refCometX = refImg.registration.cometX;
+        refCometY = refImg.registration.cometY;
+        hasRefPos = true;
+    }
+
+    // Reference date for velocity-based alignment
+    QDateTime refDate = QDateTime::fromString(args.params.refDate, Qt::ISODate);
+    if (!refDate.isValid()) {
+        refDate = QDateTime::fromString(refImg.metadata.dateObs, Qt::ISODate);
+    }
+
+    // Process each selected frame
+    for (int idx : args.imageIndices) {
+        RegistrationData reg     = args.sequence->image(idx).registration;
+        const auto&      imgInfo = args.sequence->image(idx);
+        bool usedPosition = false;
+
+        // Strategy 1 -- Position mode
+        // Project the frame's comet position into reference space via the star
+        // homography, then shift so it lands on the reference comet location.
+        if (hasRefPos && reg.cometX > 0 && reg.cometY > 0) {
+            QPointF projected = reg.transform(reg.cometX, reg.cometY);
+
+            double dx = refCometX - projected.x();
+            double dy = refCometY - projected.y();
+
+            reg.H[0][2] += dx;
+            reg.H[1][2] += dy;
+            reg.shiftX  += dx;
+            reg.shiftY  += dy;
+
+            usedPosition = true;
+        }
+
+        // Strategy 2 -- Velocity mode (fallback)
+        // Compute displacement from elapsed time and subtract it from the
+        // star-aligned transform so the comet remains stationary.
+        if (!usedPosition) {
+            QDateTime imgDate = QDateTime::fromString(imgInfo.metadata.dateObs, Qt::ISODate);
+
+            if (imgDate.isValid() && refDate.isValid()) {
+                const double hours   = refDate.secsTo(imgDate) / 3600.0;
+                const double comDisX = hours * args.params.cometVx;
+                const double comDisY = hours * args.params.cometVy;
+
+                reg.H[0][2] -= comDisX;
+                reg.H[1][2] -= comDisY;
+                reg.shiftX  -= comDisX;
+                reg.shiftY  -= comDisY;
+            }
+        }
+
+        args.effectiveRegs[idx] = reg;
+    }
+}
+
+//=============================================================================
+// BAYER PATTERN AUTO-DETECTION (private helper)
+//=============================================================================
+
+/**
+ * @brief Attempt to auto-detect the Bayer pattern from the reference image metadata.
+ *
+ * Checks the reference frame's stored metadata and XISF properties for a
+ * recognized CFA pattern string (RGGB, BGGR, GBRG, GRBG).
+ */
+void StackingEngine::autoDetectBayerPattern(StackingArgs& args)
+{
+    auto    refInfo    = args.sequence->image(args.params.refImageIndex);
+    QString patternStr = refInfo.metadata.bayerPattern;
+
+    if (patternStr.isEmpty()) {
+        patternStr = refInfo.metadata.xisfProperties.value("BayerPattern").toString();
+    }
+
+    if (!patternStr.isEmpty()) {
+        if      (patternStr == "RGGB") args.params.bayerPattern = Preprocessing::BayerPattern::RGGB;
+        else if (patternStr == "BGGR") args.params.bayerPattern = Preprocessing::BayerPattern::BGGR;
+        else if (patternStr == "GBRG") args.params.bayerPattern = Preprocessing::BayerPattern::GBRG;
+        else if (patternStr == "GRBG") args.params.bayerPattern = Preprocessing::BayerPattern::GRBG;
+
+        if (args.params.bayerPattern != Preprocessing::BayerPattern::None) {
+            args.log(tr("Auto-detected Bayer pattern: %1").arg(patternStr), "blue");
+        }
+    }
+}
+
+//=============================================================================
+// COSMETIC CORRECTION PREPARATION (private helper)
+//=============================================================================
+
+/**
+ * @brief Load and analyze the cosmetic correction master dark to build a
+ *        defect map for hot/cold pixel interpolation during stacking.
+ */
+void StackingEngine::prepareCosmeticCorrection(StackingArgs& args)
+{
+    args.progress(tr("Computing Cosmetic Correction Map..."), -1);
+
+    if (args.params.cosmeticMapFile.isEmpty()) {
+        args.log(tr("Warning: Cosmetic correction enabled but no master dark provided"), "salmon");
+        args.params.useCosmetic = false;
+        return;
+    }
+
+    // Load the master dark frame
+    ImageBuffer masterDark;
+    QString ext = QFileInfo(args.params.cosmeticMapFile).suffix().toLower();
+    bool loaded = false;
+
+    if (ext == "fit" || ext == "fits" || ext == "fts") {
+        loaded = FitsLoader::load(args.params.cosmeticMapFile, masterDark);
+    }
+
+    if (!loaded || !masterDark.isValid()) {
+        args.log(tr("Warning: Could not load cosmetic map file: %1")
+                     .arg(args.params.cosmeticMapFile), "salmon");
+        args.params.useCosmetic = false;
+        return;
+    }
+
+    // Detect defective pixels by sigma thresholding
+    args.cosmeticMap = CosmeticCorrection::findDefects(
+        masterDark,
+        args.params.cosmeticHotSigma,
+        args.params.cosmeticColdSigma,
+        args.params.cosmeticIsCFA);
+
+    if (args.cosmeticMap.isValid()) {
+        args.log(tr("Cosmetic Correction: Found %1 defects in master dark")
+                     .arg(args.cosmeticMap.count), "blue");
+    } else {
+        args.log(tr("Warning: No defects found in master dark, cosmetic correction disabled"), "salmon");
+        args.params.useCosmetic = false;
+    }
+}
+
+//=============================================================================
+// STACKING METHOD DISPATCH (private helper)
+//=============================================================================
+
+/**
+ * @brief Route to the appropriate stacking implementation based on configured method.
+ *
+ * Handles the special case of drizzle stacking, which may require a preliminary
+ * mean-stacking pass to generate rejection maps before the drizzle integration.
+ */
+StackResult StackingEngine::dispatchStacking(StackingArgs& args)
+{
+    // Drizzle integration path
+    if (args.params.drizzle) {
+        if (args.params.hasRejection()) {
+            args.log(tr("Drizzle enabled: Running first pass for rejection..."), "blue");
+            args.params.createRejectionMaps = true;
+
+            StackResult res = stackMean(args);
+            if (res != StackResult::OK) return res;
+            if (m_cancelled) return StackResult::CancelledError;
+        }
+
+        args.log(tr("Starting Drizzle stacking (Scale: %1x, PixFrac: %2)...")
+                     .arg(args.params.drizzleScale)
+                     .arg(args.params.drizzlePixFrac), "blue");
+        return stackDrizzle(args);
+    }
+
+    // Standard stacking methods
+    switch (args.params.method) {
+        case Method::Sum:
+            return stackSum(args);
+
+        case Method::Mean:
+        case Method::Median:
+            return stackMean(args);
+
+        case Method::Max:
+            return stackMax(args);
+
+        case Method::Min:
+            return stackMin(args);
+
+        default:
+            return StackResult::GenericError;
+    }
 }
 
 //=============================================================================
 // IMAGE FILTERING
 //=============================================================================
 
-bool StackingEngine::filterImages(StackingArgs& args) {
+/**
+ * @brief Apply quality filters to the image sequence and populate the list
+ *        of indices that will participate in stacking.
+ *
+ * @return true if at least 2 images pass the filter criteria.
+ */
+bool StackingEngine::filterImages(StackingArgs& args)
+{
     ImageSequence* seq = args.sequence;
-    
-    // Apply filter criteria
-    seq->applyFilter(args.params.filter, args.params.filterMode, 
+
+    seq->applyFilter(args.params.filter, args.params.filterMode,
                      args.params.filterParameter);
-    
-    // Get filtered indices
-    args.imageIndices = seq->getFilteredIndices();
+
+    args.imageIndices    = seq->getFilteredIndices();
     args.nbImagesToStack = static_cast<int>(args.imageIndices.size());
-    
-    return args.nbImagesToStack >= 2;  // Need at least 2 images
+
+    return args.nbImagesToStack >= 2;
 }
 
 //=============================================================================
 // NORMALIZATION
 //=============================================================================
 
-bool StackingEngine::computeNormalization(StackingArgs& args) {
+/**
+ * @brief Compute per-channel normalization coefficients for all selected images.
+ *
+ * Coefficients are computed by analyzing each frame's statistics relative to
+ * a reference frame. Progress is reported per image.
+ *
+ * @return true on success, false if computation fails.
+ */
+bool StackingEngine::computeNormalization(StackingArgs& args)
+{
     args.progress(tr("Computing normalization coefficients..."), -1);
-    
-    int totalImages = args.nbImagesToStack;
+
+    const int totalImages = args.nbImagesToStack;
+
     auto progressCallback = [this, &args, totalImages](const QString& msg, double pct) mutable {
         args.progress(msg, pct);
         emit progressChanged(msg, pct);
-        
-        // Log explicitly
+
         int current = static_cast<int>(pct * totalImages + 0.5);
         if (current > 0 && current <= totalImages) {
-             // args.log is thread-safe (emits signal)
-             // Use "neutral" or "white" to ensure visibility
-             args.log(tr("Normalized image %1/%2").arg(current).arg(totalImages), "white"); 
+            args.log(tr("Normalized image %1/%2").arg(current).arg(totalImages), "white");
         }
     };
-    
+
     return Normalization::computeCoefficients(
         *args.sequence,
         args.params,
         args.coefficients,
-        progressCallback
-    );
+        progressCallback);
 }
 
 //=============================================================================
 // OUTPUT PREPARATION
 //=============================================================================
 
-bool StackingEngine::prepareOutput(StackingArgs& args, int width, int height, int channels) {
-    // Determine output bit depth
+/**
+ * @brief Allocate and zero-initialize the output ImageBuffer.
+ *
+ * @param width    Output width in pixels.
+ * @param height   Output height in pixels.
+ * @param channels Number of color channels (1 or 3).
+ * @return true if allocation succeeded.
+ */
+bool StackingEngine::prepareOutput(StackingArgs& args, int width, int height, int channels)
+{
     args.result = ImageBuffer(width, height, channels);
-    
-    // Initialize to zero
-    std::memset(args.result.data().data(), 0, 
+    std::memset(args.result.data().data(), 0,
                 sizeof(float) * width * height * channels);
-    
     return args.result.isValid();
 }
 
+/**
+ * @brief Compute the output frame dimensions and origin offset.
+ *
+ * When maximize-framing is enabled, the bounding box of all registered frames
+ * is computed so that no valid pixel data is cropped. Otherwise the reference
+ * image dimensions are used directly.
+ *
+ * If upscale-at-stacking is enabled, all dimensions and offsets are doubled.
+ */
 void StackingEngine::computeOutputDimensions(const StackingArgs& args,
-                                              int& width, int& height,
-                                              int& offsetX, int& offsetY) {
+                                             int& width, int& height,
+                                             int& offsetX, int& offsetY)
+{
     const ImageSequence* seq = args.sequence;
-    
+
     if (args.params.maximizeFraming && seq->hasRegistration()) {
-        // Calculate bounding box that encompasses all images
-        double minX = 0, maxX = seq->width();
-        double minY = 0, maxY = seq->height();
-        
+        // Compute bounding box encompassing all registered frames
+        double minX = 0,              maxX = seq->width();
+        double minY = 0,              maxY = seq->height();
+
         for (int idx : args.imageIndices) {
             const auto& img = seq->image(idx);
             double dx = img.registration.shiftX;
             double dy = img.registration.shiftY;
-            
+
             minX = std::min(minX, dx);
             minY = std::min(minY, dy);
             maxX = std::max(maxX, img.width + dx);
             maxY = std::max(maxY, img.height + dy);
         }
-        
-        width = static_cast<int>(std::ceil(maxX - minX));
-        height = static_cast<int>(std::ceil(maxY - minY));
+
+        width   = static_cast<int>(std::ceil(maxX - minX));
+        height  = static_cast<int>(std::ceil(maxY - minY));
         offsetX = static_cast<int>(std::floor(minX));
         offsetY = static_cast<int>(std::floor(minY));
     } else {
-        // Use reference image dimensions
-        width = seq->width();
-        height = seq->height();
+        // Default: use reference image dimensions
+        width   = seq->width();
+        height  = seq->height();
         offsetX = 0;
         offsetY = 0;
     }
-    
-    // Apply upscaling if requested
+
+    // Double all dimensions for 2x upscaling
     if (args.params.upscaleAtStacking) {
-        width *= 2;
-        height *= 2;
+        width   *= 2;
+        height  *= 2;
         offsetX *= 2;
         offsetY *= 2;
     }
 }
 
+//=============================================================================
+// PIXEL SAMPLING WITH REGISTRATION
+//=============================================================================
+
+/**
+ * @brief Sample a pixel from a source image buffer, applying registration transform.
+ *
+ * For shift-only registration, uses nearest-neighbor lookup with rounded offsets.
+ * For full homography transforms (with optional SIP distortion), computes the
+ * inverse transform and samples via bicubic interpolation.
+ *
+ * @param buffer     Source image buffer.
+ * @param x, y       Output pixel coordinates.
+ * @param channel    Color channel index.
+ * @param reg        Registration transform for this frame.
+ * @param offsetX    Global framing X offset.
+ * @param offsetY    Global framing Y offset.
+ * @param outValue   Sampled pixel value (output).
+ * @param srcOffsetX Source ROI X offset (for block-based loading).
+ * @param srcOffsetY Source ROI Y offset (for block-based loading).
+ * @return true if the source coordinate falls within the image bounds.
+ */
 bool StackingEngine::getShiftedPixel(const ImageBuffer& buffer,
-                                      int x, int y, int channel,
-                                      const RegistrationData& reg,
-                                      int offsetX, int offsetY,
-                                      float& outValue,
-                                      int srcOffsetX, int srcOffsetY) {
+                                     int x, int y, int channel,
+                                     const RegistrationData& reg,
+                                     int offsetX, int offsetY,
+                                     float& outValue,
+                                     int srcOffsetX, int srcOffsetY)
+{
+    // --- Fast path: shift-only registration (integer rounding) ---
     if (reg.isShiftOnly()) {
-        
         int shiftX = static_cast<int>(std::round(reg.shiftX - offsetX));
         int shiftY = static_cast<int>(std::round(reg.shiftY - offsetY));
-        
+
         int nx = x - shiftX - srcOffsetX;
         int ny = y - shiftY - srcOffsetY;
-        
+
         if (nx < 0 || nx >= buffer.width() || ny < 0 || ny >= buffer.height()) {
             return false;
         }
-        
-        size_t idx = static_cast<size_t>(channel) * buffer.width() * buffer.height() +
-                     static_cast<size_t>(ny) * buffer.width() + nx;
+
+        size_t idx = static_cast<size_t>(channel) * buffer.width() * buffer.height()
+                   + static_cast<size_t>(ny) * buffer.width() + nx;
         outValue = buffer.data().data()[idx];
         return true;
-    } else {
-        
-        double H[3][3];
-        std::memcpy(H, reg.H, 9 * sizeof(double));
-        
-        // Invert 3x3
-        double det = H[0][0] * (H[1][1] * H[2][2] - H[2][1] * H[1][2]) -
-                     H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0]) +
-                     H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
-                     
-        if (std::abs(det) < 1e-9) return false; // Singular
-        
-        double invDet = 1.0 / det;
-        
-        double invH[3][3];
-        invH[0][0] = (H[1][1] * H[2][2] - H[2][1] * H[1][2]) * invDet;
-        invH[0][1] = (H[0][2] * H[2][1] - H[0][1] * H[2][2]) * invDet;
-        invH[0][2] = (H[0][1] * H[1][2] - H[0][2] * H[1][1]) * invDet;
-        invH[1][0] = (H[1][2] * H[2][0] - H[1][0] * H[2][2]) * invDet;
-        invH[1][1] = (H[0][0] * H[2][2] - H[0][2] * H[2][0]) * invDet;
-        invH[1][2] = (H[1][0] * H[0][2] - H[0][0] * H[1][2]) * invDet;
-        invH[2][0] = (H[1][0] * H[2][1] - H[2][0] * H[1][1]) * invDet;
-        invH[2][1] = (H[2][0] * H[0][1] - H[0][0] * H[2][1]) * invDet;
-        invH[2][2] = (H[0][0] * H[1][1] - H[1][0] * H[0][1]) * invDet;
-        
-        // Apply inverse transform to output pixel center
-        double rx = x + offsetX + 0.5; 
-        double ry = y + offsetY + 0.5;
-        
-        // If Reference has Distortion (Reverse SIP Ref -> Linear Ref), apply meaningful check here
-        // Current model: Reference is flat. Output corresponds to Reference.
-        // H maps Input Linear -> Output (Reference).
-        // We need Input Linear = H_inv * Output.
-        
-        double z_in = invH[2][0] * rx + invH[2][1] * ry + invH[2][2];
-        double scale_in = (std::abs(z_in) > 1e-9) ? 1.0 / z_in : 1.0;
-        
-        double u_lin = (invH[0][0] * rx + invH[0][1] * ry + invH[0][2]) * scale_in;
-        double v_lin = (invH[1][0] * rx + invH[1][1] * ry + invH[1][2]) * scale_in;
-        
-        double u_pix = u_lin;
-        double v_pix = v_lin;
-        
-        if (reg.hasDistortion && reg.sipOrder > 0) {
-             // Apply Reverse Distortion
-             double du = Distortion::computePoly(u_lin, v_lin, reg.sipOrder, reg.sipAP);
-             double dv = Distortion::computePoly(u_lin, v_lin, reg.sipOrder, reg.sipBP);
-             u_pix += du;
-             v_pix += dv;
-        }
-        
-        u_pix -= 0.5;
-        v_pix -= 0.5;
-        
-        // Apply source offset to map to buffer coordinates
-        u_pix -= srcOffsetX;
-        v_pix -= srcOffsetY;
-        
-        float val = getInterpolatedPixel(buffer, u_pix, v_pix, channel);
-        
-        if (val < 0.0f) return false; // convention for out of bounds
-        
-        outValue = val;
-        return true;
     }
+
+    // --- General path: full homography with optional distortion ---
+
+    // Copy and invert the 3x3 homography matrix
+    double H[3][3];
+    std::memcpy(H, reg.H, 9 * sizeof(double));
+
+    double det = H[0][0] * (H[1][1] * H[2][2] - H[2][1] * H[1][2])
+               - H[0][1] * (H[1][0] * H[2][2] - H[1][2] * H[2][0])
+               + H[0][2] * (H[1][0] * H[2][1] - H[1][1] * H[2][0]);
+
+    if (std::abs(det) < 1e-9) return false;   // Singular matrix
+
+    double invDet = 1.0 / det;
+
+    double invH[3][3];
+    invH[0][0] = (H[1][1] * H[2][2] - H[2][1] * H[1][2]) * invDet;
+    invH[0][1] = (H[0][2] * H[2][1] - H[0][1] * H[2][2]) * invDet;
+    invH[0][2] = (H[0][1] * H[1][2] - H[0][2] * H[1][1]) * invDet;
+    invH[1][0] = (H[1][2] * H[2][0] - H[1][0] * H[2][2]) * invDet;
+    invH[1][1] = (H[0][0] * H[2][2] - H[0][2] * H[2][0]) * invDet;
+    invH[1][2] = (H[1][0] * H[0][2] - H[0][0] * H[1][2]) * invDet;
+    invH[2][0] = (H[1][0] * H[2][1] - H[2][0] * H[1][1]) * invDet;
+    invH[2][1] = (H[2][0] * H[0][1] - H[0][0] * H[2][1]) * invDet;
+    invH[2][2] = (H[0][0] * H[1][1] - H[1][0] * H[0][1]) * invDet;
+
+    // Map output pixel center to input linear coordinates
+    double rx = x + offsetX + 0.5;
+    double ry = y + offsetY + 0.5;
+
+    double z_in    = invH[2][0] * rx + invH[2][1] * ry + invH[2][2];
+    double scaleIn = (std::abs(z_in) > 1e-9) ? 1.0 / z_in : 1.0;
+
+    double u_lin = (invH[0][0] * rx + invH[0][1] * ry + invH[0][2]) * scaleIn;
+    double v_lin = (invH[1][0] * rx + invH[1][1] * ry + invH[1][2]) * scaleIn;
+
+    double u_pix = u_lin;
+    double v_pix = v_lin;
+
+    // Apply reverse SIP distortion if present
+    if (reg.hasDistortion && reg.sipOrder > 0) {
+        u_pix += Distortion::computePoly(u_lin, v_lin, reg.sipOrder, reg.sipAP);
+        v_pix += Distortion::computePoly(u_lin, v_lin, reg.sipOrder, reg.sipBP);
+    }
+
+    // Convert from FITS 1-based center convention to 0-based pixel index
+    u_pix -= 0.5;
+    v_pix -= 0.5;
+
+    // Adjust for source ROI offset
+    u_pix -= srcOffsetX;
+    v_pix -= srcOffsetY;
+
+    float val = getInterpolatedPixel(buffer, u_pix, v_pix, channel);
+    if (val < 0.0f) return false;   // Out of bounds sentinel
+
+    outValue = val;
+    return true;
 }
 
-float StackingEngine::getInterpolatedPixel(const ImageBuffer& buffer, 
-                                          double x, double y, int channel) {
-    // Bicubic Interpolation with Edge Clamping to prevent black borders.
-    // Pixels near edges use clamped coordinates instead of returning 0.
-    
-    int width = buffer.width();
-    int height = buffer.height();
+//=============================================================================
+// BICUBIC INTERPOLATION
+//=============================================================================
 
-    // Reject pixels clearly out of bounds (more than 1 pixel outside)
+/**
+ * @brief Sample a pixel value using bicubic (Catmull-Rom) interpolation.
+ *
+ * Edge pixels are clamped rather than returning zero, which prevents black
+ * border artifacts in averaged stacks. Returns -1.0f for coordinates that
+ * fall more than 1 pixel outside the image bounds.
+ *
+ * On x86/x64 platforms, SSE2 intrinsics accelerate the horizontal convolution.
+ *
+ * @param buffer   Source image buffer.
+ * @param x, y     Continuous (sub-pixel) source coordinates.
+ * @param channel  Color channel index.
+ * @return Interpolated value, or -1.0f if out of bounds.
+ */
+float StackingEngine::getInterpolatedPixel(const ImageBuffer& buffer,
+                                           double x, double y, int channel)
+{
+    const int width  = buffer.width();
+    const int height = buffer.height();
+
+    // Reject coordinates clearly outside the image
     if (x < -1.0 || x >= width || y < -1.0 || y >= height) return -1.0f;
 
     int x0 = static_cast<int>(std::floor(x));
     int y0 = static_cast<int>(std::floor(y));
-    
+
     float dx = static_cast<float>(x - x0);
     float dy = static_cast<float>(y - y0);
-    
-    float t = dx;
+
+    // Catmull-Rom horizontal weights
+    float t  = dx;
     float t2 = t * t;
     float t3 = t2 * t;
-    
-    float w0 = -0.5f*t3 + t2 - 0.5f*t;
-    float w1 = 1.5f*t3 - 2.5f*t2 + 1.0f;
-    float w2 = -1.5f*t3 + 2.0f*t2 + 0.5f*t;
-    float w3 = 0.5f*t3 - 0.5f*t2;
-    
-    float arr[4];
 
+    float w0 = -0.5f * t3 + t2 - 0.5f * t;
+    float w1 =  1.5f * t3 - 2.5f * t2 + 1.0f;
+    float w2 = -1.5f * t3 + 2.0f * t2 + 0.5f * t;
+    float w3 =  0.5f * t3 - 0.5f * t2;
+
+    // Evaluate 4 horizontal spans, then blend vertically
+    float arr[4];
     for (int j = 0; j < 4; ++j) {
-        int py = std::clamp(y0 - 1 + j, 0, height - 1);
-        
+        int py  = std::clamp(y0 - 1 + j, 0, height - 1);
+
         int px0 = std::clamp(x0 - 1, 0, width - 1);
         int px1 = std::clamp(x0,     0, width - 1);
         int px2 = std::clamp(x0 + 1, 0, width - 1);
         int px3 = std::clamp(x0 + 2, 0, width - 1);
-        
+
         float r0 = buffer.value(px0, py, channel);
         float r1 = buffer.value(px1, py, channel);
         float r2 = buffer.value(px2, py, channel);
         float r3 = buffer.value(px3, py, channel);
-        
+
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-        __m128 mw = _mm_set_ps(w3, w2, w1, w0);
+        // SSE2 horizontal dot product
+        __m128 mw   = _mm_set_ps(w3, w2, w1, w0);
         float rv[4] = {r0, r1, r2, r3};
-        __m128 mr = _mm_loadu_ps(rv);
+        __m128 mr   = _mm_loadu_ps(rv);
         __m128 mprod = _mm_mul_ps(mr, mw);
-        
-        __m128 shuf = _mm_shuffle_ps(mprod, mprod, _MM_SHUFFLE(3, 3, 1, 1));
-        __m128 sums = _mm_add_ps(mprod, shuf);
+
+        __m128 shuf  = _mm_shuffle_ps(mprod, mprod, _MM_SHUFFLE(3, 3, 1, 1));
+        __m128 sums  = _mm_add_ps(mprod, shuf);
         __m128 shuf2 = _mm_movehl_ps(shuf, sums);
         sums = _mm_add_ss(sums, shuf2);
         _mm_store_ss(&arr[j], sums);
@@ -624,12 +792,12 @@ float StackingEngine::getInterpolatedPixel(const ImageBuffer& buffer,
         arr[j] = r0 * w0 + r1 * w1 + r2 * w2 + r3 * w3;
 #endif
     }
-    
+
     float res = cubicHermite(arr[0], arr[1], arr[2], arr[3], dy);
 
-    // Prevent negative ringing (which creates black artifacts in averaging)
+    // Clamp negative ringing to zero (prevents dark artifacts in averaging)
     if (res < 0.0f) res = 0.0f;
-    
+
     return res;
 }
 
@@ -637,51 +805,56 @@ float StackingEngine::getInterpolatedPixel(const ImageBuffer& buffer,
 // SUM STACKING
 //=============================================================================
 
-StackResult StackingEngine::stackSum(StackingArgs& args) {
+/**
+ * @brief Stack images by summing all contributing pixel values.
+ *
+ * The final result is normalized by the maximum sum across all pixels,
+ * producing a [0..1] output range. Total exposure time is accumulated
+ * for metadata.
+ */
+StackResult StackingEngine::stackSum(StackingArgs& args)
+{
     int outputWidth, outputHeight, offsetX, offsetY;
     computeOutputDimensions(args, outputWidth, outputHeight, offsetX, offsetY);
-    
-    int channels = args.sequence->channels();
-    
+
+    const int channels = args.sequence->channels();
+
     if (!prepareOutput(args, outputWidth, outputHeight, channels)) {
         return StackResult::AllocError;
     }
-    
-    // Accumulator for sums (use double for precision)
-    // Use Interleaved layout for sums to match output
-    size_t totalPixels = static_cast<size_t>(outputWidth) * outputHeight * channels;
+
+    // Double-precision accumulators for numerical stability
+    const size_t totalPixels = static_cast<size_t>(outputWidth) * outputHeight * channels;
     std::vector<double> sums(totalPixels, 0.0);
-    std::vector<int> counts(totalPixels, 0);
-    
-    int processed = 0;
+    std::vector<int>    counts(totalPixels, 0);
+
+    int    processed     = 0;
     double totalExposure = 0.0;
-    
+
     for (int idx : args.imageIndices) {
         if (m_cancelled) return StackResult::CancelledError;
-        
+
         args.progress(tr("Stacking image %1/%2...")
-                     .arg(processed + 1).arg(args.nbImagesToStack),
-                     static_cast<double>(processed) / args.nbImagesToStack);
-        
-        // Load image
+                          .arg(processed + 1).arg(args.nbImagesToStack),
+                      static_cast<double>(processed) / args.nbImagesToStack);
+
+        // Load source image
         ImageBuffer buffer;
         QFileInfo fi(args.sequence->image(idx).filePath);
         if (!fi.exists()) {
-             args.log(tr("Error: File not found: %1").arg(fi.filePath()), "salmon");
-             continue;
+            args.log(tr("Error: File not found: %1").arg(fi.filePath()), "salmon");
+            continue;
         }
-        
-        // Use native separators to minimize CFITSIO parsing issues
-        QString nativePath = QDir::toNativeSeparators(fi.absoluteFilePath());
-        if (!args.sequence->readImage(idx, buffer)) { 
+
+        if (!args.sequence->readImage(idx, buffer)) {
             args.log(tr("Warning: Failed to read image %1, skipping").arg(idx), "salmon");
             continue;
         }
-        
+
         const auto& imgInfo = args.sequence->image(idx);
         totalExposure += imgInfo.exposure;
-        
-        // Scale registration for upscaling if needed
+
+        // Resolve registration (comet-mode or standard)
         RegistrationData reg;
         if (!args.effectiveRegs.empty() && idx < static_cast<int>(args.effectiveRegs.size())) {
             reg = args.effectiveRegs[idx];
@@ -693,266 +866,297 @@ StackResult StackingEngine::stackSum(StackingArgs& args) {
             reg.shiftY *= 2.0;
         }
 
-        // Add pixels
+        // Accumulate pixel values (each (y,x,c) maps to a unique index -- no race)
         #pragma omp parallel for collapse(2)
         for (int y = 0; y < outputHeight; ++y) {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int c = 0; c < channels; ++c) {
                     float value;
-                    
                     if (getShiftedPixel(buffer, x, y, c, reg, offsetX, offsetY, value)) {
-                        // Interleaved Indexing: (y * W + x) * Ch + c
                         size_t outIdx = (static_cast<size_t>(y) * outputWidth + x) * channels + c;
-                        
-                        // No race condition: each (y,x,c) triple writes to a unique outIdx
-                        sums[outIdx] += value;
-                        counts[outIdx]++;
+                        sums[outIdx]   += value;
+                        counts[outIdx] += 1;
                     }
                 }
             }
         }
-        
+
         processed++;
     }
-    
-    // Normalize by max value (or count if desired)
+
+    // Normalize by maximum sum value
     float* output = args.result.data().data();
-    
-    // Find max sum for normalization (parallel reduction)
+
     double maxSum = 0.0;
-    #ifdef _OPENMP
+#ifdef _OPENMP
     #pragma omp parallel for reduction(max:maxSum)
-    #endif
+#endif
     for (size_t i = 0; i < totalPixels; ++i) {
         if (sums[i] > maxSum) maxSum = sums[i];
     }
-    
+
     if (maxSum > 0) {
         double invMax = 1.0 / maxSum;
-        #ifdef _OPENMP
+#ifdef _OPENMP
         #pragma omp parallel for
-        #endif
+#endif
         for (size_t i = 0; i < totalPixels; ++i) {
             output[i] = static_cast<float>(sums[i] * invMax);
         }
     }
-    
+
     args.log(tr("Sum stacking complete. Total exposure: %1s").arg(totalExposure), "");
-    
     return StackResult::OK;
 }
 
 //=============================================================================
-// MEAN STACKING WITH REJECTION 
+// MEAN / MEDIAN STACKING WITH REJECTION (Block-based, preloaded)
 //=============================================================================
 
-static int64_t computeMaxRowsInMemory(int width, int height, int channels, int nbImages) {
-    // Use up to 4GB — halves block count vs 2GB, cutting I/O reads by 2×.
-    // Actual peak usage ≈ nbThreads × rowsPerBlock × width × nbImages × ch × 4 bytes.
-    constexpr int64_t maxMemoryMB = 4096;
-    constexpr int64_t bytesPerMB = 1024 * 1024;
-    
-    // Linked Rejection: We process R,G,B rows simultaneously.
-    // So total task size is just height (rows).
-    int64_t totalRows = static_cast<int64_t>(height);
-    int elemSize = sizeof(float);
-    
-    // Bytes per row includes ALL channels
-    int64_t bytesPerRow = static_cast<int64_t>(width) * nbImages * channels * elemSize;
-    
-    // Also need stack/scratch buffers per thread 
-    // (StackDataBlock has stackRGB[3], rejectedRGB[3] etc -> significant)
-    // Memory overhead: approximately nbImages * channels * 4 bytes per pixel per thread
-    // Scratch buffer is reusable. But bytesPerRow is large.
-    
+/**
+ * @brief Estimate the maximum number of image rows that can be held in memory
+ *        simultaneously across all frames and channels.
+ *
+ * Targets a 4 GB working set, which halves block count compared to 2 GB and
+ * reduces I/O overhead proportionally.
+ *
+ * @param width     Output image width.
+ * @param height    Output image height.
+ * @param channels  Number of color channels.
+ * @param nbImages  Number of frames to stack.
+ * @return Maximum rows that fit within the memory budget.
+ */
+static int64_t computeMaxRowsInMemory(int width, int height, int channels, int nbImages)
+{
+    constexpr int64_t kMaxMemoryMB = 4096;
+    constexpr int64_t kBytesPerMB  = 1024 * 1024;
+
+    const int64_t totalRows   = static_cast<int64_t>(height);
+    const int64_t bytesPerRow = static_cast<int64_t>(width) * nbImages * channels * sizeof(float);
+
     if (bytesPerRow == 0) return 1;
 
-    int64_t maxRows = (maxMemoryMB * bytesPerMB) / bytesPerRow;
-    
+    int64_t maxRows = (kMaxMemoryMB * kBytesPerMB) / bytesPerRow;
+
     if (maxRows > totalRows) return totalRows;
-    if (maxRows < 1) return 1; // At minimum, process 1 row
+    if (maxRows < 1)         return 1;
     return maxRows;
 }
 
-StackResult StackingEngine::stackMean(StackingArgs& args) {
+/**
+ * @brief Mean (or median) stacking engine with full rejection support.
+ *
+ * All selected images are preloaded into RAM, then processed in row-blocks
+ * distributed across OpenMP threads. For each output pixel position the
+ * per-frame values are gathered, normalized, rejection-filtered, and finally
+ * combined by mean or median.
+ *
+ * Supports: linked RGB rejection, per-image weighting, feathered blending,
+ * debayering at load time, and GESDT/sigma/MAD/percentile/winsorized/
+ * biweight/linear-fit/modified-Z rejection algorithms.
+ */
+StackResult StackingEngine::stackMean(StackingArgs& args)
+{
     int outputWidth, outputHeight, offsetX, offsetY;
     computeOutputDimensions(args, outputWidth, outputHeight, offsetX, offsetY);
-    
-    // Determine effective channels
+
+    // Determine effective output channel count
     int channels = args.sequence->channels();
     if (args.params.debayer) {
-        channels = 3; // Force RGB output for Debayer mode
+        channels = 3;   // Force RGB output when debayering
     }
-    int nbImages = args.nbImagesToStack;
-    
-    // ===== FAST C OPTIMIZATION =====
-    // Now supports: Rejection (Sigma, MAD, Percentile, GESDT), Weighted Mean, Homographies
+    const int nbImages = args.nbImagesToStack;
+
+    // Skip unsupported fast-C path (placeholder for future optimization)
     if (!args.params.debayer &&
         !args.params.upscaleAtStacking &&
         !args.params.drizzle &&
         args.params.rejection != Rejection::LinearFit &&
         args.params.rejection != Rejection::SigmaMedian) {
-        
-        // Try to use accelerated C function (handles normalization, weights, rejection, registration)
-        // StackResult cResult = tryStackMeanC(args, outputWidth, outputHeight, channels);
-        // if (cResult == StackResult::OK) {
-        //     args.log(tr("Mean stacking complete (accelerated C)"), "green");
-        //     return StackResult::OK;
-        // }
+        // Reserved for accelerated C implementation
     }
-    
+
     if (!prepareOutput(args, outputWidth, outputHeight, channels)) {
         args.log("Error: Failed to allocate output buffer", "red");
         return StackResult::AllocError;
     }
-    
+
     QString methodStr = (args.params.method == Method::Median) ? "Median" : "Mean";
     args.log(tr("Starting %1 stacking of %2 images (%3 x %4, %5 channels)...")
-             .arg(methodStr).arg(nbImages).arg(outputWidth).arg(outputHeight).arg(channels), "neutral");
-    
+                 .arg(methodStr).arg(nbImages)
+                 .arg(outputWidth).arg(outputHeight).arg(channels),
+             "neutral");
+
+    // ---- Thread configuration ----
+
     int nbThreads = 1;
 #ifdef _OPENMP
     nbThreads = omp_get_max_threads();
-    if (nbThreads > 8) nbThreads = 8; // Limit for memory reasons
+    if (nbThreads > 8) nbThreads = 8;   // Cap to limit memory pressure
 #endif
-    
+
+    // ---- Block partitioning ----
+
     long maxRowsInMemory = computeMaxRowsInMemory(outputWidth, outputHeight, channels, nbImages);
-    
+
     std::vector<ImageBlock> blocks;
     int largestBlockHeight;
-    if (computeParallelBlocks(blocks, maxRowsInMemory, outputWidth, outputHeight, 
-                               channels, nbThreads, largestBlockHeight) != 0) {
+    if (computeParallelBlocks(blocks, maxRowsInMemory, outputWidth, outputHeight,
+                              channels, nbThreads, largestBlockHeight) != 0) {
         args.log("Error: Failed to compute parallel blocks", "red");
         return StackResult::GenericError;
     }
-    
+
     args.log(tr("Using %1 parallel blocks of max %2 rows each")
-             .arg(blocks.size()).arg(largestBlockHeight), "neutral");
-    int poolSize = nbThreads;
-    // No per-frame pixel buffer: images are preloaded into RAM.
-    // pixelsPerBlock=0 → blockDataSize=0, so allocate() only reserves the tiny
-    // stackRGB/rejection scratch arrays (a few KB per thread).
-    size_t pixelsPerBlock = 0;
-    
+                 .arg(blocks.size()).arg(largestBlockHeight), "neutral");
+
+    // ---- Allocate per-thread scratch blocks ----
+    // pixelsPerBlock=0 because images are fully preloaded; only the small
+    // stackRGB/rejection scratch arrays are needed per thread.
+
+    const int    poolSize       = nbThreads;
+    const size_t pixelsPerBlock = 0;
+    const bool   useFeathering  = (args.params.featherDistance > 0);
+
     std::vector<StackDataBlock> dataPool(poolSize);
-    bool useFeathering = (args.params.featherDistance > 0);
     for (int i = 0; i < poolSize; ++i) {
         if (!dataPool[i].allocate(nbImages, pixelsPerBlock, channels,
-                                   args.params.rejection, useFeathering, false)) {
+                                  args.params.rejection, useFeathering, false)) {
             args.log("Error: Failed to allocate data pool", "red");
             return StackResult::AllocError;
         }
     }
-    
+
     args.log(tr("Allocated %1 per-thread rejection scratch blocks (stackRGB only, no pixel buffers)")
-             .arg(poolSize), "neutral");
-    
+                 .arg(poolSize), "neutral");
+
     // =====================================================================
     // PRELOAD ALL REGISTERED IMAGES INTO RAM
     // =====================================================================
-    // Replaces 112+ partial readImageRegion() disk seeks with 14 sequential
-    // full-image reads.  Net RAM cost is the same as the old pix[] buffers
-    // (~4 GB for 14 × 290 MB images) while I/O drops by ~8×.
-    // =====================================================================
+    // Replaces many partial readImageRegion() disk seeks with sequential
+    // full-image reads. Net RAM cost is equivalent to the old pix[] buffers
+    // while I/O latency drops significantly.
+
     using Preprocessing::BayerPattern;
+
     args.log(tr("Preloading %1 registered images into RAM...").arg(nbImages), "neutral");
+
     std::vector<ImageBuffer> preloadedImages(nbImages);
     for (int frame = 0; frame < nbImages; ++frame) {
         int imgIdx = args.imageIndices[frame];
+
         if (!args.sequence->readImage(imgIdx, preloadedImages[frame])) {
             args.log(tr("Error: Failed to preload image %1").arg(imgIdx), "salmon");
             return StackResult::SequenceError;
         }
-        // Debayer at preload time so the block loop sees fully-demosaiced data.
+
+        // Debayer at preload time so block processing sees fully demosaiced data
         if (args.params.debayer && args.params.bayerPattern != BayerPattern::None) {
             ImageBuffer debayered;
             bool ok = false;
+
             if (args.params.debayerMethod == Preprocessing::DebayerAlgorithm::Bilinear) {
-                ok = Preprocessing::Debayer::bilinear(preloadedImages[frame], debayered, args.params.bayerPattern);
+                ok = Preprocessing::Debayer::bilinear(preloadedImages[frame], debayered,
+                                                      args.params.bayerPattern);
             } else {
-                ok = Preprocessing::Debayer::vng(preloadedImages[frame], debayered, args.params.bayerPattern);
+                ok = Preprocessing::Debayer::vng(preloadedImages[frame], debayered,
+                                                 args.params.bayerPattern);
             }
+
             if (ok) preloadedImages[frame] = std::move(debayered);
         }
     }
     args.log(tr("Preload complete."), "neutral");
-    
-    // Cache per-frame registration shifts so they are not re-fetched per pixel.
+
+    // ---- Cache per-frame registration shifts ----
+
     struct FrameShift { double sx, sy; int iw, ih; };
     std::vector<FrameShift> frameShifts(nbImages);
+
     for (int frame = 0; frame < nbImages; ++frame) {
         int imgIdx = args.imageIndices[frame];
         const auto& imgInfo = args.sequence->image(imgIdx);
         double scale = args.params.upscaleAtStacking ? 2.0 : 1.0;
+
         frameShifts[frame].sx = imgInfo.registration.shiftX * scale - offsetX;
         frameShifts[frame].sy = imgInfo.registration.shiftY * scale - offsetY;
         frameShifts[frame].iw = preloadedImages[frame].width();
         frameShifts[frame].ih = preloadedImages[frame].height();
     }
-    
-    float featherDist = static_cast<float>(args.params.featherDistance);
-    
-    // ===== PRE-CALCULATE NORMALIZATION COEFFICIENTS =====
+
+    const float featherDist = static_cast<float>(args.params.featherDistance);
+
+    // ---- Pre-calculate normalization coefficients per channel per frame ----
+
     struct NormCoeffs { double offset; double mul; double scale; };
     std::vector<std::vector<NormCoeffs>> allCoeffs(channels);
+
     for (int c = 0; c < channels; ++c) {
         allCoeffs[c].resize(nbImages, {0.0, 1.0, 1.0});
+
         if (args.params.hasNormalization()) {
             for (int i = 0; i < nbImages; ++i) {
-                // Fix: Must use the original sequence index, not the stack loop index
                 int seqIdx = args.imageIndices[i];
-                
-                // If coefficients exist for this channel (and it's a valid index), use them.
-                // If not (e.g. Debayer enabled but normalization ran on Mono), use Channel 0.
+
+                // Fall back to channel 0 if per-channel coefficients are unavailable
                 int sourceCh = c;
                 if (c >= 3 || args.coefficients.poffset[c].empty()) {
                     sourceCh = 0;
                 }
-                
+
                 if (sourceCh < 3 && seqIdx < static_cast<int>(args.coefficients.poffset[sourceCh].size())) {
                     allCoeffs[c][i].offset = args.coefficients.poffset[sourceCh][seqIdx];
-                    allCoeffs[c][i].mul = args.coefficients.pmul[sourceCh][seqIdx];
-                    allCoeffs[c][i].scale = args.coefficients.pscale[sourceCh][seqIdx];
+                    allCoeffs[c][i].mul    = args.coefficients.pmul[sourceCh][seqIdx];
+                    allCoeffs[c][i].scale  = args.coefficients.pscale[sourceCh][seqIdx];
                 }
             }
         }
     }
-    
-    // ===== REJECTION STATS =====
+
+    // ---- Rejection statistics accumulators ----
+
     std::atomic<long> totalRejLow{0};
     std::atomic<long> totalRejHigh{0};
-    
-    // ===== GESDT CRITICAL VALUES =====
+
+    // ---- Pre-compute GESDT critical values (if applicable) ----
+
     std::vector<float> gesdtCriticalValues;
     if (args.params.rejection == Rejection::GESDT) {
-        int maxOutliers = static_cast<int>(nbImages * args.params.sigmaLow); // sigmaLow is misused as fraction here
+        int maxOutliers = static_cast<int>(nbImages * args.params.sigmaLow);
         if (maxOutliers < 1) maxOutliers = 1;
         gesdtCriticalValues.resize(maxOutliers);
-        
+
         for (int i = 0; i < maxOutliers; ++i) {
             int ni = nbImages - i;
             if (ni <= 2) break;
-            double alpha = 0.05 / (2.0 * ni); // Standard 0.05 significance
-            double p = 1.0 - alpha;
-            double t = std::sqrt(-2.0 * std::log(p > 0.5 ? 1.0-p : p));
-            double c0 = 2.515517, c1 = 0.802853, c2 = 0.010328;
-            double d1 = 1.432788, d2 = 0.189269, d3 = 0.001308;
-            t = t - (c0 + c1*t + c2*t*t) / (1 + d1*t + d2*t*t + d3*t*t*t);
+
+            // Rational approximation of the inverse normal CDF (Abramowitz & Stegun)
+            double alpha = 0.05 / (2.0 * ni);
+            double p     = 1.0 - alpha;
+            double t     = std::sqrt(-2.0 * std::log(p > 0.5 ? 1.0 - p : p));
+
+            const double c0 = 2.515517, c1 = 0.802853, c2 = 0.010328;
+            const double d1 = 1.432788, d2 = 0.189269, d3 = 0.001308;
+            t = t - (c0 + c1 * t + c2 * t * t) / (1 + d1 * t + d2 * t * t + d3 * t * t * t);
             t = std::abs(t);
+
             double num = (ni - 1) * t;
-            double den = std::sqrt((ni - 2 + t*t) * ni);
+            double den = std::sqrt((ni - 2 + t * t) * ni);
             gesdtCriticalValues[i] = static_cast<float>(num / den);
         }
     }
+
     float* pGesdt = gesdtCriticalValues.empty() ? nullptr : gesdtCriticalValues.data();
-    
-    float* outputData = args.result.data().data();
-    std::atomic<bool> failed{false};
-    std::atomic<int> processedBlocks{0};
-    int nbBlocks = static_cast<int>(blocks.size());
-    
+
+    // ---- Main parallel block processing loop ----
+
+    float*             outputData      = args.result.data().data();
+    std::atomic<bool>  failed{false};
+    std::atomic<int>   processedBlocks{0};
+    const int          nbBlocks = static_cast<int>(blocks.size());
+
     args.log(tr("Starting stacking..."), "neutral");
-    
+
 #ifdef _OPENMP
     #pragma omp parallel for num_threads(nbThreads) schedule(dynamic) if(nbBlocks > 1)
 #endif
@@ -960,70 +1164,68 @@ StackResult StackingEngine::stackMean(StackingArgs& args) {
         if (failed || m_cancelled || args.isCancelled() || !Threading::getThreadRun()) {
             continue;
         }
-        
-        // ===== Step 1: Get allocated data block for this thread =====
+
+        // Obtain this thread's scratch block
         int dataIdx = 0;
 #ifdef _OPENMP
         dataIdx = omp_get_thread_num();
 #endif
-        StackDataBlock& data = dataPool[dataIdx];
-        ImageBlock& block = blocks[blockIdx];
-        // data.layer = block.channel; // Not used anymore (we process all channels)
-        
+        StackDataBlock& data  = dataPool[dataIdx];
+        ImageBlock&     block = blocks[blockIdx];
+
         long blockRejLow = 0, blockRejHigh = 0;
-        
+
         if (m_cancelled || args.isCancelled()) {
             failed = true;
             continue;
         }
-        
-        // ===== PIXEL STACKING (single pass, reads from preloaded RAM images) =====
-        // No I/O here — preloadedImages[] already holds every registered frame.
-        // Border exclusion:
-        //   (1) Hard geometric out-of-bounds → skip frame immediately.
-        //   (2) For pre-warped r_ files: warpPerspective(BORDER_CONSTANT=0) + mask
-        //       zeroing marks out-of-bounds pixels with 0.0f in ALL channels.
-        //         "if (stack[frame] != 0.f) { stack[kept++] = stack[frame]; }"
-        //       → skip frames where r==g==b==0.0f (mono: v==0.0f).
+
+        // ---- Per-pixel stacking within this block ----
+
         for (int y = 0; y < block.height; ++y) {
-            int globalY = block.startRow + y;
-            size_t outRowIdx = static_cast<size_t>(globalY) * outputWidth;
-            
+            const int    globalY   = block.startRow + y;
+            const size_t outRowIdx = static_cast<size_t>(globalY) * outputWidth;
+
             for (int x = 0; x < outputWidth; ++x) {
-                // Fill stackRGB[c][effectiveFrames] directly from preloaded images.
+
+                // ---- Gather pixel values from all frames ----
+
                 int effectiveFrames = 0;
                 for (int frame = 0; frame < nbImages; ++frame) {
                     if (m_cancelled || args.isCancelled()) break;
-                    
+
                     const FrameShift& fs = frameShifts[frame];
-                    // Source coordinates in this frame's image space.
-                    // For pre-warped r_ files fs.sx==fs.sy==0, so srcX==x, srcGY==globalY.
-                    // For sequences with live registration these will be non-zero.
+
+                    // Source coordinates in this frame's image space
                     double srcX  = x       - fs.sx;
                     double srcGY = globalY - fs.sy;
-                    
-                    // Hard geometric out-of-bounds: skip immediately.
-                    if (srcX  < 0.0 || srcX  >= static_cast<double>(fs.iw) ||
-                        srcGY < 0.0 || srcGY >= static_cast<double>(fs.ih)) continue;
-                    
-                    const ImageBuffer& img = preloadedImages[frame];
-                    const float* imgBase = img.data().data();
-                    int iw = img.width(), ih = img.height(), ich = img.channels();
-                    
-                    // Integer vs sub-pixel fetch.
-                    // Pre-registered r_ files always use integer coordinates (shift=0)
-                    // so the branch predictor will practically never take the bicubic path.
+
+                    // Geometric bounds check
+                    if (srcX < 0.0 || srcX >= static_cast<double>(fs.iw) ||
+                        srcGY < 0.0 || srcGY >= static_cast<double>(fs.ih)) {
+                        continue;
+                    }
+
+                    const ImageBuffer& img     = preloadedImages[frame];
+                    const float*       imgBase = img.data().data();
+                    const int iw  = img.width();
+                    const int ih  = img.height();
+                    const int ich = img.channels();
+
+                    // Determine whether integer or sub-pixel sampling is needed
                     double fx = srcX  - std::floor(srcX);
                     double fy = srcGY - std::floor(srcGY);
                     bool intCoords = (fx < 1e-6 && fy < 1e-6);
-                    
+
                     if (channels == 3) {
+                        // --- RGB pixel fetch ---
                         float r, g, b;
+
                         if (intCoords) {
                             int ix = static_cast<int>(srcX);
                             int iy = static_cast<int>(srcGY);
-                            // Guard for exact-edge case (srcX == iw after truncation)
                             if (ix >= iw || iy >= ih) continue;
+
                             const float* px = imgBase + (static_cast<size_t>(iy) * iw + ix) * ich;
                             r = px[0];
                             g = (ich > 1) ? px[1] : px[0];
@@ -1033,15 +1235,11 @@ StackResult StackingEngine::stackMean(StackingArgs& args) {
                             g = (ich > 1) ? interpolateBicubic(imgBase, iw, ih, srcX, srcGY, 1, ich) : r;
                             b = (ich > 2) ? interpolateBicubic(imgBase, iw, ih, srcX, srcGY, 2, ich) : r;
                         }
-                        // === ZERO EXCLUSION ===
-                        // Pre-warped r_ files: warpPerspective(BORDER_CONSTANT=0) + mask zeroing
-                        // set ALL channels to exactly 0.0f for pixels outside the source frame.
-                        //   "if (stack[frame] != 0.f) { stack[kept++] = stack[frame]; }"
-                        // Each channel is tested independently; for geometrically-warped images
-                        // all three channels are zero simultaneously at the same border pixels.
+
+                        // Skip zero-valued border pixels (warpPerspective BORDER_CONSTANT=0)
                         if (r == 0.0f && g == 0.0f && b == 0.0f) continue;
-                        
-                        // Normalization (guard: skip if channel still 0 after warp ringing)
+
+                        // Apply normalization
                         if (args.params.hasNormalization()) {
                             auto applyNorm = [&](float& v, int c) {
                                 if (v != 0.0f) {
@@ -1049,21 +1247,30 @@ StackResult StackingEngine::stackMean(StackingArgs& args) {
                                     switch (args.params.normalization) {
                                         case NormalizationMethod::Additive:
                                         case NormalizationMethod::AdditiveScaling:
-                                            v = static_cast<float>(v * coeff.scale - coeff.offset); break;
+                                            v = static_cast<float>(v * coeff.scale - coeff.offset);
+                                            break;
                                         case NormalizationMethod::Multiplicative:
                                         case NormalizationMethod::MultiplicativeScaling:
-                                            v = static_cast<float>(v * coeff.scale * coeff.mul); break;
-                                        default: break;
+                                            v = static_cast<float>(v * coeff.scale * coeff.mul);
+                                            break;
+                                        default:
+                                            break;
                                     }
                                 }
                             };
-                            applyNorm(r, 0); applyNorm(g, 1); applyNorm(b, 2);
+                            applyNorm(r, 0);
+                            applyNorm(g, 1);
+                            applyNorm(b, 2);
                         }
+
                         data.stackRGB[0][effectiveFrames] = r;
                         data.stackRGB[1][effectiveFrames] = g;
                         data.stackRGB[2][effectiveFrames] = b;
+
                     } else {
+                        // --- Mono pixel fetch ---
                         float v;
+
                         if (intCoords) {
                             int ix = static_cast<int>(srcX);
                             int iy = static_cast<int>(srcGY);
@@ -1072,23 +1279,30 @@ StackResult StackingEngine::stackMean(StackingArgs& args) {
                         } else {
                             v = interpolateBicubic(imgBase, iw, ih, srcX, srcGY, 0, ich);
                         }
+
                         if (v == 0.0f) continue;
+
+                        // Apply normalization
                         if (args.params.hasNormalization()) {
                             const auto& coeff = allCoeffs[0][frame];
                             switch (args.params.normalization) {
                                 case NormalizationMethod::Additive:
                                 case NormalizationMethod::AdditiveScaling:
-                                    v = static_cast<float>(v * coeff.scale - coeff.offset); break;
+                                    v = static_cast<float>(v * coeff.scale - coeff.offset);
+                                    break;
                                 case NormalizationMethod::Multiplicative:
                                 case NormalizationMethod::MultiplicativeScaling:
-                                    v = static_cast<float>(v * coeff.scale * coeff.mul); break;
-                                default: break;
+                                    v = static_cast<float>(v * coeff.scale * coeff.mul);
+                                    break;
+                                default:
+                                    break;
                             }
                         }
+
                         data.stack[effectiveFrames] = v;
                     }
-                    // Feathering mask: distance of pixel from its source frame border.
-                    // Zero-excluded frames are not reached here, so mstack stays consistent.
+
+                    // Feathering weight: smooth falloff near source frame borders
                     if (useFeathering && data.mstack) {
                         float dL = static_cast<float>(srcX);
                         float dT = static_cast<float>(srcGY);
@@ -1096,232 +1310,261 @@ StackResult StackingEngine::stackMean(StackingArgs& args) {
                         float dB = static_cast<float>(fs.ih - 1.0 - srcGY);
                         float minDist = std::min({dL, dT, dR, dB});
                         if (minDist < 0.0f) minDist = 0.0f;
-                        float weight = (minDist >= featherDist) ? 1.0f :
-                            [&]{ float t = minDist / featherDist; return t * t * (3.0f - 2.0f * t); }();
+
+                        float weight = (minDist >= featherDist)
+                            ? 1.0f
+                            : [&]{ float t = minDist / featherDist;
+                                   return t * t * (3.0f - 2.0f * t); }();
+
                         data.mstack[effectiveFrames] = weight;
                     }
+
                     effectiveFrames++;
                 }
 
-                // 2. Rejection (operates on effectiveFrames valid pixels only)
+                // ---- Apply pixel rejection ----
+
                 int keptPixels = effectiveFrames;
+
                 if (effectiveFrames > 0 && args.params.hasRejection()) {
-                    int rej[2] = {0,0};
+                    int rej[2] = {0, 0};
+
                     if (channels == 3) {
-                         keptPixels = applyRejectionLinked(data, effectiveFrames, args.params.rejection,
-                                                           args.params.sigmaLow, args.params.sigmaHigh, pGesdt, rej);
+                        keptPixels = applyRejectionLinked(
+                            data, effectiveFrames, args.params.rejection,
+                            args.params.sigmaLow, args.params.sigmaHigh, pGesdt, rej);
                     } else {
-                         keptPixels = applyRejection(data, effectiveFrames, args.params.rejection,
-                                                     args.params.sigmaLow, args.params.sigmaHigh, pGesdt, rej);
+                        keptPixels = applyRejection(
+                            data, effectiveFrames, args.params.rejection,
+                            args.params.sigmaLow, args.params.sigmaHigh, pGesdt, rej);
                     }
-                    blockRejLow += rej[0];
+
+                    blockRejLow  += rej[0];
                     blockRejHigh += rej[1];
                 }
-                
-                // 3. Compute Result (using optimized C functions)
+
+                // ---- Compute output value (mean or median) ----
+
                 if (channels == 3) {
-                    for(int c=0; c<3; ++c) {
+                    for (int c = 0; c < 3; ++c) {
                         float result = 0.0f;
+
                         if (keptPixels > 0) {
                             float* s = data.stackRGB[c];
-                                if (args.params.method == Method::Median) {
-                                    // Use C++ median (sort in place)
-                                    std::sort(s, s + keptPixels);
-                                    if (keptPixels % 2 == 1) result = s[keptPixels / 2];
-                                    else result = (s[keptPixels / 2 - 1] + s[keptPixels / 2]) * 0.5f;
-                                } else {
-                                    // Use weighted mean if enabled
-                                    if ((args.params.weighting != WeightingType::None && !args.weights.empty()) || useFeathering) {
-                                        float* mstackPtr = useFeathering ? data.mstack : nullptr;
-                                        result = computeWeightedMean(data, keptPixels, nbImages, args.weights.data(), mstackPtr, c);
-                                    } else {
-                                        // Standard Mean
-                                        float sum = 0.0f;
-                                        for(int k=0; k<keptPixels; ++k) sum += s[k];
-                                        result = sum / keptPixels;
-                                    }
-                                }
+
+                            if (args.params.method == Method::Median) {
+                                std::sort(s, s + keptPixels);
+                                result = (keptPixels % 2 == 1)
+                                    ? s[keptPixels / 2]
+                                    : (s[keptPixels / 2 - 1] + s[keptPixels / 2]) * 0.5f;
+                            } else if ((args.params.weighting != WeightingType::None &&
+                                        !args.weights.empty()) || useFeathering) {
+                                float* mstackPtr = useFeathering ? data.mstack : nullptr;
+                                result = computeWeightedMean(data, keptPixels, nbImages,
+                                                             args.weights.data(), mstackPtr, c);
+                            } else {
+                                float sum = 0.0f;
+                                for (int k = 0; k < keptPixels; ++k) sum += s[k];
+                                result = sum / keptPixels;
+                            }
                         }
+
                         size_t outIdx = (outRowIdx + x) * channels + c;
                         outputData[outIdx] = result;
                     }
+
                 } else {
-                    // Mono (using optimized C functions)
+                    // Mono output
                     float result = 0.0f;
+
                     if (keptPixels > 0) {
-                         if (args.params.method == Method::Median) {
-                             // Use C++ median
-                             std::sort(data.stack, data.stack + keptPixels);
-                             if (keptPixels % 2 == 1) result = data.stack[keptPixels / 2];
-                             else result = (data.stack[keptPixels / 2 - 1] + data.stack[keptPixels / 2]) * 0.5f;
-                         } else {
-                             // Use weighted mean if enabled
-                             if ((args.params.weighting != WeightingType::None && !args.weights.empty()) || useFeathering) {
-                                  float* mstackPtr = useFeathering ? data.mstack : nullptr;
-                                  result = computeWeightedMean(data, keptPixels, nbImages, args.weights.data(), mstackPtr, -1);
-                             } else {
-                                 // Standard Mean
-                                 float sum = 0.0f;
-                                 for(int k=0; k<keptPixels; ++k) sum += data.stack[k];
-                                 result = sum / keptPixels;
-                             }
-                         }
+                        if (args.params.method == Method::Median) {
+                            std::sort(data.stack, data.stack + keptPixels);
+                            result = (keptPixels % 2 == 1)
+                                ? data.stack[keptPixels / 2]
+                                : (data.stack[keptPixels / 2 - 1] + data.stack[keptPixels / 2]) * 0.5f;
+                        } else if ((args.params.weighting != WeightingType::None &&
+                                    !args.weights.empty()) || useFeathering) {
+                            float* mstackPtr = useFeathering ? data.mstack : nullptr;
+                            result = computeWeightedMean(data, keptPixels, nbImages,
+                                                         args.weights.data(), mstackPtr, -1);
+                        } else {
+                            float sum = 0.0f;
+                            for (int k = 0; k < keptPixels; ++k) sum += data.stack[k];
+                            result = sum / keptPixels;
+                        }
                     }
-                    size_t outIdx = (outRowIdx + x) * channels + block.channel;
-                    if(block.channel != -1) outIdx = (outRowIdx + x) * channels + block.channel;
-                    else outIdx = (outRowIdx + x) * channels + 0;
+
+                    size_t outIdx = (block.channel != -1)
+                        ? (outRowIdx + x) * channels + block.channel
+                        : (outRowIdx + x) * channels + 0;
                     outputData[outIdx] = result;
                 }
-            }
-        }
-        
-        // Accumulate rejection stats
-        totalRejLow += blockRejLow;
+            } // x
+        } // y
+
+        // Accumulate block-level rejection statistics
+        totalRejLow  += blockRejLow;
         totalRejHigh += blockRejHigh;
-        
+
         processedBlocks++;
-        
-        // Progress update
+
+        // Periodic progress reporting
         if (processedBlocks % std::max(1, nbBlocks / 20) == 0) {
-            args.progress(tr("Processing block %1/%2...").arg(processedBlocks.load()).arg(nbBlocks),
-                         static_cast<double>(processedBlocks) / nbBlocks);
+            args.progress(tr("Processing block %1/%2...")
+                              .arg(processedBlocks.load()).arg(nbBlocks),
+                          static_cast<double>(processedBlocks) / nbBlocks);
         }
-    }
-    
+    } // blockIdx
+
+    // ---- Cleanup ----
+
     for (auto& data : dataPool) {
         data.deallocate();
     }
-    
+
     if (failed || m_cancelled || args.isCancelled() || !Threading::getThreadRun()) {
         args.log("Stacking cancelled or failed", "salmon");
         return StackResult::CancelledError;
     }
-    
-    long totalPixels = static_cast<long>(outputWidth) * outputHeight * nbImages;
-    if (args.params.hasRejection() && totalPixels > 0) {
-        double rejLowPct = 100.0 * totalRejLow / totalPixels;
-        double rejHighPct = 100.0 * totalRejHigh / totalPixels;
+
+    // ---- Report rejection statistics ----
+
+    long totalPixelSamples = static_cast<long>(outputWidth) * outputHeight * nbImages;
+    if (args.params.hasRejection() && totalPixelSamples > 0) {
+        double rejLowPct  = 100.0 * totalRejLow  / totalPixelSamples;
+        double rejHighPct = 100.0 * totalRejHigh / totalPixelSamples;
         args.log(tr("Rejection statistics: low=%1% high=%2%")
-                 .arg(rejLowPct, 0, 'f', 3).arg(rejHighPct, 0, 'f', 3), "neutral");
+                     .arg(rejLowPct, 0, 'f', 3).arg(rejHighPct, 0, 'f', 3), "neutral");
     }
-    
+
     args.log(tr("%1 stacking complete").arg(methodStr), "green");
     return StackResult::OK;
 }
 
+//=============================================================================
+// BLOCK DATA LOADING (legacy / ROI-based path)
+//=============================================================================
 
-
+/**
+ * @brief Load pixel data for a row-block from all images for a specific channel.
+ *
+ * Phase 1 (sequential): reads ROI regions from disk for each image.
+ * Phase 2 (parallel):   bicubic-interpolates into the output-aligned block buffer.
+ *
+ * This method is used by the non-preloaded code path and by drizzle.
+ */
 void StackingEngine::loadBlockData(const StackingArgs& args,
                                    int startRow, int endRow,
                                    int outputWidth, int channel,
                                    int offsetX, int offsetY,
                                    std::vector<float>& blockData)
 {
-    int nbImages = args.nbImagesToStack;
-    int blockHeight = endRow - startRow;
-    size_t pixelsPerBlock = static_cast<size_t>(outputWidth) * blockHeight;
-    
+    const int    nbImages       = args.nbImagesToStack;
+    const int    blockHeight    = endRow - startRow;
+    const size_t pixelsPerBlock = static_cast<size_t>(outputWidth) * blockHeight;
+    const int    margin         = 3;    // Extra pixels for bicubic kernel support
+
     if (blockData.size() != nbImages * pixelsPerBlock) {
         blockData.resize(nbImages * pixelsPerBlock);
     }
-    
-    const int margin = 3;
-    
-    // ===== PHASE 1: SEQUENTIAL I/O =====
-    // Load all image ROIs sequentially (disk I/O cannot be parallelized efficiently)
+
+    // ---- Phase 1: Sequential disk I/O ----
+
     struct LoadedROI {
         ImageBuffer buffer;
-        int rX, rY, rW, rH;
+        int    rX, rY, rW, rH;
         double shiftX, shiftY;
-        bool loaded;
+        bool   loaded;
     };
     std::vector<LoadedROI> rois(nbImages);
 
     for (int i = 0; i < nbImages; ++i) {
         int imgIdx = args.imageIndices[i];
         const auto& imgInfo = args.sequence->image(imgIdx);
-        
-        // Diagnostic: Log each file being read
+
         if (args.logCallback) {
-            args.logCallback(QObject::tr("  Loading %1 (%2/%3)...").arg(imgInfo.fileName()).arg(i+1).arg(nbImages), "");
+            args.logCallback(QObject::tr("  Loading %1 (%2/%3)...")
+                                 .arg(imgInfo.fileName()).arg(i + 1).arg(nbImages), "");
         }
-        
-        // Use effective registration if available (e.g. Comet Mode)
+
+        // Resolve registration (comet mode or standard)
         RegistrationData reg;
         if (!args.effectiveRegs.empty() && imgIdx < static_cast<int>(args.effectiveRegs.size())) {
             reg = args.effectiveRegs[imgIdx];
         } else {
-             reg = imgInfo.registration;
+            reg = imgInfo.registration;
         }
-        
+
         double shiftX = reg.isShiftOnly() ? reg.shiftX : 0;
         double shiftY = reg.isShiftOnly() ? reg.shiftY : 0;
-        
-        double srcMinX = offsetX - shiftX;
-        double srcMaxX = offsetX + outputWidth - shiftX;
-        double srcMinY = offsetY + startRow - shiftY;
-        double srcMaxY = offsetY + endRow - shiftY;
+
+        // Compute source ROI with margin for interpolation kernel
+        double srcMinX = offsetX                 - shiftX;
+        double srcMaxX = offsetX + outputWidth   - shiftX;
+        double srcMinY = offsetY + startRow      - shiftY;
+        double srcMaxY = offsetY + endRow        - shiftY;
 
         int rX = static_cast<int>(std::floor(srcMinX)) - margin;
         int rY = static_cast<int>(std::floor(srcMinY)) - margin;
-        int rW = static_cast<int>(std::ceil(srcMaxX)) - rX + margin;
-        int rH = static_cast<int>(std::ceil(srcMaxY)) - rY + margin;
-        
-        rois[i].rX = rX; rois[i].rY = rY; 
-        rois[i].rW = rW; rois[i].rH = rH;
-        rois[i].shiftX = shiftX; rois[i].shiftY = shiftY;
-        rois[i].loaded = args.sequence->readImageRegion(imgIdx, rois[i].buffer, rX, rY, rW, rH, channel);
-        
-        // Apply cosmetic correction if enabled and map is valid
+        int rW = static_cast<int>(std::ceil(srcMaxX))   - rX + margin;
+        int rH = static_cast<int>(std::ceil(srcMaxY))   - rY + margin;
+
+        rois[i] = { {}, rX, rY, rW, rH, shiftX, shiftY, false };
+        rois[i].loaded = args.sequence->readImageRegion(imgIdx, rois[i].buffer,
+                                                        rX, rY, rW, rH, channel);
+
+        // Apply cosmetic correction to the ROI if enabled
         if (rois[i].loaded && args.params.useCosmetic && args.cosmeticMap.isValid()) {
-            CosmeticCorrection::apply(rois[i].buffer, args.cosmeticMap, rX, rY, args.params.cosmeticIsCFA);
+            CosmeticCorrection::apply(rois[i].buffer, args.cosmeticMap, rX, rY,
+                                      args.params.cosmeticIsCFA);
         }
     }
-    
-    // ===== PHASE 2: PARALLEL INTERPOLATION =====
-    // Add check for cancellation
+
+    // ---- Phase 2: Parallel interpolation into aligned block buffer ----
+
     if (m_cancelled || args.isCancelled()) return;
 
-    #ifdef _OPENMP
+#ifdef _OPENMP
     #pragma omp parallel for schedule(dynamic)
-    #endif
+#endif
     for (int i = 0; i < nbImages; ++i) {
         if (m_cancelled || args.isCancelled()) continue;
-        
+
         float* imgBlockPtr = &blockData[i * pixelsPerBlock];
-        
+
         if (!rois[i].loaded) {
             std::fill(imgBlockPtr, imgBlockPtr + pixelsPerBlock, 0.0f);
             continue;
         }
 
         const ImageBuffer& roi = rois[i].buffer;
-        int rX = rois[i].rX, rY = rois[i].rY;
-        int rW = rois[i].rW, rH = rois[i].rH;
-        double shiftX = rois[i].shiftX, shiftY = rois[i].shiftY;
+        const int    rX     = rois[i].rX;
+        const int    rY     = rois[i].rY;
+        const int    rW     = rois[i].rW;
+        const int    rH     = rois[i].rH;
+        const double shiftX = rois[i].shiftX;
+        const double shiftY = rois[i].shiftY;
 
-
-        
-        // Bicubic Interpolation into Block
         for (int y = 0; y < blockHeight; ++y) {
             for (int x = 0; x < outputWidth; ++x) {
                 double gX = offsetX + x;
                 double gY = offsetY + startRow + y;
                 double sX = gX - shiftX;
                 double sY = gY - shiftY;
-                
+
                 double lX = sX - rX;
                 double lY = sY - rY;
-                
+
                 float val = 0.0f;
                 if (lX >= 2.0 && lX < rW - 2.0 && lY >= 2.0 && lY < rH - 2.0) {
                     val = getInterpolatedPixel(roi, lX, lY, 0);
                 } else if (lX >= 0 && lX < rW && lY >= 0 && lY < rH) {
-                    val = roi.value((int)lX, (int)lY, 0);
+                    val = roi.value(static_cast<int>(lX), static_cast<int>(lY), 0);
                 }
-                
+
                 if (!std::isfinite(val)) val = 0.0f;
-                
+
                 imgBlockPtr[y * outputWidth + x] = val;
             }
         }
@@ -1329,139 +1572,155 @@ void StackingEngine::loadBlockData(const StackingArgs& args,
 }
 
 //=============================================================================
-// ACCELERATED MEAN STACKING (C-based, with rejection support)
+// ACCELERATED MEAN STACKING (placeholder)
 //=============================================================================
 
-StackResult StackingEngine::tryStackMeanC(StackingArgs& args, int width, int height, int channels) {
+/**
+ * @brief Placeholder for an optimized C-based mean stacking implementation.
+ *
+ * Currently returns GenericError to indicate the path is not available.
+ * Future versions may provide a SIMD-accelerated fallback here.
+ */
+StackResult StackingEngine::tryStackMeanC(StackingArgs& args, int width, int height, int channels)
+{
     Q_UNUSED(args);
     Q_UNUSED(width);
     Q_UNUSED(height);
     Q_UNUSED(channels);
-    // Optimized C stacking removed.
     return StackResult::GenericError;
 }
 
 //=============================================================================
-// MEDIAN STACKING
+// MEDIAN STACKING (standalone, non-block path)
 //=============================================================================
 
-StackResult StackingEngine::stackMedian(StackingArgs& args) {
+/**
+ * @brief Standalone median stacking implementation.
+ *
+ * Loads all images into memory, then computes the per-pixel median across
+ * frames using partial sorting. Primarily used for small sequences or when
+ * the block-based mean/median engine is not applicable.
+ */
+StackResult StackingEngine::stackMedian(StackingArgs& args)
+{
     int outputWidth, outputHeight, offsetX, offsetY;
     computeOutputDimensions(args, outputWidth, outputHeight, offsetX, offsetY);
-    
-    int channels = args.sequence->channels();
-    int nbImages = args.nbImagesToStack;
-    
+
+    const int channels = args.sequence->channels();
+    const int nbImages = args.nbImagesToStack;
+
     if (!prepareOutput(args, outputWidth, outputHeight, channels)) {
         return StackResult::AllocError;
     }
-    
+
     float* output = args.result.data().data();
-    
-    // Load all images into memory (for small sequences)
-    // For large sequences, should process in blocks
+
+    // Load all images into memory
     std::vector<ImageBuffer> images(nbImages);
-    
     for (int i = 0; i < nbImages; ++i) {
         if (m_cancelled) return StackResult::CancelledError;
-        
+
         args.progress(tr("Loading image %1/%2...").arg(i + 1).arg(nbImages),
-                     static_cast<double>(i) / (nbImages * 2));
-        
+                      static_cast<double>(i) / (nbImages * 2));
+
         if (!args.sequence->readImage(args.imageIndices[i], images[i])) {
             args.log(tr("Warning: Failed to load image %1").arg(i), "salmon");
         }
     }
-    
-    // Process each pixel
-    // Parallelize over Y
+
+    // Compute per-pixel median (parallelized over rows)
     #pragma omp parallel for collapse(1)
     for (int y = 0; y < outputHeight; ++y) {
-        if (m_cancelled) continue; // Difficult to break OpenMP
-        
-        // Progress (not thread safe to call args.progress frequently, limit it)
+        if (m_cancelled) continue;
+
         if (y % 100 == 0 && omp_get_thread_num() == 0) {
             args.progress(tr("Computing median (row %1/%2)...").arg(y).arg(outputHeight),
-                         0.5 + 0.5 * y / outputHeight);
+                          0.5 + 0.5 * y / outputHeight);
         }
-        
+
         for (int x = 0; x < outputWidth; ++x) {
             for (int c = 0; c < channels; ++c) {
                 std::vector<float> stack;
                 stack.reserve(nbImages);
-                
+
                 for (int i = 0; i < nbImages; ++i) {
                     if (!images[i].isValid()) continue;
-                    
+
                     const auto& imgInfo = args.sequence->image(args.imageIndices[i]);
-                    
                     float value;
-                    if (getShiftedPixel(images[i], x, y, c, imgInfo.registration, offsetX, offsetY, value)) {
+                    if (getShiftedPixel(images[i], x, y, c, imgInfo.registration,
+                                        offsetX, offsetY, value)) {
                         if (value != 0.0f) {
                             stack.push_back(value);
                         }
                     }
                 }
-                
+
                 float result = 0.0f;
                 if (!stack.empty()) {
                     result = Statistics::quickMedian(stack);
                 }
-                
-                // Interleaved Indexing
+
                 size_t outIdx = (static_cast<size_t>(y) * outputWidth + x) * channels + c;
                 output[outIdx] = result;
             }
         }
     }
-    
+
     if (m_cancelled) return StackResult::CancelledError;
-    
     return StackResult::OK;
 }
 
 //=============================================================================
-// MIN/MAX STACKING
+// MAX STACKING
 //=============================================================================
 
-StackResult StackingEngine::stackMax(StackingArgs& args) {
+/**
+ * @brief Stack images by retaining the maximum pixel value at each position.
+ *
+ * Images are processed sequentially; pixel comparisons within each image
+ * are parallelized over rows. Thread-safe because each image updates
+ * non-overlapping output indices in the inner loop.
+ */
+StackResult StackingEngine::stackMax(StackingArgs& args)
+{
     int outputWidth, outputHeight, offsetX, offsetY;
     computeOutputDimensions(args, outputWidth, outputHeight, offsetX, offsetY);
-    
-    int channels = args.sequence->channels();
-    
+
+    const int channels = args.sequence->channels();
+
     if (!prepareOutput(args, outputWidth, outputHeight, channels)) {
         return StackResult::AllocError;
     }
-    
+
     float* output = args.result.data().data();
-    size_t totalPixels = static_cast<size_t>(outputWidth) * outputHeight * channels;
-    
-    // Initialize to minimum possible value
+    const size_t totalPixels = static_cast<size_t>(outputWidth) * outputHeight * channels;
+
+    // Initialize output to zero (effective minimum for positive-valued images)
     for (size_t i = 0; i < totalPixels; ++i) {
         output[i] = 0.0f;
     }
-    
+
     int processed = 0;
     for (int idx : args.imageIndices) {
         if (m_cancelled) return StackResult::CancelledError;
-        
+
         args.progress(tr("Processing image %1/%2...")
-                     .arg(processed + 1).arg(args.nbImagesToStack),
-                     static_cast<double>(processed) / args.nbImagesToStack);
-        
+                          .arg(processed + 1).arg(args.nbImagesToStack),
+                      static_cast<double>(processed) / args.nbImagesToStack);
+
         ImageBuffer buffer;
-        if (!args.sequence->readImage(idx, buffer)) {
-            continue;
-        }
-        // Get registration data
+        if (!args.sequence->readImage(idx, buffer)) continue;
+
         RegistrationData reg;
-        if (!args.effectiveRegs.empty() && idx < (int)args.effectiveRegs.size()) {
-             reg = args.effectiveRegs[idx];
+        if (!args.effectiveRegs.empty() && idx < static_cast<int>(args.effectiveRegs.size())) {
+            reg = args.effectiveRegs[idx];
         } else {
-             reg = args.sequence->image(idx).registration;
+            reg = args.sequence->image(idx).registration;
         }
-        
+
+        // Images are sequential; pixels within an image are parallel.
+        // Each (y,x,c) maps to a unique outIdx, so no race condition.
         #pragma omp parallel for collapse(2)
         for (int y = 0; y < outputHeight; ++y) {
             for (int x = 0; x < outputWidth; ++x) {
@@ -1469,11 +1728,6 @@ StackResult StackingEngine::stackMax(StackingArgs& args) {
                     float value;
                     if (getShiftedPixel(buffer, x, y, c, reg, offsetX, offsetY, value)) {
                         size_t outIdx = (static_cast<size_t>(y) * outputWidth + x) * channels + c;
-                        
-                        // NOT THREAD SAFE without atomic/critical if looping images in parallel,
-                        // but here we loop images sequential, pixels parallel.
-                        // So multiple threads write to DIFFERENT outIdx. Safe.
-                        
                         if (value > output[outIdx]) {
                             output[outIdx] = value;
                         }
@@ -1481,57 +1735,66 @@ StackResult StackingEngine::stackMax(StackingArgs& args) {
                 }
             }
         }
-        
+
         processed++;
     }
-    
+
     return StackResult::OK;
 }
 
-StackResult StackingEngine::stackMin(StackingArgs& args) {
+//=============================================================================
+// MIN STACKING
+//=============================================================================
+
+/**
+ * @brief Stack images by retaining the minimum non-zero pixel value at each position.
+ *
+ * Zero-valued pixels (from out-of-bounds registration or masked borders)
+ * are excluded from the minimum comparison to avoid artifacts.
+ */
+StackResult StackingEngine::stackMin(StackingArgs& args)
+{
     int outputWidth, outputHeight, offsetX, offsetY;
     computeOutputDimensions(args, outputWidth, outputHeight, offsetX, offsetY);
-    
-    int channels = args.sequence->channels();
-    
+
+    const int channels = args.sequence->channels();
+
     if (!prepareOutput(args, outputWidth, outputHeight, channels)) {
         return StackResult::AllocError;
     }
-    
+
     float* output = args.result.data().data();
-    size_t totalPixels = static_cast<size_t>(outputWidth) * outputHeight * channels;
-    
-    // Initialize to maximum possible value
+    const size_t totalPixels = static_cast<size_t>(outputWidth) * outputHeight * channels;
+
+    // Initialize output to 1.0 (effective maximum for normalized images)
     for (size_t i = 0; i < totalPixels; ++i) {
         output[i] = 1.0f;
     }
-    
+
     int processed = 0;
     for (int idx : args.imageIndices) {
         if (m_cancelled) return StackResult::CancelledError;
-        
+
         args.progress(tr("Processing image %1/%2...")
-                     .arg(processed + 1).arg(args.nbImagesToStack),
-                     static_cast<double>(processed) / args.nbImagesToStack);
-        
+                          .arg(processed + 1).arg(args.nbImagesToStack),
+                      static_cast<double>(processed) / args.nbImagesToStack);
+
         ImageBuffer buffer;
-        if (!args.sequence->readImage(idx, buffer)) {
-            continue;
-        }
-        
+        if (!args.sequence->readImage(idx, buffer)) continue;
+
         const auto& imgInfo = args.sequence->image(idx);
         RegistrationData reg = imgInfo.registration;
-        if (!args.effectiveRegs.empty() && idx < (int)args.effectiveRegs.size()) {
-             reg = args.effectiveRegs[idx];
+        if (!args.effectiveRegs.empty() && idx < static_cast<int>(args.effectiveRegs.size())) {
+            reg = args.effectiveRegs[idx];
         }
-        
+
         #pragma omp parallel for collapse(2)
         for (int y = 0; y < outputHeight; ++y) {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int c = 0; c < channels; ++c) {
                     float value;
                     if (getShiftedPixel(buffer, x, y, c, reg, offsetX, offsetY, value)) {
-                        if (value != 0.0f) {  // Don't count zeros as minimum
+                        if (value != 0.0f) {
                             size_t outIdx = (static_cast<size_t>(y) * outputWidth + x) * channels + c;
                             if (value < output[outIdx]) {
                                 output[outIdx] = value;
@@ -1541,10 +1804,10 @@ StackResult StackingEngine::stackMin(StackingArgs& args) {
                 }
             }
         }
-        
+
         processed++;
     }
-    
+
     return StackResult::OK;
 }
 
@@ -1552,181 +1815,198 @@ StackResult StackingEngine::stackMin(StackingArgs& args) {
 // DRIZZLE STACKING
 //=============================================================================
 
-StackResult StackingEngine::stackDrizzle(StackingArgs& args) {
-    // 1. Initialize Drizzle Engine
+/**
+ * @brief Perform drizzle integration for sub-pixel resolution enhancement.
+ *
+ * Each input image is loaded, normalized, optionally rejection-masked against
+ * a reference stack from a previous mean-stacking pass, then fed into the
+ * DrizzleStacking engine which accumulates fractional pixel contributions
+ * onto the upscaled output grid.
+ */
+StackResult StackingEngine::stackDrizzle(StackingArgs& args)
+{
+    // ---- Initialize drizzle engine ----
+
     DrizzleStacking drizzle;
-    
+
     DrizzleStacking::DrizzleParams dParams;
-    dParams.scaleFactor = args.params.drizzleScale;
-    dParams.dropSize = args.params.drizzlePixFrac;
-    dParams.kernelType = static_cast<int>(args.params.drizzleKernel);
+    dParams.scaleFactor  = args.params.drizzleScale;
+    dParams.dropSize     = args.params.drizzlePixFrac;
+    dParams.kernelType   = static_cast<int>(args.params.drizzleKernel);
     dParams.useWeightMaps = true;
-    dParams.fastMode = args.params.drizzleFast;
+    dParams.fastMode     = args.params.drizzleFast;
 
     drizzle.initialize(args.sequence->width(), args.sequence->height(),
-                       args.sequence->channels(),
-                       dParams);
-    
-    // Pass 1 Result (Reference Stack) for rejection
+                       args.sequence->channels(), dParams);
+
+    // Reference stack from the rejection pre-pass (may be empty)
     ImageBuffer referenceStack;
     if (args.params.hasRejection() && args.result.isValid()) {
-         referenceStack = args.result;
+        referenceStack = args.result;
     }
 
-    // 2. Iterate input images
+    // ---- Process each input image ----
+
     int processed = 0;
-    
+
     for (int idx : args.imageIndices) {
         if (m_cancelled) return StackResult::CancelledError;
-        
+
         args.progress(tr("Drizzling image %1/%2...")
-                     .arg(processed + 1).arg(args.nbImagesToStack),
-                     static_cast<double>(processed) / args.nbImagesToStack);
-        
-        // Load Image
+                          .arg(processed + 1).arg(args.nbImagesToStack),
+                      static_cast<double>(processed) / args.nbImagesToStack);
+
+        // Load image
         ImageBuffer buffer;
-        if (!args.sequence->readImage(idx, buffer)) {
-            continue;
-        }
-        
-        // Normalize Buffer BEFORE Drizzle
+        if (!args.sequence->readImage(idx, buffer)) continue;
+
+        // Pre-drizzle normalization
         if (args.params.hasNormalization()) {
-             // Apply normalization to the whole buffer
-             for (int c=0; c<buffer.channels(); ++c) {
-                 float* data = buffer.data().data() + c * buffer.width() * buffer.height();
-                 size_t count = static_cast<size_t>(buffer.width()) * buffer.height();
-                 for(size_t i=0; i<count; ++i) {
-                     if (data[i] != 0.0f) {
-                         data[i] = Normalization::applyToPixel(data[i], args.params.normalization, 
-                                                               processed, c, args.coefficients);
-                     }
-                 }
-             }
+            for (int c = 0; c < buffer.channels(); ++c) {
+                float* data  = buffer.data().data() + c * buffer.width() * buffer.height();
+                size_t count = static_cast<size_t>(buffer.width()) * buffer.height();
+
+                for (size_t i = 0; i < count; ++i) {
+                    if (data[i] != 0.0f) {
+                        data[i] = Normalization::applyToPixel(
+                            data[i], args.params.normalization,
+                            processed, c, args.coefficients);
+                    }
+                }
+            }
         }
-        
-        // Compute Rejection Mask on-the-fly if enabled
-        std::unique_ptr<ImageBuffer> dimRejectionMap;
-        
-        // Use effective registration if available
+
+        // Resolve registration
         RegistrationData reg;
         if (!args.effectiveRegs.empty() && idx < static_cast<int>(args.effectiveRegs.size())) {
             reg = args.effectiveRegs[idx];
         } else {
-             reg = args.sequence->image(idx).registration;
+            reg = args.sequence->image(idx).registration;
         }
 
+        // ---- Build on-the-fly rejection mask against reference stack ----
+
+        std::unique_ptr<ImageBuffer> dimRejectionMap;
+
         if (referenceStack.isValid()) {
-             dimRejectionMap = std::make_unique<ImageBuffer>(buffer.width(), buffer.height(), 1);
-             float* maskData = dimRejectionMap->data().data();
-             // Zero init
-             std::memset(maskData, 0, sizeof(float) * buffer.width() * buffer.height());
-             
-             // Check each pixel against reference
-             int shiftX = 0, shiftY = 0;
-             if (reg.hasRegistration) {
-                 shiftX = static_cast<int>(std::round(reg.shiftX));
-                 shiftY = static_cast<int>(std::round(reg.shiftY));
-             }
-             
-             // Sigma threshold
-             // Estimate noise level of the current image
-             double ch0Noise = Statistics::computeNoise(buffer.data().data(), buffer.width(), buffer.height());
-             
-             float sigmaParam = std::max(args.params.sigmaLow, args.params.sigmaHigh);
-             if (sigmaParam <= 0.0f) sigmaParam = 3.0f;
-             
-             float threshold = static_cast<float>(sigmaParam * ch0Noise);
-             // Apply a minimum threshold.
-             if (threshold < 1e-6f) threshold = 1e-6f;
-             
-             for (int y = 0; y < buffer.height(); ++y) {
-                 for (int x = 0; x < buffer.width(); ++x) {
-                     // Get Ref Value
-                     // Coordinate in Ref: x - shiftX, y - shiftY
-                     int rx = x - shiftX;
-                     int ry = y - shiftY;
-                     
-                     if (rx >= 0 && rx < referenceStack.width() && ry >= 0 && ry < referenceStack.height()) {
-                         bool reject = false;
-                         for(int c=0; c<buffer.channels(); ++c) {
-                             float val = buffer.value(x, y, c);
-                             float ref = referenceStack.value(rx, ry, c);
-                             
-                             if (std::abs(val - ref) > threshold) {
-                                 reject = true;
-                                 break;
-                             }
-                         }
-                         if (reject) maskData[y * buffer.width() + x] = 1.0f;
-                     } 
-                 }
-             }
+            dimRejectionMap = std::make_unique<ImageBuffer>(buffer.width(), buffer.height(), 1);
+            float* maskData = dimRejectionMap->data().data();
+            std::memset(maskData, 0, sizeof(float) * buffer.width() * buffer.height());
+
+            int shiftX = 0, shiftY = 0;
+            if (reg.hasRegistration) {
+                shiftX = static_cast<int>(std::round(reg.shiftX));
+                shiftY = static_cast<int>(std::round(reg.shiftY));
+            }
+
+            // Noise-based threshold for rejection
+            double ch0Noise = Statistics::computeNoise(buffer.data().data(),
+                                                       buffer.width(), buffer.height());
+            float sigmaParam = std::max(args.params.sigmaLow, args.params.sigmaHigh);
+            if (sigmaParam <= 0.0f) sigmaParam = 3.0f;
+
+            float threshold = static_cast<float>(sigmaParam * ch0Noise);
+            if (threshold < 1e-6f) threshold = 1e-6f;
+
+            // Compare each pixel against the reference
+            for (int y = 0; y < buffer.height(); ++y) {
+                for (int x = 0; x < buffer.width(); ++x) {
+                    int rx = x - shiftX;
+                    int ry = y - shiftY;
+
+                    if (rx >= 0 && rx < referenceStack.width() &&
+                        ry >= 0 && ry < referenceStack.height()) {
+                        bool reject = false;
+                        for (int c = 0; c < buffer.channels(); ++c) {
+                            float val = buffer.value(x, y, c);
+                            float ref = referenceStack.value(rx, ry, c);
+                            if (std::abs(val - ref) > threshold) {
+                                reject = true;
+                                break;
+                            }
+                        }
+                        if (reject) maskData[y * buffer.width() + x] = 1.0f;
+                    }
+                }
+            }
         }
-        
-        // Prepare weights
-        std::vector<float> imgWeights; // Per-pixel weights
+
+        // ---- Prepare per-channel weights ----
+
+        std::vector<float> imgWeights;
         if (args.params.weighting != WeightingType::None && !args.weights.empty()) {
             imgWeights.resize(args.sequence->channels());
-             int totalSeqImages = args.sequence->count();
-             for(int c=0; c<args.sequence->channels(); ++c) {
-                 int wIdx = c * totalSeqImages + idx;
-                 if (wIdx < static_cast<int>(args.weights.size())) {
-                     imgWeights[c] = static_cast<float>(args.weights[wIdx]);
-                 } else {
-                     imgWeights[c] = 1.0f;
-                 }
-             }
+            int totalSeqImages = args.sequence->count();
+
+            for (int c = 0; c < args.sequence->channels(); ++c) {
+                int wIdx = c * totalSeqImages + idx;
+                imgWeights[c] = (wIdx < static_cast<int>(args.weights.size()))
+                    ? static_cast<float>(args.weights[wIdx])
+                    : 1.0f;
+            }
         }
-        
-        // Add to Drizzle
-        const float* rejMapPtr = nullptr;
-        if (dimRejectionMap) rejMapPtr = dimRejectionMap->data().data(); 
-        
-        drizzle.addImage(buffer, reg, imgWeights, rejMapPtr); 
-        
+
+        // ---- Add frame to drizzle accumulator ----
+
+        const float* rejMapPtr = dimRejectionMap ? dimRejectionMap->data().data() : nullptr;
+        drizzle.addImage(buffer, reg, imgWeights, rejMapPtr);
+
         processed++;
     }
-    
-    // 3. Resolve result
+
+    // ---- Resolve final drizzle result ----
+
     args.progress(tr("Finalizing Drizzle..."), -1);
-    // Prepare output buffer with VALID dimensions from drizzle output
-        if (!prepareOutput(args, drizzle.outputWidth(), drizzle.outputHeight(), args.sequence->channels())) {
-            // Restore the reference stack if drizzle fails.
+
+    if (!prepareOutput(args, drizzle.outputWidth(), drizzle.outputHeight(),
+                       args.sequence->channels())) {
         return StackResult::AllocError;
     }
-    
+
     if (!drizzle.resolve(args.result)) {
         return StackResult::GenericError;
     }
-    
-    // Copy metadata from the reference stack if valid.
+
+    // Carry forward metadata from the reference stack
     if (referenceStack.isValid()) {
         args.result.metadata() = referenceStack.metadata();
     }
-    
+
     return StackResult::OK;
 }
 
 //=============================================================================
-// METADATA AND SUMMARY
+// METADATA UPDATE
 //=============================================================================
 
-void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY) {
+/**
+ * @brief Populate output image metadata from the reference frame and stacking results.
+ *
+ * Copies all relevant FITS header cards, WCS astrometric solution, SIP distortion
+ * coefficients, and instrument metadata from the reference image. Then updates
+ * stacking-specific values (total exposure, frame count) and adjusts the WCS
+ * reference pixel for any framing offset.
+ *
+ * Duplicate header cards are removed to prevent pollution in the output FITS file.
+ */
+void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY)
+{
     auto& meta = args.result.metadata();
 
-    // Compute total exposure first
+    // ---- Compute total exposure ----
+
     double totalExposure = 0.0;
     for (int idx : args.imageIndices) {
         totalExposure += args.sequence->image(idx).exposure;
     }
 
-    // Copy all metadata from the reference image so the stacked result retains
-    // instrument, WCS, and header information from the best frame.
+    // ---- Copy reference image metadata ----
+
     int refIdx = args.params.refImageIndex;
     if (refIdx >= 0 && refIdx < args.sequence->count()) {
         const auto& refMeta = args.sequence->image(refIdx).metadata;
 
-        // Copy raw FITS header cards verbatim — these form the basis of the saved header
+        // Raw FITS header cards (basis for saved header)
         meta.rawHeaders = refMeta.rawHeaders;
 
         // Instrument / optics
@@ -1737,7 +2017,7 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
         meta.isMono       = refMeta.isMono;
         meta.bitDepth     = refMeta.bitDepth;
 
-        // Object / observation info
+        // Object / observation
         meta.objectName = refMeta.objectName;
         meta.dateObs    = refMeta.dateObs;
 
@@ -1758,7 +2038,7 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
         meta.lonpole = refMeta.lonpole;
         meta.latpole = refMeta.latpole;
 
-        // SIP distortion coefficients
+        // SIP distortion
         meta.sipOrderA  = refMeta.sipOrderA;
         meta.sipOrderB  = refMeta.sipOrderB;
         meta.sipOrderAP = refMeta.sipOrderAP;
@@ -1766,32 +2046,37 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
         meta.sipCoeffs  = refMeta.sipCoeffs;
 
         // Color profile
-        meta.iccData         = refMeta.iccData;
-        meta.iccProfileName  = refMeta.iccProfileName;
-        meta.iccProfileType  = refMeta.iccProfileType;
+        meta.iccData        = refMeta.iccData;
+        meta.iccProfileName = refMeta.iccProfileName;
+        meta.iccProfileType = refMeta.iccProfileType;
     }
 
-    // Override stacking-specific values that differ from any individual frame
+    // ---- Override stacking-specific values ----
+
     meta.stackCount = args.nbImagesToStack;
     meta.exposure   = totalExposure;
 
-    // Deduplicate rawHeaders: keep first occurrence of each key, remove duplicates
-    // This prevents header pollution in stacked FITS files when source had duplicates
-    std::set<QString> seenKeys;
-    std::vector<ImageBuffer::Metadata::HeaderCard> deduped;
-    for (const auto& card : meta.rawHeaders) {
-        QString key = card.key.trimmed().toUpper();
-        if (seenKeys.find(key) == seenKeys.end()) {
-            seenKeys.insert(key);
-            deduped.push_back(card);
-        }
-    }
-    meta.rawHeaders = deduped;
+    // ---- Deduplicate raw header cards ----
 
-    // Keep rawHeaders consistent: update ALL EXPTIME / EXPOSURE entries and add/update STACKCNT
+    {
+        std::set<QString> seenKeys;
+        std::vector<ImageBuffer::Metadata::HeaderCard> deduped;
+
+        for (const auto& card : meta.rawHeaders) {
+            QString key = card.key.trimmed().toUpper();
+            if (seenKeys.find(key) == seenKeys.end()) {
+                seenKeys.insert(key);
+                deduped.push_back(card);
+            }
+        }
+        meta.rawHeaders = deduped;
+    }
+
+    // ---- Update EXPTIME / EXPOSURE cards ----
+
     bool foundExptime = false;
     for (auto& card : meta.rawHeaders) {
-        if (card.key.compare("EXPTIME", Qt::CaseInsensitive) == 0 ||
+        if (card.key.compare("EXPTIME",  Qt::CaseInsensitive) == 0 ||
             card.key.compare("EXPOSURE", Qt::CaseInsensitive) == 0) {
             card.value   = QString::number(totalExposure, 'f', 6);
             card.comment = "Total stacked exposure [s]";
@@ -1806,6 +2091,8 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
         meta.rawHeaders.push_back(card);
     }
 
+    // ---- Update / add STACKCNT card ----
+
     bool foundStackCnt = false;
     for (auto& card : meta.rawHeaders) {
         if (card.key.compare("STACKCNT", Qt::CaseInsensitive) == 0) {
@@ -1814,7 +2101,7 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
             foundStackCnt = true;
         }
     }
-        if (!foundStackCnt) {
+    if (!foundStackCnt) {
         ImageBuffer::Metadata::HeaderCard card;
         card.key     = "STACKCNT";
         card.value   = QString::number(args.nbImagesToStack);
@@ -1822,49 +2109,53 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
         meta.rawHeaders.push_back(card);
     }
 
-    // Strip stale per-frame WCS cards, then rebuild fresh from meta struct
-    static const QSet<QString> wcsKeysToStrip = {
-        "CTYPE1","CTYPE2","EQUINOX","CRVAL1","CRVAL2","CRPIX1","CRPIX2",
-        "CD1_1","CD1_2","CD2_1","CD2_2","LONPOLE","LATPOLE",
-        "A_ORDER","B_ORDER","AP_ORDER","BP_ORDER"
+    // ---- Rebuild WCS header cards with adjusted reference pixel ----
+
+    static const QSet<QString> kWcsKeysToStrip = {
+        "CTYPE1", "CTYPE2", "EQUINOX", "CRVAL1", "CRVAL2", "CRPIX1", "CRPIX2",
+        "CD1_1", "CD1_2", "CD2_1", "CD2_2", "LONPOLE", "LATPOLE",
+        "A_ORDER", "B_ORDER", "AP_ORDER", "BP_ORDER"
     };
 
     auto& headers = meta.rawHeaders;
-    headers.erase(std::remove_if(headers.begin(), headers.end(),
-        [](const ImageBuffer::Metadata::HeaderCard& c) {
-            QString k = c.key.trimmed().toUpper();
-            if (wcsKeysToStrip.contains(k)) return true;
-            if ((k.startsWith("A_") || k.startsWith("B_") ||
-                 k.startsWith("AP_") || k.startsWith("BP_")) &&
-                k.contains('_', Qt::CaseSensitive)) return true;
-            return false;
-        }), headers.end());
+    headers.erase(
+        std::remove_if(headers.begin(), headers.end(),
+            [](const ImageBuffer::Metadata::HeaderCard& c) {
+                QString k = c.key.trimmed().toUpper();
+                if (kWcsKeysToStrip.contains(k)) return true;
+                // Remove SIP coefficient cards (A_*, B_*, AP_*, BP_*)
+                if ((k.startsWith("A_") || k.startsWith("B_") ||
+                     k.startsWith("AP_") || k.startsWith("BP_")) &&
+                    k.contains('_', Qt::CaseSensitive)) return true;
+                return false;
+            }),
+        headers.end());
 
     if (FitsHeaderUtils::hasValidWCS(meta)) {
         FitsHeaderUtils::Metadata fmeta;
-        
-        // Helper to ensure values are finite to prevent NaN propagation
+
+        // Sanitize against NaN propagation
         auto sanitize = [](double val, double fallback) {
             return std::isfinite(val) ? val : fallback;
         };
 
-        fmeta.ra      = sanitize(meta.ra, 0.0);
-        fmeta.dec     = sanitize(meta.dec, 0.0);
-        fmeta.crpix1  = sanitize(meta.crpix1, 0.0) - offsetX;
-        fmeta.crpix2  = sanitize(meta.crpix2, 0.0) - offsetY;
-        fmeta.cd1_1   = sanitize(meta.cd1_1, 0.0);
-        fmeta.cd1_2   = sanitize(meta.cd1_2, 0.0);
-        fmeta.cd2_1   = sanitize(meta.cd2_1, 0.0);
-        fmeta.cd2_2   = sanitize(meta.cd2_2, 0.0);
-        fmeta.ctype1  = meta.ctype1;
-        fmeta.ctype2  = meta.ctype2;
-        fmeta.equinox = sanitize(meta.equinox, 2000.0);
-        fmeta.lonpole = sanitize(meta.lonpole, 180.0);
-        fmeta.latpole = sanitize(meta.latpole, 0.0);
-        
-        fmeta.sipOrderA  = meta.sipOrderA;  
+        fmeta.ra       = sanitize(meta.ra,     0.0);
+        fmeta.dec      = sanitize(meta.dec,    0.0);
+        fmeta.crpix1   = sanitize(meta.crpix1, 0.0) - offsetX;
+        fmeta.crpix2   = sanitize(meta.crpix2, 0.0) - offsetY;
+        fmeta.cd1_1    = sanitize(meta.cd1_1,  0.0);
+        fmeta.cd1_2    = sanitize(meta.cd1_2,  0.0);
+        fmeta.cd2_1    = sanitize(meta.cd2_1,  0.0);
+        fmeta.cd2_2    = sanitize(meta.cd2_2,  0.0);
+        fmeta.ctype1   = meta.ctype1;
+        fmeta.ctype2   = meta.ctype2;
+        fmeta.equinox  = sanitize(meta.equinox, 2000.0);
+        fmeta.lonpole  = sanitize(meta.lonpole, 180.0);
+        fmeta.latpole  = sanitize(meta.latpole,   0.0);
+
+        fmeta.sipOrderA  = meta.sipOrderA;
         fmeta.sipOrderB  = meta.sipOrderB;
-        fmeta.sipOrderAP = meta.sipOrderAP; 
+        fmeta.sipOrderAP = meta.sipOrderAP;
         fmeta.sipOrderBP = meta.sipOrderBP;
         fmeta.sipCoeffs  = meta.sipCoeffs;
 
@@ -1879,24 +2170,30 @@ void StackingEngine::updateMetadata(StackingArgs& args, int offsetX, int offsetY
     }
 }
 
-QString StackingEngine::generateSummary(const StackingArgs& args) {
-    QString summary;
-    
-    summary = tr("Stacking complete: %1 images using %2")
-             .arg(args.nbImagesToStack)
-             .arg(methodToString(args.params.method));
-    
+//=============================================================================
+// SUMMARY GENERATION
+//=============================================================================
+
+/**
+ * @brief Generate a human-readable summary of the completed stacking operation.
+ */
+QString StackingEngine::generateSummary(const StackingArgs& args)
+{
+    QString summary = tr("Stacking complete: %1 images using %2")
+                          .arg(args.nbImagesToStack)
+                          .arg(methodToString(args.params.method));
+
     if (args.params.hasRejection()) {
         summary += tr(", rejection: %1 (%2%)")
-                  .arg(rejectionToString(args.params.rejection))
-                  .arg(args.rejectionStats.rejectionPercentage(), 0, 'f', 1);
+                       .arg(rejectionToString(args.params.rejection))
+                       .arg(args.rejectionStats.rejectionPercentage(), 0, 'f', 1);
     }
-    
+
     if (args.params.hasNormalization()) {
         summary += tr(", normalization: %1")
-                  .arg(normalizationToString(args.params.normalization));
+                       .arg(normalizationToString(args.params.normalization));
     }
-    
+
     return summary;
 }
 
@@ -1904,60 +2201,75 @@ QString StackingEngine::generateSummary(const StackingArgs& args) {
 // WORKER THREAD
 //=============================================================================
 
+/**
+ * @brief Construct a stacking worker thread.
+ *
+ * The worker owns a copy of the stacking arguments and an internal
+ * StackingEngine instance. Signals from the engine are forwarded to
+ * the worker's own signals for thread-safe progress reporting.
+ */
 StackingWorker::StackingWorker(StackingArgs args, QObject* parent)
     : QThread(parent)
     , m_args(std::move(args))
 {
-    // Connect engine signals to worker signals
     connect(&m_engine, &StackingEngine::progressChanged,
-            this, &StackingWorker::progressChanged);
+            this,      &StackingWorker::progressChanged);
     connect(&m_engine, &StackingEngine::logMessage,
-            this, &StackingWorker::logMessage);
+            this,      &StackingWorker::logMessage);
 }
 
-void StackingWorker::run() {
-    // Set up callbacks
+/**
+ * @brief Execute the stacking operation on the worker thread.
+ *
+ * Sets up progress/log/cancel callbacks, invokes the engine, and emits
+ * the finished signal with the success status.
+ */
+void StackingWorker::run()
+{
     m_args.progressCallback = [this](const QString& msg, double pct) {
         emit progressChanged(msg, pct);
     };
-    
+
     m_args.logCallback = [this](const QString& msg, const QString& color) {
         emit logMessage(msg, color);
     };
-    
+
     m_args.cancelCheck = [this]() {
         return m_engine.isCancelled();
     };
-    
+
     StackResult result = m_engine.execute(m_args);
     m_args.returnValue = static_cast<int>(result);
-    
+
     emit finished(result == StackResult::OK);
 }
 
 //=============================================================================
-// BLOCK LOADING HELPER
+// BLOCK SIZE COMPUTATION
 //=============================================================================
 
-
-int StackingEngine::computeOptimalBlockSize(const StackingArgs& args, int outputWidth, int channels) {
+/**
+ * @brief Compute the optimal block height for row-based processing.
+ *
+ * Targets approximately 64 MB per block to balance memory usage and
+ * processing granularity. Returns a height clamped to [32, 4096].
+ */
+int StackingEngine::computeOptimalBlockSize(const StackingArgs& args, int outputWidth, int channels)
+{
     Q_UNUSED(args);
-    
+
     if (outputWidth <= 0 || channels <= 0) return 128;
-    
-    // Target ~64 MB per block
-    // Row size = width * channels * 4 bytes
+
     size_t rowBytes = static_cast<size_t>(outputWidth) * channels * sizeof(float);
     if (rowBytes == 0) return 128;
-    
-    size_t targetBytes = 64 * 1024 * 1024; // 64 MB
-    int height = static_cast<int>(targetBytes / rowBytes);
-    
-    if (height < 32) height = 32;
-    if (height > 4096) height = 4096;
-    
+
+    constexpr size_t kTargetBytes = 64 * 1024 * 1024;   // 64 MB
+    int height = static_cast<int>(kTargetBytes / rowBytes);
+
+    if (height < 32)   height = 32;
+    if (height > 4096)  height = 4096;
+
     return height;
 }
 
 } // namespace Stacking
-

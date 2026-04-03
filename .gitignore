@@ -1,4 +1,10 @@
-# Build directories
+# =============================================================================
+# TStar Project - Git Ignore Rules
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Build Artifacts & Output Directories
+# -----------------------------------------------------------------------------
 build/
 build_win/
 cmake-build-*/
@@ -6,28 +12,42 @@ out/
 dist/
 installer_output/
 
-# Dependencies (users should download separately)
+# -----------------------------------------------------------------------------
+# External Dependencies (downloaded/built separately by each developer)
+# -----------------------------------------------------------------------------
 deps/
 
-# IDE and editor files
+# -----------------------------------------------------------------------------
+# IDE & Editor Configuration Files
+# -----------------------------------------------------------------------------
+
+# Visual Studio
 .vs/
-.vscode/
 *.user
 *.suo
 *.sln
 *.vcxproj*
 CMakeSettings.json
+
+# Visual Studio Code
+.vscode/
+
+# JetBrains IDEs
 .idea/
+
+# Vim / Neovim swap files
 *.swp
 *.swo
 *~
 
-# Qt Creator files
+# Qt Creator
 *.pro.user*
 *.qbs.user*
 CMakeLists.txt.user*
 
-# Compiled files
+# -----------------------------------------------------------------------------
+# Compiled Object Files & Binaries
+# -----------------------------------------------------------------------------
 *.o
 *.obj
 *.exe
@@ -40,7 +60,9 @@ CMakeLists.txt.user*
 *.ilk
 *.exp
 
-# CMake generated
+# -----------------------------------------------------------------------------
+# CMake Generated Files
+# -----------------------------------------------------------------------------
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
@@ -48,24 +70,32 @@ Makefile
 *.cmake
 !CMakeLists.txt
 
-# Qt generated
+# -----------------------------------------------------------------------------
+# Qt Auto-Generated Files
+# -----------------------------------------------------------------------------
 moc_*.cpp
 ui_*.h
 qrc_*.cpp
 *.qm
 
-# OS files
+# -----------------------------------------------------------------------------
+# Operating System Files
+# -----------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Logs and temporary files
+# -----------------------------------------------------------------------------
+# Logs & Temporary Files
+# -----------------------------------------------------------------------------
 *.log
 build_log.txt
 *.tmp
 *.temp
 
-# Python
+# -----------------------------------------------------------------------------
+# Python Artifacts
+# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class

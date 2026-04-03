@@ -1,5 +1,14 @@
+/**
+ * @file DrizzleStacking.cpp
+ * @brief Implementation of drizzle integration, mosaic feathering, and
+ *        auxiliary rejection algorithms.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
+
 #include "DrizzleStacking.h"
 #include "Statistics.h"
+
 #include <cmath>
 #include <algorithm>
 #include <numeric>
@@ -8,22 +17,29 @@
 
 namespace Stacking {
 
-// Ramp LUT for feathering
+// ============================================================================
+// MosaicFeathering -- Ramp LUT initialisation
+// ============================================================================
+
 std::vector<float> MosaicFeathering::s_rampLUT;
 
-void MosaicFeathering::initRampLUT() {
+void MosaicFeathering::initRampLUT()
+{
     if (!s_rampLUT.empty()) return;
-    
+
     const int N = 1001;
     s_rampLUT.resize(N);
-    
-    for (int i = 0; i < N; i++) {
+
+    for (int i = 0; i < N; ++i) {
         float r = static_cast<float>(i) / 1000.0f;
+        // Quintic smooth-step: 6r^5 - 15r^4 + 10r^3
         s_rampLUT[i] = r * r * r * (6.0f * r * r - 15.0f * r + 10.0f);
     }
 }
 
-// ============== DrizzleStacking ==============
+// ============================================================================
+// DrizzleStacking -- Weight map computation
+// ============================================================================
 
 DrizzleStacking::DrizzleWeight DrizzleStacking::computeWeightMap(
     const ImageBuffer& input,
@@ -32,84 +48,80 @@ DrizzleStacking::DrizzleWeight DrizzleStacking::computeWeightMap(
     const DrizzleParams& params)
 {
     DrizzleWeight result;
-    result.width = outputWidth;
+    result.width  = outputWidth;
     result.height = outputHeight;
     result.weight.resize(static_cast<size_t>(outputWidth) * outputHeight, 0.0f);
-    
-    double scale = params.scaleFactor;
-    double drop = params.dropSize;
-    
-    int inW = input.width();
-    int inH = input.height();
-    
-    // For each input pixel, compute its contribution to output pixels
+
+    const double scale = params.scaleFactor;
+    const double drop  = params.dropSize;
+    const int inW = input.width();
+    const int inH = input.height();
+
+    // For each input pixel, project its four corners into output space,
+    // optionally shrink the resulting quad, then accumulate overlap area.
     #pragma omp parallel for
-    for (int y = 0; y < inH; y++) {
-        for (int x = 0; x < inW; x++) {
-            // 1. Define input pixel corners
-            double px[] = {static_cast<double>(x), static_cast<double>(x)+1.0, 
-                           static_cast<double>(x)+1.0, static_cast<double>(x)};
-            double py[] = {static_cast<double>(y), static_cast<double>(y), 
-                           static_cast<double>(y)+1.0, static_cast<double>(y)+1.0};
-            
-            // 2. Transform
+    for (int y = 0; y < inH; ++y) {
+        for (int x = 0; x < inW; ++x) {
+
+            // Define the four corners of the input pixel
+            double px[] = { static_cast<double>(x),     static_cast<double>(x) + 1.0,
+                            static_cast<double>(x) + 1.0, static_cast<double>(x) };
+            double py[] = { static_cast<double>(y),     static_cast<double>(y),
+                            static_cast<double>(y) + 1.0, static_cast<double>(y) + 1.0 };
+
+            // Transform corners to output space
             Polygon quad(4);
-            double minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-            
-            for(int i=0; i<4; ++i) {
+            double minX =  1e9, maxX = -1e9;
+            double minY =  1e9, maxY = -1e9;
+
+            for (int i = 0; i < 4; ++i) {
                 QPointF pt = reg.transform(px[i], py[i]);
-                double tx = pt.x();
-                double ty = pt.y();
-                quad[i] = {tx * scale, ty * scale};
+                quad[i] = { pt.x() * scale, pt.y() * scale };
             }
-            
-            // 3. Shrink
+
+            // Shrink the quad towards its centroid to simulate the drop size
             if (drop < 1.0 - 1e-5) {
                 quad = shrinkPolygon(quad, drop);
             }
-            
-            // 4. Bounding Box
-            for(const auto& p : quad) {
+
+            // Compute the bounding box of the transformed quad
+            for (const auto& p : quad) {
                 if (p.x < minX) minX = p.x;
                 if (p.x > maxX) maxX = p.x;
                 if (p.y < minY) minY = p.y;
                 if (p.y > maxY) maxY = p.y;
             }
-            
-            int x0 = static_cast<int>(std::floor(minX));
-            int x1 = static_cast<int>(std::floor(maxX));
-            int y0 = static_cast<int>(std::floor(minY));
-            int y1 = static_cast<int>(std::floor(maxY));
-            
-            // Clamp
-            x0 = std::max(0, x0);
-            x1 = std::min(outputWidth - 1, x1);
-            y0 = std::max(0, y0);
-            y1 = std::min(outputHeight - 1, y1);
-            
-            // 5. Scan Output
-            for (int oy = y0; oy <= y1; oy++) {
-                for (int ox = x0; ox <= x1; ox++) {
+
+            int x0 = std::max(0, static_cast<int>(std::floor(minX)));
+            int x1 = std::min(outputWidth  - 1, static_cast<int>(std::floor(maxX)));
+            int y0 = std::max(0, static_cast<int>(std::floor(minY)));
+            int y1 = std::min(outputHeight - 1, static_cast<int>(std::floor(maxY)));
+
+            // Scan every output pixel that the bounding box touches
+            for (int oy = y0; oy <= y1; ++oy) {
+                for (int ox = x0; ox <= x1; ++ox) {
                     double oxD = static_cast<double>(ox);
                     double oyD = static_cast<double>(oy);
-                    
-                    Polygon clipped = clipPolygon(quad, oxD, oyD, oxD+1.0, oyD+1.0);
+
+                    Polygon clipped = clipPolygon(quad, oxD, oyD, oxD + 1.0, oyD + 1.0);
                     double area = computePolygonArea(clipped);
-                    
+
                     if (area > 1e-6) {
-                        float weight = static_cast<float>(area);
                         size_t idx = static_cast<size_t>(oy) * outputWidth + ox;
-                        
                         #pragma omp atomic
-                        result.weight[idx] += weight;
+                        result.weight[idx] += static_cast<float>(area);
                     }
                 }
             }
         }
     }
-    
+
     return result;
 }
+
+// ============================================================================
+// DrizzleStacking -- Full polygon-clipping drizzle
+// ============================================================================
 
 void DrizzleStacking::drizzleFrame(
     const ImageBuffer& input,
@@ -119,104 +131,86 @@ void DrizzleStacking::drizzleFrame(
     int outputWidth, int outputHeight,
     const DrizzleParams& params)
 {
-    double scale = params.scaleFactor;
-    double drop = params.dropSize;
-    
-    int inW = input.width();
-    int inH = input.height();
-    int channels = input.channels();
-    size_t outPixels = static_cast<size_t>(outputWidth) * outputHeight;
-    
+    const double scale = params.scaleFactor;
+    const double drop  = params.dropSize;
+    const int inW      = input.width();
+    const int inH      = input.height();
+    const int channels = input.channels();
+    const size_t outPixels = static_cast<size_t>(outputWidth) * outputHeight;
+
     #pragma omp parallel for
-    for (int y = 0; y < inH; y++) {
-        for (int x = 0; x < inW; x++) {
-            // 1. Define input pixel corners (integer coords are boundaries)
-            double px[] = {static_cast<double>(x), static_cast<double>(x)+1.0, 
-                           static_cast<double>(x)+1.0, static_cast<double>(x)};
-            double py[] = {static_cast<double>(y), static_cast<double>(y), 
-                           static_cast<double>(y)+1.0, static_cast<double>(y)+1.0};
-            
-            // 2. Transform to output space
+    for (int y = 0; y < inH; ++y) {
+        for (int x = 0; x < inW; ++x) {
+
+            // Define pixel corner coordinates
+            double px[] = { static_cast<double>(x),     static_cast<double>(x) + 1.0,
+                            static_cast<double>(x) + 1.0, static_cast<double>(x) };
+            double py[] = { static_cast<double>(y),     static_cast<double>(y),
+                            static_cast<double>(y) + 1.0, static_cast<double>(y) + 1.0 };
+
+            // Transform to output space
             Polygon quad(4);
-            double minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-            
-            for(int i=0; i<4; ++i) {
-                // Note: reg transform might expect pixel centers or specific convention.
-                // Assuming it handles coordinates linearly.
+            double minX =  1e9, maxX = -1e9;
+            double minY =  1e9, maxY = -1e9;
+
+            for (int i = 0; i < 4; ++i) {
                 QPointF pt = reg.transform(px[i], py[i]);
-                double tx = pt.x();
-                double ty = pt.y();
-                quad[i] = {tx * scale, ty * scale};
+                quad[i] = { pt.x() * scale, pt.y() * scale };
             }
-            
-            // 3. Shrink polygon (simulate drop size)
+
+            // Shrink polygon to simulate the drop size
             if (drop < 1.0 - 1e-5) {
                 quad = shrinkPolygon(quad, drop);
             }
-            
-            // 4. Compute Bounding Box
-            for(const auto& p : quad) {
+
+            // Bounding box of transformed quad
+            for (const auto& p : quad) {
                 if (p.x < minX) minX = p.x;
                 if (p.x > maxX) maxX = p.x;
                 if (p.y < minY) minY = p.y;
                 if (p.y > maxY) maxY = p.y;
             }
-            
-            int x0 = static_cast<int>(std::floor(minX));
-            int x1 = static_cast<int>(std::floor(maxX));
-            int y0 = static_cast<int>(std::floor(minY));
-            int y1 = static_cast<int>(std::floor(maxY));
-            
-            // Clamp to output
-            x0 = std::max(0, x0);
-            x1 = std::min(outputWidth - 1, x1);
-            y0 = std::max(0, y0);
-            y1 = std::min(outputHeight - 1, y1);
-            
-            // 5. Scan Output Pixels
-            for (int oy = y0; oy <= y1; oy++) {
-                for (int ox = x0; ox <= x1; ox++) {
-                    // Clip quad against output pixel square
+
+            int x0 = std::max(0, static_cast<int>(std::floor(minX)));
+            int x1 = std::min(outputWidth  - 1, static_cast<int>(std::floor(maxX)));
+            int y0 = std::max(0, static_cast<int>(std::floor(minY)));
+            int y1 = std::min(outputHeight - 1, static_cast<int>(std::floor(maxY)));
+
+            // Scatter flux into every overlapping output pixel
+            for (int oy = y0; oy <= y1; ++oy) {
+                for (int ox = x0; ox <= x1; ++ox) {
                     double oxD = static_cast<double>(ox);
                     double oyD = static_cast<double>(oy);
-                    
-                    Polygon clipped = clipPolygon(quad, oxD, oyD, oxD+1.0, oyD+1.0);
+
+                    Polygon clipped = clipPolygon(quad, oxD, oyD, oxD + 1.0, oyD + 1.0);
                     double area = computePolygonArea(clipped);
-                    
+
                     if (area > 1e-6) {
                         float weight = static_cast<float>(area);
-                        
-                        // Apply Kernel Modulation if not Point
+
+                        // Modulate weight with the convolution kernel (if not Point)
                         if (m_currentKernel != DrizzleKernelType::Point) {
-                            // Drizzle kernel is centered on the transformed input pixel center.
-                            // Compute transformed center for this input pixel (x,y).
-                            // Transform the pixel center (x+0.5, y+0.5) to output space.
-                            
                             double cxIn = static_cast<double>(x) + 0.5;
                             double cyIn = static_cast<double>(y) + 0.5;
                             QPointF centerOut = reg.transform(cxIn, cyIn);
                             double tx = centerOut.x() * scale;
                             double ty = centerOut.y() * scale;
-                            
-                            double centerX = static_cast<double>(ox) + 0.5;
-                            double centerY = static_cast<double>(oy) + 0.5;
-                            double dx = centerX - tx; 
-                            double dy = centerY - ty;
-                            
+
+                            double dx = (static_cast<double>(ox) + 0.5) - tx;
+                            double dy = (static_cast<double>(oy) + 0.5) - ty;
                             weight *= getKernelWeight(dx, dy);
                         }
-                        
-                         size_t idx = static_cast<size_t>(oy) * outputWidth + ox;
-                         
-                         for (int c = 0; c < channels; c++) {
+
+                        size_t idx = static_cast<size_t>(oy) * outputWidth + ox;
+
+                        for (int c = 0; c < channels; ++c) {
                             double val = static_cast<double>(input.value(x, y, c)) * weight;
-                            
                             #pragma omp atomic
                             accum[c * outPixels + idx] += val;
-                         }
-                         
-                         #pragma omp atomic
-                         weightAccum[idx] += weight;
+                        }
+
+                        #pragma omp atomic
+                        weightAccum[idx] += weight;
                     }
                 }
             }
@@ -224,43 +218,50 @@ void DrizzleStacking::drizzleFrame(
     }
 }
 
-void DrizzleStacking::fastDrizzleFrame(const ImageBuffer& input,
-                                      const RegistrationData& reg,
-                                      std::vector<double>& accum,
-                                      std::vector<double>& weightAccum,
-                                      int outputWidth, int outputHeight,
-                                      const DrizzleParams& params) {
-    int w = input.width();
-    int h = input.height();
-    int channels = input.channels();
-    double scale = params.scaleFactor;
-    size_t outPixels = static_cast<size_t>(outputWidth) * outputHeight;
+// ============================================================================
+// DrizzleStacking -- Fast 1x point-kernel drizzle
+// ============================================================================
+
+void DrizzleStacking::fastDrizzleFrame(
+    const ImageBuffer& input,
+    const RegistrationData& reg,
+    std::vector<double>& accum,
+    std::vector<double>& weightAccum,
+    int outputWidth, int outputHeight,
+    const DrizzleParams& params)
+{
+    const int w        = input.width();
+    const int h        = input.height();
+    const int channels = input.channels();
+    const double scale = params.scaleFactor;
+    const size_t outPixels = static_cast<size_t>(outputWidth) * outputHeight;
 
     #pragma omp parallel for collapse(2)
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            // Find transformed center of input pixel
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+
+            // Transform the centre of the input pixel
             double cxIn = static_cast<double>(x) + 0.5;
             double cyIn = static_cast<double>(y) + 0.5;
-            
+
             QPointF centerOut = reg.transform(cxIn, cyIn);
             double tx = centerOut.x() * scale;
             double ty = centerOut.y() * scale;
-            
-            // Nearest neighbor output pixel
+
+            // Nearest-neighbour output pixel
             int ox = static_cast<int>(std::floor(tx));
             int oy = static_cast<int>(std::floor(ty));
-            
+
             if (ox >= 0 && ox < outputWidth && oy >= 0 && oy < outputHeight) {
                 size_t idx = static_cast<size_t>(oy) * outputWidth + ox;
-                double weight = 1.0; // Point kernel unit weight
-                
-                for (int c = 0; c < channels; c++) {
+                const double weight = 1.0;
+
+                for (int c = 0; c < channels; ++c) {
                     double val = static_cast<double>(input.value(x, y, c)) * weight;
                     #pragma omp atomic
                     accum[c * outPixels + idx] += val;
                 }
-                
+
                 #pragma omp atomic
                 weightAccum[idx] += weight;
             }
@@ -268,33 +269,39 @@ void DrizzleStacking::fastDrizzleFrame(const ImageBuffer& input,
     }
 }
 
-// Helper Implementations
+// ============================================================================
+// DrizzleStacking -- Polygon geometry helpers
+// ============================================================================
 
-double DrizzleStacking::computePolygonArea(const Polygon& p) {
+double DrizzleStacking::computePolygonArea(const Polygon& p)
+{
     double area = 0.0;
     size_t j = p.size() - 1;
-    for (size_t i = 0; i < p.size(); i++) {
+    for (size_t i = 0; i < p.size(); ++i) {
         area += (p[j].x + p[i].x) * (p[j].y - p[i].y);
         j = i;
     }
     return std::abs(area) * 0.5;
 }
 
-DrizzleStacking::Polygon DrizzleStacking::shrinkPolygon(const Polygon& p, double factor) {
+DrizzleStacking::Polygon DrizzleStacking::shrinkPolygon(const Polygon& p,
+                                                         double factor)
+{
     if (p.empty()) return p;
-    
-    // Compute Centroid
-    double cx = 0, cy = 0;
-    for(const auto& pt : p) {
+
+    // Compute the centroid
+    double cx = 0.0, cy = 0.0;
+    for (const auto& pt : p) {
         cx += pt.x;
         cy += pt.y;
     }
-    cx /= p.size();
-    cy /= p.size();
-    
+    cx /= static_cast<double>(p.size());
+    cy /= static_cast<double>(p.size());
+
+    // Scale each vertex towards the centroid
     Polygon out;
     out.reserve(p.size());
-    for(const auto& pt : p) {
+    for (const auto& pt : p) {
         out.push_back({
             cx + (pt.x - cx) * factor,
             cy + (pt.y - cy) * factor
@@ -303,92 +310,87 @@ DrizzleStacking::Polygon DrizzleStacking::shrinkPolygon(const Polygon& p, double
     return out;
 }
 
-DrizzleStacking::Polygon DrizzleStacking::clipPolygon(const Polygon& subject, 
-                                                      double xMin, double yMin, 
-                                                      double xMax, double yMax) {
+DrizzleStacking::Polygon DrizzleStacking::clipPolygon(
+    const Polygon& subject,
+    double xMin, double yMin,
+    double xMax, double yMax)
+{
     if (subject.empty()) return subject;
-    
+
     Polygon output = subject;
-    
-    // Clip against 4 edges
-    
+
+    // Sutherland-Hodgman clipping against each of the four edges
     auto clipEdge = [&](double cEdge, bool isVertical, bool isMax) {
         Polygon input = output;
         output.clear();
-        
         if (input.empty()) return;
-        
+
         Point S = input.back();
-        
+
         for (const auto& E : input) {
-            // Check if points are inside
             bool E_in, S_in;
-            
-            if (isVertical) { // Clipping against X
+
+            if (isVertical) {
                 if (isMax) { E_in = E.x <= cEdge; S_in = S.x <= cEdge; }
                 else       { E_in = E.x >= cEdge; S_in = S.x >= cEdge; }
-            } else { // Clipping against Y
+            } else {
                 if (isMax) { E_in = E.y <= cEdge; S_in = S.y <= cEdge; }
                 else       { E_in = E.y >= cEdge; S_in = S.y >= cEdge; }
             }
-            
+
             if (E_in) {
                 if (!S_in) {
-                    // Compute intersection
                     double t;
                     if (isVertical) t = (cEdge - S.x) / (E.x - S.x);
                     else            t = (cEdge - S.y) / (E.y - S.y);
-                    
-                    output.push_back({S.x + t * (E.x - S.x), S.y + t * (E.y - S.y)});
+                    output.push_back({ S.x + t * (E.x - S.x),
+                                       S.y + t * (E.y - S.y) });
                 }
                 output.push_back(E);
             } else if (S_in) {
                 double t;
                 if (isVertical) t = (cEdge - S.x) / (E.x - S.x);
                 else            t = (cEdge - S.y) / (E.y - S.y);
-                
-                output.push_back({S.x + t * (E.x - S.x), S.y + t * (E.y - S.y)});
+                output.push_back({ S.x + t * (E.x - S.x),
+                                   S.y + t * (E.y - S.y) });
             }
             S = E;
         }
     };
-    
-    // Left (xMin)
-    clipEdge(xMin, true, false);
-    // Right (xMax)
-    clipEdge(xMax, true, true);
-    // Top (yMin)
-    clipEdge(yMin, false, false);
-    // Bottom (yMax)
-    clipEdge(yMax, false, true);
-    
+
+    clipEdge(xMin, true,  false);   // Left
+    clipEdge(xMax, true,  true);    // Right
+    clipEdge(yMin, false, false);   // Top
+    clipEdge(yMax, false, true);    // Bottom
+
     return output;
 }
+
+// ============================================================================
+// DrizzleStacking -- Stack finalisation
+// ============================================================================
 
 void DrizzleStacking::finalizeStack(
     const std::vector<double>& accum,
     const std::vector<double>& weightAccum,
     ImageBuffer& output)
 {
-    int width = output.width();
-    int height = output.height();
-    int channels = output.channels();
-    size_t pixelCount = static_cast<size_t>(width) * height;
-    
+    const int width      = output.width();
+    const int height     = output.height();
+    const int channels   = output.channels();
+    const size_t pixelCount = static_cast<size_t>(width) * height;
     float* data = output.data().data();
-    
+
     #pragma omp parallel for
-    for (int c = 0; c < channels; c++) {
-        for (size_t i = 0; i < pixelCount; i++) {
+    for (int c = 0; c < channels; ++c) {
+        for (size_t i = 0; i < pixelCount; ++i) {
             double w = weightAccum[i];
-            
-            // Interleaved Output Index
-            // i is pixel index (0..W*H-1)
-            // outIdx = i * channels + c
+
+            // Output is stored in interleaved layout: pixel_i * channels + c
             size_t outIdx = i * channels + c;
-            
-            if (w > 0) {
-                // accum uses Planar layout: [Channel0][Channel1][Channel2]
+
+            if (w > 0.0) {
+                // Accumulators use planar layout: [ch0 | ch1 | ch2]
                 double val = accum[c * pixelCount + i] / w;
                 data[outIdx] = static_cast<float>(val);
             } else {
@@ -398,129 +400,137 @@ void DrizzleStacking::finalizeStack(
     }
 }
 
-ImageBuffer DrizzleStacking::upscale2x(const ImageBuffer& input) {
-    int inW = input.width();
-    int inH = input.height();
-    int channels = input.channels();
-    
+// ============================================================================
+// DrizzleStacking -- 2x nearest-neighbour upscale
+// ============================================================================
+
+ImageBuffer DrizzleStacking::upscale2x(const ImageBuffer& input)
+{
+    const int inW      = input.width();
+    const int inH      = input.height();
+    const int channels = input.channels();
+
     ImageBuffer output(inW * 2, inH * 2, channels);
-    
-    // float* outData = output.data().data(); // Not used directly to avoid confusion
-    
+
     #pragma omp parallel for
-    for (int y = 0; y < inH; y++) {
-        for (int x = 0; x < inW; x++) {
-            for (int c = 0; c < channels; c++) {
-                float val = input.value(x, y, c);
-                // Map to 2x2 block
-                // (2x, 2y), (2x+1, 2y), (2x, 2y+1), (2x+1, 2y+1)
-                
-                int outY = y * 2;
-                int outX = x * 2;
-                int outW = inW * 2;
-                
-                // Interleaved Indexing
-                // Idx = (y * W + x) * ch + c
-                
+    for (int y = 0; y < inH; ++y) {
+        for (int x = 0; x < inW; ++x) {
+            for (int c = 0; c < channels; ++c) {
+                float val  = input.value(x, y, c);
+                int   outY = y * 2;
+                int   outX = x * 2;
+                int   outW = inW * 2;
+
                 auto setPixel = [&](int ox, int oy) {
                     output.data()[(oy * outW + ox) * channels + c] = val;
                 };
-                
-                setPixel(outX, outY);
+
+                setPixel(outX,     outY);
                 setPixel(outX + 1, outY);
-                setPixel(outX, outY + 1);
+                setPixel(outX,     outY + 1);
                 setPixel(outX + 1, outY + 1);
             }
         }
     }
-    
+
     return output;
 }
 
-RegistrationData DrizzleStacking::scaleRegistration(const RegistrationData& reg, double factor) {
+// ============================================================================
+// DrizzleStacking -- Registration scaling
+// ============================================================================
+
+RegistrationData DrizzleStacking::scaleRegistration(
+    const RegistrationData& reg, double factor)
+{
     RegistrationData scaled = reg;
     scaled.H[0][2] *= factor;
     scaled.H[1][2] *= factor;
     return scaled;
 }
 
-// ============== MosaicFeathering ==============
+// ============================================================================
+// MosaicFeathering -- Feather mask computation
+// ============================================================================
 
 std::vector<float> MosaicFeathering::computeFeatherMask(
     const ImageBuffer& input,
     const FeatherParams& params)
 {
     initRampLUT();
-    
-    int width = input.width();
-    int height = input.height();
-    size_t pixelCount = static_cast<size_t>(width) * height;
-    
-    // Create binary mask from non-zero pixels
+
+    const int width  = input.width();
+    const int height = input.height();
+    const size_t pixelCount = static_cast<size_t>(width) * height;
+
+    // Build a binary mask: 255 where there is content, 0 where void
     std::vector<uint8_t> binary(pixelCount);
-    
+
     #pragma omp parallel for
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            float val = input.value(x, y, 0);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float val  = input.value(x, y, 0);
             size_t idx = static_cast<size_t>(y) * width + x;
             binary[idx] = (val > 0.0f) ? 255 : 0;
         }
     }
-    
-    // Compute downscaled distance mask
-    int outW = static_cast<int>(width * params.maskScale);
+
+    // Compute the distance transform at reduced resolution
+    int outW = static_cast<int>(width  * params.maskScale);
     int outH = static_cast<int>(height * params.maskScale);
     if (outW < 1) outW = 1;
     if (outH < 1) outH = 1;
-    
+
     std::vector<float> smallMask;
     computeDistanceMask(binary, width, height, outW, outH, smallMask);
-    
-    // Upscale back to full size
+
+    // Bilinearly upscale the small mask back to full resolution
     std::vector<float> mask(pixelCount);
-    
+
     double scaleX = static_cast<double>(outW) / width;
     double scaleY = static_cast<double>(outH) / height;
-    
+
     #pragma omp parallel for
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            // Bilinear interpolation from small mask
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+
             double sx = x * scaleX - 0.5;
             double sy = y * scaleY - 0.5;
-            
+
             int x0 = static_cast<int>(std::floor(sx));
             int y0 = static_cast<int>(std::floor(sy));
             int x1 = x0 + 1;
             int y1 = y0 + 1;
-            
+
             x0 = std::clamp(x0, 0, outW - 1);
             x1 = std::clamp(x1, 0, outW - 1);
             y0 = std::clamp(y0, 0, outH - 1);
             y1 = std::clamp(y1, 0, outH - 1);
-            
+
             double fx = sx - std::floor(sx);
             double fy = sy - std::floor(sy);
-            
+
             float v00 = smallMask[y0 * outW + x0];
             float v10 = smallMask[y0 * outW + x1];
             float v01 = smallMask[y1 * outW + x0];
             float v11 = smallMask[y1 * outW + x1];
-            
+
             float val = static_cast<float>(
                 v00 * (1 - fx) * (1 - fy) +
-                v10 * fx * (1 - fy) +
+                v10 * fx       * (1 - fy) +
                 v01 * (1 - fx) * fy +
-                v11 * fx * fy
-            );
-            
+                v11 * fx       * fy);
+
             mask[y * width + x] = params.smoothRamp ? smoothRamp(val) : val;
         }
     }
-    
+
     return mask;
 }
+
+// ============================================================================
+// MosaicFeathering -- Distance mask via OpenCV
+// ============================================================================
 
 void MosaicFeathering::computeDistanceMask(
     const std::vector<uint8_t>& binary,
@@ -528,66 +538,53 @@ void MosaicFeathering::computeDistanceMask(
     int outWidth, int outHeight,
     std::vector<float>& output)
 {
-    // Use OpenCV's efficient O(N) Distance Transform
-    // Map existing binary data to cv::Mat
-    // binary: 255 = content, 0 = void.
-    // distanceTransform calculates distance to nearest ZERO pixel.
-    
+    // OpenCV distance transform: computes the Euclidean distance from each
+    // non-zero pixel to the nearest zero pixel.
     cv::Mat binMat(height, width, CV_8UC1, (void*)binary.data());
     cv::Mat distMat;
-    
-    // DIST_L2 = Euclidean distance
-    // DIST_MASK_5 = 5x5 mask for precise distance
     cv::distanceTransform(binMat, distMat, cv::DIST_L2, cv::DIST_MASK_5);
-    
-    // Resize to output size
+
+    // Resize to the target resolution
     cv::Mat smallDist;
-    cv::resize(distMat, smallDist, cv::Size(outWidth, outHeight), 0, 0, cv::INTER_AREA);
-    
-    // Normalize and copy to float vector
-    // Existing logic normalized such that 50px = 1.0
-    // We should maintain this "ramp width" logic.
-    // The previous implementation used a fixed 50-pixel ramp in the original scale.
-    // "float normalizedDist = static_cast<float>(minDist) / 50.0f;"
-    // Yes.
-    
+    cv::resize(distMat, smallDist, cv::Size(outWidth, outHeight),
+               0, 0, cv::INTER_AREA);
+
+    // Normalise distances so that 50 pixels of clearance maps to 1.0
     output.resize(static_cast<size_t>(outWidth) * outHeight);
-    float* outIdx = output.data();
-    
-    // Distance map is resized. After interpolation, values remain in original units (0..MaxDist).
-    // The threshold of 50.0f applies to the resized distance map.
-    
-    float* sPtr = (float*)smallDist.data;
-    size_t count = static_cast<size_t>(outWidth) * outHeight;
-    
+    float* outPtr   = output.data();
+    float* srcPtr   = reinterpret_cast<float*>(smallDist.data);
+    size_t count    = static_cast<size_t>(outWidth) * outHeight;
+
     #pragma omp parallel for
     for (size_t i = 0; i < count; ++i) {
-        float d = sPtr[i];
-        outIdx[i] = std::min(1.0f, d / 50.0f);
+        outPtr[i] = std::min(1.0f, srcPtr[i] / 50.0f);
     }
 }
+
+// ============================================================================
+// MosaicFeathering -- Two-image blend
+// ============================================================================
 
 void MosaicFeathering::blendImages(
     const ImageBuffer& imgA, const std::vector<float>& maskA,
     const ImageBuffer& imgB, const std::vector<float>& maskB,
     ImageBuffer& output)
 {
-    int width = imgA.width();
-    int height = imgA.height();
-    int channels = imgA.channels();
-    
+    const int width      = imgA.width();
+    const int height     = imgA.height();
+    const int channels   = imgA.channels();
+    const size_t pixelCount = static_cast<size_t>(width) * height;
+
     output = ImageBuffer(width, height, channels);
-    
-    size_t pixelCount = static_cast<size_t>(width) * height;
-    
+
     #pragma omp parallel for
-    for (int c = 0; c < channels; c++) {
-        for (size_t i = 0; i < pixelCount; i++) {
-            float wA = maskA[i];
-            float wB = maskB[i];
+    for (int c = 0; c < channels; ++c) {
+        for (size_t i = 0; i < pixelCount; ++i) {
+            float wA   = maskA[i];
+            float wB   = maskB[i];
             float wSum = wA + wB;
-            
-            if (wSum > 0) {
+
+            if (wSum > 0.0f) {
                 float valA = imgA.data()[c * pixelCount + i];
                 float valB = imgB.data()[c * pixelCount + i];
                 output.data()[c * pixelCount + i] = (valA * wA + valB * wB) / wSum;
@@ -598,43 +595,43 @@ void MosaicFeathering::blendImages(
     }
 }
 
-// ============== LinearFitRejection ==============
+// ============================================================================
+// LinearFitRejection
+// ============================================================================
 
 int LinearFitRejection::reject(
     float* stack, int N, float sigLow, float sigHigh,
     int* rejected, int& lowReject, int& highReject)
 {
     if (N < 4) return N;
-    
+
     int remaining = N;
     bool changed;
-    
-    // Prepare x values (indices)
     std::vector<float> x(N), y(N);
-    
+
     do {
         changed = false;
-        
-        // Sort and prepare data
+
+        // Sort and assign index values for the linear fit
         std::sort(stack, stack + remaining);
-        for (int i = 0; i < remaining; i++) {
+        for (int i = 0; i < remaining; ++i) {
             x[i] = static_cast<float>(i);
             y[i] = stack[i];
         }
-        
-        // Fit line
+
+        // Fit a line through the sorted values
         float intercept, slope;
         fitLine(x.data(), y.data(), remaining, intercept, slope);
-        
-        // Compute sigma (mean absolute deviation from line)
+
+        // Compute mean absolute deviation from the fitted line
         float sigma = 0.0f;
-        for (int i = 0; i < remaining; i++) {
+        for (int i = 0; i < remaining; ++i) {
             sigma += std::abs(stack[i] - (slope * i + intercept));
         }
         sigma /= remaining;
-        
-        // Check for rejections
-        for (int i = 0; i < remaining; i++) {
+
+        // Flag outliers that deviate beyond the sigma thresholds
+        for (int i = 0; i < remaining; ++i) {
             if (remaining <= 4) {
                 rejected[i] = 0;
             } else {
@@ -650,68 +647,71 @@ int LinearFitRejection::reject(
                 }
             }
         }
-        
-        // Compact array
+
+        // Compact the array by removing rejected pixels
         int output = 0;
-        for (int i = 0; i < remaining; i++) {
+        for (int i = 0; i < remaining; ++i) {
             if (rejected[i] == 0) {
                 if (i != output) stack[output] = stack[i];
                 output++;
             }
         }
-        
-        changed = (output != remaining);
+
+        changed   = (output != remaining);
         remaining = output;
-        
+
     } while (changed && remaining > 3);
-    
+
     return remaining;
 }
 
 void LinearFitRejection::fitLine(const float* x, const float* y, int N,
                                   float& intercept, float& slope)
 {
-    // Simple linear regression
-    float sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    
-    for (int i = 0; i < N; i++) {
-        sumX += x[i];
-        sumY += y[i];
+    // Ordinary least-squares linear regression
+    float sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f, sumX2 = 0.0f;
+
+    for (int i = 0; i < N; ++i) {
+        sumX  += x[i];
+        sumY  += y[i];
         sumXY += x[i] * y[i];
         sumX2 += x[i] * x[i];
     }
-    
+
     float denom = N * sumX2 - sumX * sumX;
     if (std::abs(denom) < 1e-10f) {
-        slope = 0;
+        slope     = 0.0f;
         intercept = sumY / N;
     } else {
-        slope = (N * sumXY - sumX * sumY) / denom;
+        slope     = (N * sumXY - sumX * sumY) / denom;
         intercept = (sumY - slope * sumX) / N;
     }
 }
 
-// ============== GESDTRejection ==============
+// ============================================================================
+// GESDTRejection
+// ============================================================================
 
-float GESDTRejection::grubbsStat(const float* data, int N, int& maxIndex) {
-    // Compute mean and std
-    float sum = 0;
-    for (int i = 0; i < N; i++) sum += data[i];
+float GESDTRejection::grubbsStat(const float* data, int N, int& maxIndex)
+{
+    // Compute sample mean and standard deviation
+    float sum = 0.0f;
+    for (int i = 0; i < N; ++i) sum += data[i];
     float mean = sum / N;
-    
-    float sumSq = 0;
-    for (int i = 0; i < N; i++) sumSq += (data[i] - mean) * (data[i] - mean);
+
+    float sumSq = 0.0f;
+    for (int i = 0; i < N; ++i) sumSq += (data[i] - mean) * (data[i] - mean);
     float sd = std::sqrt(sumSq / (N - 1));
-    
+
     if (sd < 1e-10f) {
         maxIndex = 0;
         return 0.0f;
     }
-    
-    // Data should be sorted; check ends for max deviation
-    float devLow = mean - data[0];
+
+    // Data is sorted; check only the extremes for maximum deviation
+    float devLow  = mean - data[0];
     float devHigh = data[N - 1] - mean;
-    
+
     if (devHigh > devLow) {
         maxIndex = N - 1;
         return devHigh / sd;
@@ -727,60 +727,57 @@ int GESDTRejection::reject(
     int* rejected, int& lowReject, int& highReject)
 {
     if (N < 4) return N;
-    
-    // Sort data
+
     std::sort(stack, stack + N);
-    
-    // Compute median for classifying rejections
     float median = stack[N / 2];
-    
-    // Working copy
+
+    // Working copy for iterative removal
     std::vector<float> work(stack, stack + N);
-    std::vector<GESDTRejection::ESDOutlier> outliers(maxOutliers);
-    
+    std::vector<ESDOutlier> outliers(maxOutliers);
+
     int coldCount = 0;
-    for (int iter = 0; iter < maxOutliers; iter++) {
+    for (int iter = 0; iter < maxOutliers; ++iter) {
         int size = N - iter;
         if (size < 4) break;
-        
+
         int maxIndex;
         float gStat = grubbsStat(work.data(), size, maxIndex);
-        
-        outliers[iter].isOutlier = (gStat > criticalValues[iter]);
-        outliers[iter].value = work[maxIndex];
+
+        outliers[iter].isOutlier    = (gStat > criticalValues[iter]);
+        outliers[iter].value        = work[maxIndex];
         outliers[iter].originalIndex = (maxIndex == 0) ? coldCount++ : maxIndex;
-        
-        // Remove element
-        for (int i = maxIndex; i < size - 1; i++) {
+
+        // Remove the flagged element from the working array
+        for (int i = maxIndex; i < size - 1; ++i) {
             work[i] = work[i + 1];
         }
     }
-    
-    // Mark rejections
+
+    // Propagate outlier flags back to the sorted stack
     std::fill(rejected, rejected + N, 0);
-    for (int i = 0; i < maxOutliers; i++) {
+    for (int i = 0; i < maxOutliers; ++i) {
         if (outliers[i].isOutlier) {
-            // Find original index in sorted stack
-            for (int j = 0; j < N; j++) {
-                if (std::abs(stack[j] - outliers[i].value) < 1e-10f && rejected[j] == 0) {
+            for (int j = 0; j < N; ++j) {
+                if (std::abs(stack[j] - outliers[i].value) < 1e-10f &&
+                    rejected[j] == 0) {
                     rejected[j] = (outliers[i].value < median) ? -1 : 1;
                     if (rejected[j] < 0) lowReject++;
-                    else highReject++;
+                    else                 highReject++;
                     break;
                 }
             }
         }
     }
-    
+
     // Compact
     int output = 0;
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < N; ++i) {
         if (rejected[i] == 0) {
             if (i != output) stack[output] = stack[i];
             output++;
         }
     }
-    
+
     return output;
 }
 
@@ -789,139 +786,136 @@ void GESDTRejection::computeCriticalValues(
     std::vector<float>& output)
 {
     output.resize(maxOutliers);
-    
-    for (int i = 0; i < maxOutliers; i++) {
+
+    for (int i = 0; i < maxOutliers; ++i) {
         int n = N - i;
         if (n < 4) {
-            output[i] = 1e10f; // No rejection possible
+            output[i] = 1e10f;   // Effectively disable rejection
             continue;
         }
-        
-        // t critical value (approximation using normal for large N)
+
+        // Approximate the t critical value using the normal distribution
         double p = 1.0 - alpha / (2.0 * n);
-        
-        // Approximate t_{p,n-2} using normal approximation
-        // For proper implementation, use boost::math or GSL
-        double tCrit = 1.645; // Default for ~0.95
-        if (p > 0.99) tCrit = 2.576;
+
+        double tCrit = 1.645;                  // Default ~0.95
+        if      (p > 0.99)  tCrit = 2.576;
         else if (p > 0.975) tCrit = 1.96;
-        
-        // Grubbs critical value
-        double gCrit = ((n - 1) / std::sqrt(static_cast<double>(n))) * 
-                       std::sqrt(tCrit * tCrit / (n - 2 + tCrit * tCrit));
-        
+
+        // Grubbs critical value formula
+        double gCrit = ((n - 1) / std::sqrt(static_cast<double>(n))) *
+                        std::sqrt(tCrit * tCrit / (n - 2 + tCrit * tCrit));
+
         output[i] = static_cast<float>(gCrit);
     }
 }
 
-// ============== Drizzle Kernel LUT ==============
+// ============================================================================
+// DrizzleStacking -- Kernel LUT
+// ============================================================================
 
-void DrizzleStacking::initKernel(DrizzleKernelType type, double param) {
+void DrizzleStacking::initKernel(DrizzleKernelType type, double param)
+{
     m_currentKernel = type;
     if (type == DrizzleKernelType::Point) return;
-    
+
     m_kernelLUT.resize(LUT_SIZE + 1);
-    
-    // Define max radius for LUT
+
+    // Determine the maximum radius covered by the LUT
     double maxRadius = 2.0;
-    if (type == DrizzleKernelType::Lanczos) maxRadius = (param > 0) ? param : 3.0; // param is 'a'
-    else if (type == DrizzleKernelType::Gaussian) maxRadius = 3.0; // 3-sigma radius
-    
+    if (type == DrizzleKernelType::Lanczos)
+        maxRadius = (param > 0.0) ? param : 3.0;
+    else if (type == DrizzleKernelType::Gaussian)
+        maxRadius = 3.0;   // 3-sigma cutoff
+
     m_lutScale = static_cast<float>(LUT_SIZE) / static_cast<float>(maxRadius);
-    
+
     for (int i = 0; i <= LUT_SIZE; ++i) {
-        double x = static_cast<double>(i) / m_lutScale;
+        double x   = static_cast<double>(i) / m_lutScale;
         double val = 0.0;
-        
-           if (type == DrizzleKernelType::Gaussian) {
-               // param = sigma. Default to 1.0.
-               double sigma = (param > 0) ? param : 1.0;
-             // Gaussian: exp(-x^2 / (2*sigma^2))
-             // Normalize peak to 1.0 (weight normalization happens via weightAccum)
-             val = std::exp(-(x*x) / (2.0 * sigma * sigma));
+
+        if (type == DrizzleKernelType::Gaussian) {
+            double sigma = (param > 0.0) ? param : 1.0;
+            val = std::exp(-(x * x) / (2.0 * sigma * sigma));
+
         } else if (type == DrizzleKernelType::Lanczos) {
-            // Lanczos-a
-            double a = (param > 0) ? param : 3.0;
-            if (x < 1e-9) val = 1.0;
-            else if (x >= a) val = 0.0;
+            double a = (param > 0.0) ? param : 3.0;
+            if (x < 1e-9)       val = 1.0;
+            else if (x >= a)    val = 0.0;
             else {
-                double pi_x = 3.14159265359 * x;
+                double pi_x = 3.14159265358979323846 * x;
                 val = (a * std::sin(pi_x) * std::sin(pi_x / a)) / (pi_x * pi_x);
             }
         }
-        
+
         m_kernelLUT[i] = static_cast<float>(val);
     }
 }
 
-float DrizzleStacking::getKernelWeight(double dx, double dy) const {
+float DrizzleStacking::getKernelWeight(double dx, double dy) const
+{
     if (m_currentKernel == DrizzleKernelType::Point) return 1.0f;
-    
-    // Separable kernel: W(x,y) = K(x) * K(y)
-    // Works for Gaussian and Lanczos
-    
+
+    // Separable kernel: W(x,y) = K(|x|) * K(|y|)
     auto lookup = [&](double d) -> float {
         d = std::abs(d);
         float idx = static_cast<float>(d) * m_lutScale;
-        int i = static_cast<int>(idx);
-        
+        int   i   = static_cast<int>(idx);
+
         if (i >= LUT_SIZE) return 0.0f;
-        
-        // Linear interpolation
+
+        // Linear interpolation between adjacent LUT entries
         float t = idx - i;
-        return m_kernelLUT[i] * (1.0f - t) + m_kernelLUT[i+1] * t;
+        return m_kernelLUT[i] * (1.0f - t) + m_kernelLUT[i + 1] * t;
     };
-    
+
     return lookup(dx) * lookup(dy);
 }
 
-// ============== Stateful API Implementation ==============
+// ============================================================================
+// DrizzleStacking -- Stateful API
+// ============================================================================
 
-void DrizzleStacking::initialize(int inputWidth, int inputHeight, int channels, const DrizzleParams& params) {
-    m_params = params;
+void DrizzleStacking::initialize(int inputWidth, int inputHeight, int channels,
+                                  const DrizzleParams& params)
+{
+    m_params   = params;
     m_channels = channels;
-    
-    // Compute output dimensions
-    m_outWidth = static_cast<int>(inputWidth * params.scaleFactor);
+
+    // Compute output dimensions from the scale factor
+    m_outWidth  = static_cast<int>(inputWidth  * params.scaleFactor);
     m_outHeight = static_cast<int>(inputHeight * params.scaleFactor);
-    
+
     size_t outPixels = static_cast<size_t>(m_outWidth) * m_outHeight;
-    
-    // Allocate allocators (zero initialized)
+
+    // Zero-initialise the accumulators
     m_accum.assign(outPixels * channels, 0.0);
     m_weightAccum.assign(outPixels, 0.0);
-    
-    // Init kernel if needed
+
+    // Build kernel LUT if a non-point kernel is requested
     initKernel(static_cast<DrizzleKernelType>(params.kernelType));
 }
 
 void DrizzleStacking::addImage(
-    const ImageBuffer& img, 
-    const RegistrationData& reg, 
-    const std::vector<float>& /*weights*/, 
+    const ImageBuffer& img,
+    const RegistrationData& reg,
+    const std::vector<float>& /*weights*/,
     const float* /*rejectionMap*/)
 {
-    if (m_accum.empty()) return; // Not initialized
-    
-    // For now we ignore external weights/rejection in this basic pass
-    // or we implement a modified drizzleFrame that accepts them.
-    // The static drizzleFrame does not take rejectionMap yet.
-    // We'll call the static method for now.
-    
-    // reg may need scaling if it is not handled inside drizzleFrame.
-    // drizzleFrame takes params.scaleFactor and applies it.
-    // So reg should be the original registration (Image -> Reference).
-    
+    if (m_accum.empty()) return;   // Not initialised
+
     if (m_params.fastMode) {
-        fastDrizzleFrame(img, reg, m_accum, m_weightAccum, m_outWidth, m_outHeight, m_params);
+        fastDrizzleFrame(img, reg, m_accum, m_weightAccum,
+                         m_outWidth, m_outHeight, m_params);
     } else {
-        drizzleFrame(img, reg, m_accum, m_weightAccum, m_outWidth, m_outHeight, m_params);
+        drizzleFrame(img, reg, m_accum, m_weightAccum,
+                     m_outWidth, m_outHeight, m_params);
     }
 }
 
-bool DrizzleStacking::resolve(ImageBuffer& output) {
+bool DrizzleStacking::resolve(ImageBuffer& output)
+{
     if (m_accum.empty()) return false;
-    
+
     output = ImageBuffer(m_outWidth, m_outHeight, m_channels);
     finalizeStack(m_accum, m_weightAccum, output);
     return true;

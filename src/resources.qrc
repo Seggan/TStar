@@ -1,4 +1,5 @@
 <!DOCTYPE RCC>
+<!-- Qt Resource Collection: Embedded application resources -->
 <RCC version="1.0">
     <qresource prefix="/">
         <file>images/Logo.png</file>

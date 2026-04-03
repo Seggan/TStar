@@ -1,31 +1,44 @@
 #ifndef GRAXPERTDIALOG_H
 #define GRAXPERTDIALOG_H
 
-#include <QDialog>
-#include <QRadioButton>
-#include <QDoubleSpinBox>
-#include <QComboBox>
-#include <QCheckBox>
+#include "DialogBase.h"
 #include "algos/GraXpertRunner.h"
 
-#include "DialogBase.h"
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDialog>
+#include <QDoubleSpinBox>
+#include <QRadioButton>
 
+/**
+ * @brief Configuration dialog for GraXpert background extraction / denoising.
+ *
+ * Lets the user choose between background extraction and AI denoising,
+ * set smoothing/strength, select an AI model version, and toggle GPU
+ * acceleration.  Returns a GraXpertParams struct via getParams().
+ */
 class GraXpertDialog : public DialogBase {
     Q_OBJECT
+
 public:
     explicit GraXpertDialog(QWidget* parent = nullptr);
+
+    /** @brief Collect the current UI state into a GraXpertParams struct. */
     GraXpertParams getParams() const;
 
 private slots:
+    /** @brief Update control visibility based on the selected operation. */
     void updateUI();
 
 private:
-    QRadioButton* m_rbBackground;
-    QRadioButton* m_rbDenoise;
-    
-    QDoubleSpinBox* m_spinStrength; // reused for smoothing/strength
-    QComboBox* m_aiVersionCombo;
-    QCheckBox* m_gpuCheck;
+    // -- Operation selection --
+    QRadioButton*   m_rbBackground;
+    QRadioButton*   m_rbDenoise;
+
+    // -- Shared parameter controls --
+    QDoubleSpinBox* m_spinStrength;      ///< Reused as smoothing (BG) or strength (denoise).
+    QComboBox*      m_aiVersionCombo;
+    QCheckBox*      m_gpuCheck;
 };
 
 #endif // GRAXPERTDIALOG_H

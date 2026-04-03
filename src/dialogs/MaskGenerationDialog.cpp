@@ -1,6 +1,7 @@
 #include "MaskGenerationDialog.h"
 #include "MaskCanvas.h"
 #include "LivePreviewDialog.h"
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -14,805 +15,806 @@
 #include <QButtonGroup>
 #include <QtMath>
 #include <QtConcurrent/QtConcurrent>
-#include <opencv2/opencv.hpp>
 #include <QMessageBox>
 #include <QUuid>
+#include <opencv2/opencv.hpp>
 
-MaskGenerationDialog::MaskGenerationDialog(const ImageBuffer& image, QWidget* parent) 
-    : DialogBase(parent, tr("Mask Generation"), 1024, 700), m_sourceImage(image) 
+// =============================================================================
+// Constructor
+// =============================================================================
+
+MaskGenerationDialog::MaskGenerationDialog(const ImageBuffer& image, QWidget* parent)
+    : DialogBase(parent, tr("Mask Generation"), 1024, 700)
+    , m_sourceImage(image)
+    , m_livePreview(nullptr)
 {
-    setWindowFlag(Qt::Window); // Allow minimize/maximize
-    
-    m_livePreview = nullptr; // Create only when Preview Mask is clicked
-    
+    setWindowFlag(Qt::Window);
     setupUI();
 
-    if (parentWidget()) {
+    if (parentWidget())
         move(parentWidget()->window()->geometry().center() - rect().center());
-    }
 }
 
-void MaskGenerationDialog::setupUI() {
+// =============================================================================
+// UI Construction
+// =============================================================================
+
+void MaskGenerationDialog::setupUI()
+{
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    
-    // --- 1. Mode Toolbar ---
+
+    // -------------------------------------------------------------------------
+    // Mode toolbar: drawing mode selection and zoom controls
+    // -------------------------------------------------------------------------
     QHBoxLayout* modeBar = new QHBoxLayout();
-    m_freeBtn = new QPushButton(tr("Freehand"));
-    m_freeBtn->setCheckable(true);
-    m_freeBtn->setChecked(true);
-    
+
+    m_freeBtn    = new QPushButton(tr("Freehand"));
     m_ellipseBtn = new QPushButton(tr("Ellipse"));
-    m_ellipseBtn->setCheckable(true);
-    
-    m_selectBtn = new QPushButton(tr("Select Entire Image"));
-    m_selectBtn->setCheckable(true);
-    
-    m_moveBtn = new QPushButton(tr("Move/Select"));
-    m_moveBtn->setCheckable(true);
-    
-    QButtonGroup* group = new QButtonGroup(this);
-    group->addButton(m_freeBtn);
-    group->addButton(m_ellipseBtn);
-    group->addButton(m_selectBtn);
-    group->addButton(m_moveBtn);
-    group->setExclusive(true);
-    
-    QString btnStyle = "QPushButton { padding:6px; border:1px solid #888; border-radius:4px; background:transparent; color: #e0e0e0; } "
-                       "QPushButton:checked { background-color:#0078d4; color:white; border-color:#005a9e; }";
-    
-    m_freeBtn->setStyleSheet(btnStyle);
-    m_ellipseBtn->setStyleSheet(btnStyle);
-    m_selectBtn->setStyleSheet(btnStyle);
-    m_moveBtn->setStyleSheet(btnStyle);
-    
-    connect(m_freeBtn, &QPushButton::clicked, [this](){ setMode("polygon"); });
-    connect(m_ellipseBtn, &QPushButton::clicked, [this](){ setMode("ellipse"); });
-    connect(m_selectBtn, &QPushButton::clicked, [this](){ setMode("select"); });
-    connect(m_moveBtn, &QPushButton::clicked, [this](){ setMode("move"); });
-    
+    m_selectBtn  = new QPushButton(tr("Select Entire Image"));
+    m_moveBtn    = new QPushButton(tr("Move/Select"));
+
+    for (QPushButton* btn : { m_freeBtn, m_ellipseBtn, m_selectBtn, m_moveBtn })
+        btn->setCheckable(true);
+
+    m_freeBtn->setChecked(true);
+
+    QButtonGroup* modeGroup = new QButtonGroup(this);
+    modeGroup->addButton(m_freeBtn);
+    modeGroup->addButton(m_ellipseBtn);
+    modeGroup->addButton(m_selectBtn);
+    modeGroup->addButton(m_moveBtn);
+    modeGroup->setExclusive(true);
+
+    const QString btnStyle =
+        "QPushButton { padding:6px; border:1px solid #888; border-radius:4px;"
+        "  background:transparent; color:#e0e0e0; }"
+        "QPushButton:checked { background-color:#0078d4; color:white; border-color:#005a9e; }";
+
+    for (QPushButton* btn : { m_freeBtn, m_ellipseBtn, m_selectBtn, m_moveBtn })
+        btn->setStyleSheet(btnStyle);
+
+    connect(m_freeBtn,    &QPushButton::clicked, [this]() { setMode("polygon"); });
+    connect(m_ellipseBtn, &QPushButton::clicked, [this]() { setMode("ellipse"); });
+    connect(m_selectBtn,  &QPushButton::clicked, [this]() { setMode("select");  });
+    connect(m_moveBtn,    &QPushButton::clicked, [this]() { setMode("move");    });
+
     modeBar->addWidget(m_freeBtn);
     modeBar->addWidget(m_ellipseBtn);
     modeBar->addWidget(m_selectBtn);
     modeBar->addWidget(m_moveBtn);
     modeBar->addStretch();
-    
-    // Zoom Controls
+
     QPushButton* zOut = new QPushButton(tr("Zoom Out"));
-    QPushButton* zIn = new QPushButton(tr("Zoom In"));
+    QPushButton* zIn  = new QPushButton(tr("Zoom In"));
     QPushButton* zFit = new QPushButton(tr("Fit"));
-    
-    connect(zOut, &QPushButton::clicked, [this](){ m_canvas->zoomOut(); });
-    connect(zIn, &QPushButton::clicked, [this](){ m_canvas->zoomIn(); });
-    connect(zFit, &QPushButton::clicked, [this](){ m_canvas->fitToView(); });
-    
+
+    connect(zOut, &QPushButton::clicked, [this]() { m_canvas->zoomOut();    });
+    connect(zIn,  &QPushButton::clicked, [this]() { m_canvas->zoomIn();     });
+    connect(zFit, &QPushButton::clicked, [this]() { m_canvas->fitToView();  });
+
     modeBar->addWidget(zOut);
     modeBar->addWidget(zIn);
     modeBar->addWidget(zFit);
-    
+
     mainLayout->addLayout(modeBar);
-    
-    // Generate preview image for background
-    QImage bg = m_sourceImage.getDisplayImage(ImageBuffer::Display_Linear, true); // Linear by default for accuracy
+
+    // -------------------------------------------------------------------------
+    // Canvas: displays the background image and hosts drawn shapes
+    // -------------------------------------------------------------------------
+    QImage bg = m_sourceImage.getDisplayImage(ImageBuffer::Display_Linear, true);
     m_canvas = new MaskCanvas(bg, this);
-    m_canvas->setFixedHeight(400); // Fixed height
+    m_canvas->setFixedHeight(400);
     m_canvas->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    connect(m_canvas, &MaskCanvas::maskContentChanged, this, &MaskGenerationDialog::updateLivePreview);
+    connect(m_canvas, &MaskCanvas::maskContentChanged,
+            this,     &MaskGenerationDialog::updateLivePreview);
+
     mainLayout->addWidget(m_canvas);
-    
-    // --- 3. Controls ---
+
+    // -------------------------------------------------------------------------
+    // Mask type and global blur controls
+    // -------------------------------------------------------------------------
     QHBoxLayout* controls = new QHBoxLayout();
     controls->addWidget(new QLabel(tr("Mask Type:")));
+
     m_typeCombo = new QComboBox();
-    m_typeCombo->addItem(tr("Binary"), "Binary");
+    m_typeCombo->addItem(tr("Binary"),          "Binary");
     m_typeCombo->addItem(tr("Range Selection"), "Range Selection");
-    m_typeCombo->addItem(tr("Lightness"), "Lightness");
-    m_typeCombo->addItem(tr("Chrominance"), "Chrominance");
-    m_typeCombo->addItem(tr("Star Mask"), "Star Mask");
-    m_typeCombo->addItem(tr("Color: Red"), "Color: Red");
-    m_typeCombo->addItem(tr("Color: Orange"), "Color: Orange");
-    m_typeCombo->addItem(tr("Color: Yellow"), "Color: Yellow");
-    m_typeCombo->addItem(tr("Color: Green"), "Color: Green");
-    m_typeCombo->addItem(tr("Color: Cyan"), "Color: Cyan");
-    m_typeCombo->addItem(tr("Color: Blue"), "Color: Blue");
-    m_typeCombo->addItem(tr("Color: Violet"),   "Color: Violet");
-    m_typeCombo->addItem(tr("Color: Magenta"), "Color: Magenta");
-    connect(m_typeCombo, &QComboBox::currentTextChanged, this, &MaskGenerationDialog::onTypeChanged);
-    connect(m_typeCombo, &QComboBox::currentTextChanged, this, &MaskGenerationDialog::updateLivePreview);
-    
-    // Use preview stretch combo to also update the background canvas visualization
-    // This allows the user to see the image context more clearly
+    m_typeCombo->addItem(tr("Lightness"),        "Lightness");
+    m_typeCombo->addItem(tr("Chrominance"),      "Chrominance");
+    m_typeCombo->addItem(tr("Star Mask"),        "Star Mask");
+    m_typeCombo->addItem(tr("Color: Red"),       "Color: Red");
+    m_typeCombo->addItem(tr("Color: Orange"),    "Color: Orange");
+    m_typeCombo->addItem(tr("Color: Yellow"),    "Color: Yellow");
+    m_typeCombo->addItem(tr("Color: Green"),     "Color: Green");
+    m_typeCombo->addItem(tr("Color: Cyan"),      "Color: Cyan");
+    m_typeCombo->addItem(tr("Color: Blue"),      "Color: Blue");
+    m_typeCombo->addItem(tr("Color: Violet"),    "Color: Violet");
+    m_typeCombo->addItem(tr("Color: Magenta"),   "Color: Magenta");
+
+    connect(m_typeCombo, &QComboBox::currentTextChanged,
+            this, &MaskGenerationDialog::onTypeChanged);
+    connect(m_typeCombo, &QComboBox::currentTextChanged,
+            this, &MaskGenerationDialog::updateLivePreview);
+
     controls->addWidget(m_typeCombo);
-    
+
     controls->addWidget(new QLabel(tr("Edge Blur (px):")));
     m_blurSlider = new QSlider(Qt::Horizontal);
     m_blurSlider->setRange(0, 300);
-    m_blurLabel = new QLabel("0");
-    // Update label and preview during drag (now fast due to downsampling)
-    connect(m_blurSlider, &QSlider::valueChanged, [this](int v){ 
-        m_blurLabel->setText(QString::number(v)); 
-    });
-    connect(m_blurSlider, &QSlider::valueChanged, this, &MaskGenerationDialog::updateLivePreview);
+    m_blurLabel  = new QLabel("0");
+
+    connect(m_blurSlider, &QSlider::valueChanged,
+            [this](int v) { m_blurLabel->setText(QString::number(v)); });
+    connect(m_blurSlider, &QSlider::valueChanged,
+            this, &MaskGenerationDialog::updateLivePreview);
+
     controls->addWidget(m_blurSlider);
     controls->addWidget(m_blurLabel);
-    
+
     mainLayout->addLayout(controls);
-    
-    // --- 4. Range Selection Group ---
+
+    // -------------------------------------------------------------------------
+    // Range selection group (visible only when mask type == Range Selection)
+    // -------------------------------------------------------------------------
     m_rangeGroup = new QGroupBox(tr("Range Selection"));
     QGridLayout* rangeGrid = new QGridLayout(m_rangeGroup);
-    
+
+    // Helper lambda: create a labelled slider row and connect it to the live preview
     auto addSlider = [&](int row, const QString& name, int max, QLabel*& lblInfo) -> QSlider* {
         rangeGrid->addWidget(new QLabel(name + ":"), row, 0);
         QSlider* s = new QSlider(Qt::Horizontal);
         s->setRange(0, max);
         lblInfo = new QLabel("0.00");
-        rangeGrid->addWidget(s, row, 1);
+        rangeGrid->addWidget(s,      row, 1);
         rangeGrid->addWidget(lblInfo, row, 2);
-        connect(s, &QSlider::valueChanged, [max, lblInfo](int v){
-            lblInfo->setText(QString::number((double)v/max, 'f', 2));
+        connect(s, &QSlider::valueChanged, [max, lblInfo](int v) {
+            lblInfo->setText(QString::number(static_cast<double>(v) / max, 'f', 2));
         });
-        connect(s, &QSlider::valueChanged, this, &MaskGenerationDialog::updateLivePreview);
+        connect(s, &QSlider::valueChanged,
+                this, &MaskGenerationDialog::updateLivePreview);
         return s;
     };
-    
+
     m_lowerSl = addSlider(0, tr("Lower Limit"), 100, m_lowerLbl);
     m_upperSl = addSlider(1, tr("Upper Limit"), 100, m_upperLbl);
-    m_fuzzSl = addSlider(2, tr("Fuzziness"), 100, m_fuzzLbl);
-    
-    // Smoothness (Sigma)
+    m_fuzzSl  = addSlider(2, tr("Fuzziness"),   100, m_fuzzLbl);
+
     rangeGrid->addWidget(new QLabel(tr("Internal Blur:")), 3, 0);
     m_smoothSl = new QSlider(Qt::Horizontal);
     m_smoothSl->setRange(0, 200);
     m_smoothSl->setValue(3);
     m_smoothLbl = new QLabel("3 px");
-    rangeGrid->addWidget(m_smoothSl, 3, 1);
+    rangeGrid->addWidget(m_smoothSl,  3, 1);
     rangeGrid->addWidget(m_smoothLbl, 3, 2);
-    connect(m_smoothSl, &QSlider::valueChanged, [this](int v){
-        m_smoothLbl->setText(QString("%1 px").arg(v));
-    });
-    connect(m_smoothSl, &QSlider::valueChanged, this, &MaskGenerationDialog::updateLivePreview);
-    
+    connect(m_smoothSl, &QSlider::valueChanged,
+            [this](int v) { m_smoothLbl->setText(QString("%1 px").arg(v)); });
+    connect(m_smoothSl, &QSlider::valueChanged,
+            this, &MaskGenerationDialog::updateLivePreview);
+
+    // Link Limits: keeps lower and upper sliders in sync
     m_linkCb = new QCheckBox(tr("Link Limits"));
     rangeGrid->addWidget(m_linkCb, 0, 3);
-    connect(m_linkCb, &QCheckBox::toggled, [this](bool c){ 
-        if(c) m_upperSl->setValue(m_lowerSl->value()); 
+    connect(m_linkCb, &QCheckBox::toggled, [this](bool checked) {
+        if (checked) m_upperSl->setValue(m_lowerSl->value());
     });
-    connect(m_lowerSl, &QSlider::valueChanged, [this](int v){
-        if(m_linkCb->isChecked()) m_upperSl->setValue(v);
+    connect(m_lowerSl, &QSlider::valueChanged, [this](int v) {
+        if (m_linkCb->isChecked()) m_upperSl->setValue(v);
     });
-    
+
     m_screenCb = new QCheckBox(tr("Screening"));
     rangeGrid->addWidget(m_screenCb, 1, 3);
-    connect(m_screenCb, &QCheckBox::toggled, this, &MaskGenerationDialog::updateLivePreview);
-    
+    connect(m_screenCb, &QCheckBox::toggled,
+            this, &MaskGenerationDialog::updateLivePreview);
+
     m_lightCb = new QCheckBox(tr("Use Lightness"));
-    m_lightCb->setChecked(true); 
+    m_lightCb->setChecked(true);
     rangeGrid->addWidget(m_lightCb, 2, 3);
-    connect(m_lightCb, &QCheckBox::toggled, this, &MaskGenerationDialog::updateLivePreview);
-    
+    connect(m_lightCb, &QCheckBox::toggled,
+            this, &MaskGenerationDialog::updateLivePreview);
+
     m_invertCb = new QCheckBox(tr("Invert Range"));
     rangeGrid->addWidget(m_invertCb, 3, 3);
-    connect(m_invertCb, &QCheckBox::toggled, this, &MaskGenerationDialog::updateLivePreview);
-    
+    connect(m_invertCb, &QCheckBox::toggled,
+            this, &MaskGenerationDialog::updateLivePreview);
+
     m_rangeGroup->setVisible(false);
     mainLayout->addWidget(m_rangeGroup);
 
-    // --- 4b. Color Mask Group ---
+    // -------------------------------------------------------------------------
+    // Color mask group (visible only for Color: * mask types)
+    // -------------------------------------------------------------------------
     m_colorGroup = new QGroupBox(tr("Color Mask"));
     QGridLayout* colorGrid = new QGridLayout(m_colorGroup);
 
-    colorGrid->addWidget(new QLabel(tr("Fuzziness (°):")), 0, 0);
+    colorGrid->addWidget(new QLabel(tr("Fuzziness (deg):")), 0, 0);
     m_colorFuzzSl = new QSlider(Qt::Horizontal);
     m_colorFuzzSl->setRange(0, 60);
     m_colorFuzzSl->setValue(0);
-    m_colorFuzzLbl = new QLabel("0°");
-    colorGrid->addWidget(m_colorFuzzSl, 0, 1);
+    m_colorFuzzLbl = new QLabel("0 deg");
+    colorGrid->addWidget(m_colorFuzzSl,  0, 1);
     colorGrid->addWidget(m_colorFuzzLbl, 0, 2);
-    connect(m_colorFuzzSl, &QSlider::valueChanged, [this](int v){
-        m_colorFuzzLbl->setText(QString("%1°").arg(v));
-    });
-    connect(m_colorFuzzSl, &QSlider::valueChanged, this, &MaskGenerationDialog::updateLivePreview);
+    connect(m_colorFuzzSl, &QSlider::valueChanged,
+            [this](int v) { m_colorFuzzLbl->setText(QString("%1 deg").arg(v)); });
+    connect(m_colorFuzzSl, &QSlider::valueChanged,
+            this, &MaskGenerationDialog::updateLivePreview);
 
     m_colorGroup->setVisible(false);
     mainLayout->addWidget(m_colorGroup);
 
-    // Defaults
-    m_upperSl->setValue(100); // 1.0 default
-    
-    // --- 5. Preview Visualization ---
-    QGroupBox* previewGroup = new QGroupBox(tr("Preview Visualization"));
+    // Default: upper limit at 1.0
+    m_upperSl->setValue(100);
+
+    // -------------------------------------------------------------------------
+    // Preview visualization: stretch mode and resolution controls
+    // -------------------------------------------------------------------------
+    QGroupBox*   previewGroup  = new QGroupBox(tr("Preview Visualization"));
     QHBoxLayout* previewLayout = new QHBoxLayout(previewGroup);
-    
+
     previewLayout->addWidget(new QLabel(tr("Stretch:")));
     m_previewStretchCombo = new QComboBox();
-    m_previewStretchCombo->addItem(tr("Linear"), ImageBuffer::Display_Linear);
+    m_previewStretchCombo->addItem(tr("Linear"),       ImageBuffer::Display_Linear);
     m_previewStretchCombo->addItem(tr("Auto Stretch"), ImageBuffer::Display_AutoStretch);
-    m_previewStretchCombo->addItem(tr("Histogram"), ImageBuffer::Display_Histogram);
-    m_previewStretchCombo->addItem(tr("ArcSinh"), ImageBuffer::Display_ArcSinh);
-    m_previewStretchCombo->addItem(tr("Sqrt"), ImageBuffer::Display_Sqrt);
-    m_previewStretchCombo->addItem(tr("Log"), ImageBuffer::Display_Log);
-    m_previewStretchCombo->setCurrentIndex(0); // Default to Linear
-    // Generate downsampled data for preview
-    // Max dimension ~ 256px for ultra fast preview (blur is O(R^2) or O(N), but smaller N is better)
-    // 512px is good balance.
-    m_maxPreviewDim = 1024; // Default per user request
-    int w = m_sourceImage.width();
-    int h = m_sourceImage.height();
+    m_previewStretchCombo->addItem(tr("Histogram"),    ImageBuffer::Display_Histogram);
+    m_previewStretchCombo->addItem(tr("ArcSinh"),      ImageBuffer::Display_ArcSinh);
+    m_previewStretchCombo->addItem(tr("Sqrt"),         ImageBuffer::Display_Sqrt);
+    m_previewStretchCombo->addItem(tr("Log"),          ImageBuffer::Display_Log);
+    m_previewStretchCombo->setCurrentIndex(0);
+
+    // Build the downsampled luma cache for fast preview generation
+    m_maxPreviewDim = 1024;
+    const int w = m_sourceImage.width();
+    const int h = m_sourceImage.height();
     float scale = 1.0f;
-    if (w > m_maxPreviewDim || h > m_maxPreviewDim) {
-        scale = std::min((float)m_maxPreviewDim/w, (float)m_maxPreviewDim/h);
-    }
+    if (w > m_maxPreviewDim || h > m_maxPreviewDim)
+        scale = std::min(static_cast<float>(m_maxPreviewDim) / w,
+                         static_cast<float>(m_maxPreviewDim) / h);
+
     m_smallW = static_cast<int>(w * scale);
     m_smallH = static_cast<int>(h * scale);
-    
-    // Cache lightness
-    std::vector<float> L = getComponentLightness();
-    cv::Mat matL(h, w, CV_32FC1, L.data());
-    cv::Mat smallMatL;
-    cv::resize(matL, smallMatL, cv::Size(m_smallW, m_smallH), 0, 0, cv::INTER_AREA);
-    
-    m_smallLuma.resize(m_smallW * m_smallH);
-    memcpy(m_smallLuma.data(), smallMatL.data, m_smallLuma.size() * sizeof(float));
 
-    connect(m_previewStretchCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](){
-        // Update Live Preview (Mask)
-        updateLivePreview();
-        
-        // ALSO Update Canvas Background (using full res logic)
-        if (m_canvas) {
-            ImageBuffer::DisplayMode mode = static_cast<ImageBuffer::DisplayMode>(m_previewStretchCombo->currentData().toInt());
-            QImage bg = m_sourceImage.getDisplayImage(mode, true);
-            m_canvas->setBackgroundImage(bg);
-        }
-    });
-    previewLayout->addWidget(m_previewStretchCombo);
-
-    previewLayout->addWidget(new QLabel(tr("Size:")));
-    m_previewSizeCombo = new QComboBox();
-    m_previewSizeCombo->addItem("512px", 512);
-    m_previewSizeCombo->addItem("1024px", 1024);
-    m_previewSizeCombo->setCurrentIndex(1); // Default 1024
-    
-    connect(m_previewSizeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](){
-        int dim = m_previewSizeCombo->currentData().toInt();
-        m_maxPreviewDim = (dim == 0) ? 99999 : dim;
-        
-        // Regenerate cache
-        int w = m_sourceImage.width();
-        int h = m_sourceImage.height();
-        float scale = 1.0f;
-        if (w > m_maxPreviewDim || h > m_maxPreviewDim) {
-            scale = std::min((float)m_maxPreviewDim/w, (float)m_maxPreviewDim/h);
-        }
-        m_smallW = static_cast<int>(w * scale);
-        m_smallH = static_cast<int>(h * scale);
-        
+    {
         std::vector<float> L = getComponentLightness();
         cv::Mat matL(h, w, CV_32FC1, L.data());
         cv::Mat smallMatL;
         cv::resize(matL, smallMatL, cv::Size(m_smallW, m_smallH), 0, 0, cv::INTER_AREA);
         m_smallLuma.resize(m_smallW * m_smallH);
-        memcpy(m_smallLuma.data(), smallMatL.data, m_smallLuma.size() * sizeof(float));
-        
-        updateLivePreview();
-    });
-    previewLayout->addWidget(m_previewSizeCombo);
+        std::memcpy(m_smallLuma.data(), smallMatL.data, m_smallLuma.size() * sizeof(float));
+    }
 
+    connect(m_previewStretchCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            [this]() {
+                updateLivePreview();
+                if (m_canvas) {
+                    const auto mode = static_cast<ImageBuffer::DisplayMode>(
+                        m_previewStretchCombo->currentData().toInt());
+                    m_canvas->setBackgroundImage(m_sourceImage.getDisplayImage(mode, true));
+                }
+            });
+
+    previewLayout->addWidget(m_previewStretchCombo);
+    previewLayout->addWidget(new QLabel(tr("Size:")));
+
+    m_previewSizeCombo = new QComboBox();
+    m_previewSizeCombo->addItem("512px",  512);
+    m_previewSizeCombo->addItem("1024px", 1024);
+    m_previewSizeCombo->setCurrentIndex(1);
+
+    connect(m_previewSizeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            [this]() {
+                const int dim  = m_previewSizeCombo->currentData().toInt();
+                m_maxPreviewDim = (dim == 0) ? 99999 : dim;
+
+                const int w2 = m_sourceImage.width();
+                const int h2 = m_sourceImage.height();
+                float sc = 1.0f;
+                if (w2 > m_maxPreviewDim || h2 > m_maxPreviewDim)
+                    sc = std::min(static_cast<float>(m_maxPreviewDim) / w2,
+                                  static_cast<float>(m_maxPreviewDim) / h2);
+
+                m_smallW = static_cast<int>(w2 * sc);
+                m_smallH = static_cast<int>(h2 * sc);
+
+                std::vector<float> L = getComponentLightness();
+                cv::Mat matL(h2, w2, CV_32FC1, L.data());
+                cv::Mat smallMatL;
+                cv::resize(matL, smallMatL, cv::Size(m_smallW, m_smallH), 0, 0, cv::INTER_AREA);
+                m_smallLuma.resize(m_smallW * m_smallH);
+                std::memcpy(m_smallLuma.data(), smallMatL.data, m_smallLuma.size() * sizeof(float));
+
+                updateLivePreview();
+            });
+
+    previewLayout->addWidget(m_previewSizeCombo);
     mainLayout->addWidget(previewGroup);
 
-    // --- 6. Buttons ---
+    // -------------------------------------------------------------------------
+    // Action buttons: Preview Mask, Clear Shapes, Cancel, OK
+    // -------------------------------------------------------------------------
     QHBoxLayout* btnLayout = new QHBoxLayout();
     QPushButton* previewBtn = new QPushButton(tr("Preview Mask"));
-    QPushButton* clearBtn = new QPushButton(tr("Clear Shapes"));
+    QPushButton* clearBtn   = new QPushButton(tr("Clear Shapes"));
     connect(previewBtn, &QPushButton::clicked, this, &MaskGenerationDialog::generatePreview);
-    connect(clearBtn, &QPushButton::clicked, this, &MaskGenerationDialog::clearShapes);
+    connect(clearBtn,   &QPushButton::clicked, this, &MaskGenerationDialog::clearShapes);
     btnLayout->addWidget(previewBtn);
     btnLayout->addWidget(clearBtn);
-    
     mainLayout->addLayout(btnLayout);
-    
-    // Using explicit buttons for correct ordering: Cancel on left, OK on right
+
     QHBoxLayout* btnLayout2 = new QHBoxLayout();
     btnLayout2->addStretch();
     QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
-    QPushButton* okBtn = new QPushButton(tr("OK"));
+    QPushButton* okBtn     = new QPushButton(tr("OK"));
     okBtn->setDefault(true);
     btnLayout2->addWidget(cancelBtn);
     btnLayout2->addWidget(okBtn);
-    
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    connect(okBtn,     &QPushButton::clicked, this, &QDialog::accept);
     mainLayout->addLayout(btnLayout2);
 }
 
-void MaskGenerationDialog::setMode(const QString& mode) {
+// =============================================================================
+// Mode and Shape Management
+// =============================================================================
+
+void MaskGenerationDialog::setMode(const QString& mode)
+{
     if (m_canvas) m_canvas->setMode(mode);
 }
 
-void MaskGenerationDialog::clearShapes() {
+void MaskGenerationDialog::clearShapes()
+{
     if (m_canvas) m_canvas->clearShapes();
 }
 
-void MaskGenerationDialog::onTypeChanged(const QString& type) {
-    Q_UNUSED(type);
-    QString id = m_typeCombo->currentData().toString();
-    bool isRange = (id == "Range Selection");
-    bool isColor = id.startsWith("Color:");
-    
-    // Save current width to prevent horizontal expansion
-    int curWidth = width();
-    
+// Show or hide the range / color parameter groups based on the selected mask type.
+// Preserves the dialog width while allowing vertical resize.
+void MaskGenerationDialog::onTypeChanged(const QString& /*type*/)
+{
+    const QString id   = m_typeCombo->currentData().toString();
+    const bool isRange = (id == "Range Selection");
+    const bool isColor = id.startsWith("Color:");
+    const int  curW    = width();
+
     m_rangeGroup->setVisible(isRange);
     m_colorGroup->setVisible(isColor);
-    
-    // Ensure the dialog resizes correctly to fit or shrink based on visible controls
+
     updateGeometry();
     adjustSize();
-    
-    // Restore width to keep it consistent
-    resize(curWidth, height());
+    resize(curW, height());
 }
 
-MaskLayer MaskGenerationDialog::getGeneratedMask(int requestedW, int requestedH) const {
-    QString t = m_typeCombo->currentData().toString();
-    
-    // Determine target size
-    int targetW = (requestedW > 0) ? requestedW : m_sourceImage.width();
-    int targetH = (requestedH > 0) ? requestedH : m_sourceImage.height();
-    bool isPreview = (requestedW > 0);
+// =============================================================================
+// Mask Generation
+// =============================================================================
 
-    // Get base mask from canvas
-    // If preview, use MaskCanvas scaled generation
-    std::vector<float> base;
-    if (isPreview) {
-        base = m_canvas->createMask(targetW, targetH);
-    } else {
-        base = const_cast<MaskGenerationDialog*>(this)->generateBaseMask();
-    }
-    
-    bool baseIsEmpty = std::all_of(base.begin(), base.end(), [](float v) { return v == 0.0f; });
-    
-    const QString ALL_IMAGE_TYPES[] = {
+MaskLayer MaskGenerationDialog::getGeneratedMask(int requestedW, int requestedH) const
+{
+    const QString t      = m_typeCombo->currentData().toString();
+    const int     targetW = (requestedW > 0) ? requestedW : m_sourceImage.width();
+    const int     targetH = (requestedH > 0) ? requestedH : m_sourceImage.height();
+    const bool    isPreview = (requestedW > 0);
+
+    // Obtain the geometric base mask (canvas shapes rasterized to target resolution)
+    std::vector<float> base = isPreview
+        ? m_canvas->createMask(targetW, targetH)
+        : const_cast<MaskGenerationDialog*>(this)->generateBaseMask();
+
+    // For analytical mask types, an empty canvas implies the full image is selected
+    const bool baseIsEmpty = std::all_of(base.begin(), base.end(),
+                                         [](float v) { return v == 0.0f; });
+
+    static const QString ALL_IMAGE_TYPES[] = {
         "Range Selection", "Lightness", "Chrominance", "Star Mask",
         "Color: Red", "Color: Orange", "Color: Yellow", "Color: Green",
         "Color: Cyan", "Color: Blue", "Color: Violet", "Color: Magenta"
     };
 
-    bool useAll = false;
     if (baseIsEmpty) {
         for (const QString& ait : ALL_IMAGE_TYPES) {
             if (t == ait || t.startsWith("Color:")) {
-                useAll = true;
+                base.assign(targetW * targetH, 1.0f);
                 break;
             }
         }
     }
 
-    if (useAll) {
-        base.assign(targetW * targetH, 1.0f);
-    }
-    
     std::vector<float> finalMask;
-    
+
     if (t == "Binary") {
         finalMask = base;
-    } else if (t == "Range Selection") {
-        // Need Range Mask at target size
-        std::vector<float> comp = getLightness(targetW, targetH);
-        
-        // Inline logic adapted for resizing (avoids modifying const constraints)
-        
-        float L = m_lowerSl->value() / 100.0f;
-        float U = m_upperSl->value() / 100.0f;
-        float fuzz = m_fuzzSl->value() / 100.0f;
-        int smooth = m_smoothSl->value();
-        bool screen = m_screenCb->isChecked();
-        bool inv = m_invertCb->isChecked();
-        
-        if (isPreview) {
-            float scale = (float)targetW / m_sourceImage.width();
-            smooth = std::max(0, (int)(smooth * scale));
-        }
-        
-        // Convert radius to sigma for GaussianBlur
-        // Sigma ~ Radius / 3.0 gives a visual match to "pixels"
-        float smoothSigma = (smooth > 0) ? smooth / 3.0f : 0.0f;
 
+    } else if (t == "Range Selection") {
+        std::vector<float> comp = getLightness(targetW, targetH);
+
+        const float L     = m_lowerSl->value() / 100.0f;
+        const float U     = m_upperSl->value() / 100.0f;
+        const float fuzz  = m_fuzzSl->value()  / 100.0f;
+        int         smooth = m_smoothSl->value();
+        const bool  screen = m_screenCb->isChecked();
+        const bool  inv    = m_invertCb->isChecked();
+
+        // Scale the blur radius proportionally when generating a preview
+        if (isPreview) {
+            const float sc = static_cast<float>(targetW) / m_sourceImage.width();
+            smooth = std::max(0, static_cast<int>(smooth * sc));
+        }
+
+        const float smoothSigma = (smooth > 0) ? smooth / 3.0f : 0.0f;
         finalMask.resize(base.size());
-        
+
         #pragma omp parallel for
-        for (size_t i=0; i<comp.size(); ++i) {
-            float v = comp[i];
-            float val = 0.0f;
-            float lowerBound = L - fuzz;
-            float upperBound = U + fuzz;
-            
-            if (v >= L && v <= U) val = 1.0f;
-            else if (fuzz > 1e-6) {
-                if (v >= lowerBound && v < L) val = (v - lowerBound) / fuzz;
-                else if (v > U && v <= upperBound) val = (upperBound - v) / fuzz;
+        for (size_t i = 0; i < comp.size(); ++i) {
+            const float v = comp[i];
+            float val     = 0.0f;
+
+            if (v >= L && v <= U) {
+                val = 1.0f;
+            } else if (fuzz > 1e-6f) {
+                if      (v >= L - fuzz && v < L) val = (v - (L - fuzz)) / fuzz;
+                else if (v >  U        && v <= U + fuzz) val = ((U + fuzz) - v) / fuzz;
             }
+
             val = std::clamp(val, 0.0f, 1.0f);
             if (screen) val *= v;
-            
-            // Combine with base
             finalMask[i] = base[i] * val;
         }
-        
-        // Blur
-        if (smoothSigma > 0) {
+
+        if (smoothSigma > 0.0f) {
             cv::Mat mat(targetH, targetW, CV_32FC1, finalMask.data());
-            cv::GaussianBlur(mat, mat, cv::Size(0,0), smoothSigma);
+            cv::GaussianBlur(mat, mat, cv::Size(0, 0), smoothSigma);
         }
-        
-        // Invert
-        if (inv) {
-            for(float& v : finalMask) v = 1.0f - v;
-        }
+        if (inv)
+            for (float& v : finalMask) v = 1.0f - v;
 
     } else if (t == "Lightness") {
         std::vector<float> L = getLightness(targetW, targetH);
         finalMask.resize(base.size());
-        for(size_t i=0; i<base.size(); ++i) finalMask[i] = (base[i] > 0) ? L[i] : 0.0f;
+        for (size_t i = 0; i < base.size(); ++i)
+            finalMask[i] = (base[i] > 0) ? L[i] : 0.0f;
+
     } else if (t == "Chrominance") {
         std::vector<float> C = getChrominance(targetW, targetH);
         finalMask.resize(base.size());
-        for(size_t i=0; i<base.size(); ++i) finalMask[i] = (base[i] > 0) ? C[i] : 0.0f;
+        for (size_t i = 0; i < base.size(); ++i)
+            finalMask[i] = (base[i] > 0) ? C[i] : 0.0f;
+
     } else if (t == "Star Mask") {
         std::vector<float> S = getStarMask(targetW, targetH);
         finalMask.resize(base.size());
-        for(size_t i=0; i<base.size(); ++i) finalMask[i] = (base[i] > 0) ? S[i] : 0.0f;
+        for (size_t i = 0; i < base.size(); ++i)
+            finalMask[i] = (base[i] > 0) ? S[i] : 0.0f;
+
     } else if (t.startsWith("Color:")) {
-        QString color = t.mid(7);
-        float fuzzDeg = static_cast<float>(m_colorFuzzSl->value());
-        std::vector<float> C = getColorMask(color, targetW, targetH, fuzzDeg);
+        const QString color    = t.mid(7);
+        const float   fuzzDeg  = static_cast<float>(m_colorFuzzSl->value());
+        std::vector<float> C   = getColorMask(color, targetW, targetH, fuzzDeg);
         finalMask.resize(base.size());
-        for(size_t i=0; i<base.size(); ++i) finalMask[i] = (base[i] > 0) ? C[i] : 0.0f;
+        for (size_t i = 0; i < base.size(); ++i)
+            finalMask[i] = (base[i] > 0) ? C[i] : 0.0f;
     }
-    
-    // Apply Global blur
+
+    // Apply the global edge-blur (scaled for preview)
     int blur = m_blurSlider->value();
     if (isPreview) {
-        float scale = (float)targetW / m_sourceImage.width();
-        blur = std::max(0, (int)(blur * scale));
+        const float sc = static_cast<float>(targetW) / m_sourceImage.width();
+        blur = std::max(0, static_cast<int>(blur * sc));
     }
-    
-    float blurSigma = (blur > 0) ? blur / 3.0f : 0.0f;
-    
-    if (blurSigma > 0 && finalMask.size() > 0) {
+    const float blurSigma = (blur > 0) ? blur / 3.0f : 0.0f;
+    if (blurSigma > 0.0f && !finalMask.empty()) {
         cv::Mat m(targetH, targetW, CV_32FC1, finalMask.data());
-        cv::GaussianBlur(m, m, cv::Size(0,0), blurSigma);
+        cv::GaussianBlur(m, m, cv::Size(0, 0), blurSigma);
     }
-    
+
     MaskLayer layer;
-    layer.data = finalMask;
-    layer.width = targetW;
-    layer.height = targetH;
-    layer.name = m_typeCombo->currentText();
+    layer.data    = finalMask;
+    layer.width   = targetW;
+    layer.height  = targetH;
+    layer.name    = m_typeCombo->currentText();
     layer.visible = true;
-    layer.id = QUuid::createUuid().toString();
-    layer.mode = "replace";
+    layer.id      = QUuid::createUuid().toString();
+    layer.mode    = "replace";
     layer.opacity = 1.0f;
-    
+
     return layer;
 }
 
-std::vector<float> MaskGenerationDialog::generateBaseMask() {
+std::vector<float> MaskGenerationDialog::generateBaseMask()
+{
     return m_canvas->createMask();
 }
 
-std::vector<float> MaskGenerationDialog::getComponentLightness() const {
+// =============================================================================
+// Image Component Helpers
+// =============================================================================
+
+// Compute per-pixel luminance using standard BT.601 coefficients.
+std::vector<float> MaskGenerationDialog::getComponentLightness() const
+{
     const std::vector<float>& d = m_sourceImage.data();
-    std::vector<float> L(m_sourceImage.width() * m_sourceImage.height());
-    int ch = m_sourceImage.channels();
-    
+    const int ch  = m_sourceImage.channels();
+    const int n   = m_sourceImage.width() * m_sourceImage.height();
+    std::vector<float> L(n);
+
     #pragma omp parallel for
-    for (int i = 0; i < (int)L.size(); ++i) {
-        if (ch == 1) L[i] = d[i];
-        else {
-            float r = d[i*3];
-            float g = d[i*3+1];
-            float b = d[i*3+2];
-            L[i] = 0.2989f*r + 0.5870f*g + 0.1140f*b;
+    for (int i = 0; i < n; ++i) {
+        if (ch == 1) {
+            L[i] = d[i];
+        } else {
+            L[i] = 0.2989f * d[i * 3 + 0]
+                 + 0.5870f * d[i * 3 + 1]
+                 + 0.1140f * d[i * 3 + 2];
         }
     }
     return L;
 }
 
-std::vector<float> MaskGenerationDialog::getChrominance(int w, int h) const {
-     // If full resolution
-     if (w == m_sourceImage.width() && h == m_sourceImage.height()) {
-         return getComponentChrominance();
-     }
-     
-     // Create a resized RGB image for computation
-     cv::Mat src(h, w, CV_32FC3);
-     
-     // Resize raw data
-     cv::Mat fullSrc(m_sourceImage.height(), m_sourceImage.width(), CV_32FC3, const_cast<float*>(m_sourceImage.data().data()));
-     cv::resize(fullSrc, src, cv::Size(w, h), 0, 0, cv::INTER_AREA);
-     
-     cv::Mat ycrcb;
-     cv::cvtColor(src, ycrcb, cv::COLOR_RGB2YCrCb);
-     
-     std::vector<cv::Mat> chans;
-     cv::split(ycrcb, chans);
-     
-     cv::Scalar meanCr = cv::mean(chans[1]);
-     cv::Scalar meanCb = cv::mean(chans[2]);
-     
-     cv::Mat diffCr = chans[1] - meanCr;
-     cv::Mat diffCb = chans[2] - meanCb;
-     
-     cv::Mat dist;
-     cv::sqrt(diffCr.mul(diffCr) + diffCb.mul(diffCb), dist);
-     
-     cv::normalize(dist, dist, 0, 1, cv::NORM_MINMAX);
-     
-     std::vector<float> res(w*h);
-     memcpy(res.data(), dist.data, res.size()*sizeof(float));
-     return res;
-}
-
-std::vector<float> MaskGenerationDialog::getComponentChrominance() const {
-     int w = m_sourceImage.width();
-     int h = m_sourceImage.height();
-     cv::Mat src(h, w, CV_32FC3, const_cast<float*>(m_sourceImage.data().data()));
-     
-     cv::Mat ycrcb;
-     cv::cvtColor(src, ycrcb, cv::COLOR_RGB2YCrCb);
-     
-     std::vector<cv::Mat> chans;
-     cv::split(ycrcb, chans);
-     
-     cv::Scalar meanCr = cv::mean(chans[1]);
-     cv::Scalar meanCb = cv::mean(chans[2]);
-     
-     cv::Mat diffCr = chans[1] - meanCr;
-     cv::Mat diffCb = chans[2] - meanCb;
-     
-     cv::Mat dist;
-     cv::sqrt(diffCr.mul(diffCr) + diffCb.mul(diffCb), dist);
-     
-     cv::normalize(dist, dist, 0, 1, cv::NORM_MINMAX);
-     
-     std::vector<float> res(w*h);
-     memcpy(res.data(), dist.data, res.size()*sizeof(float));
-     return res;
-}
-
-std::vector<float> MaskGenerationDialog::getStarMask(int w, int h) const {
-    // Perform high-quality star detection once at full resolution.
-    auto stars = m_sourceImage.detectStarsHQ();
-    
-    // Generate the star mask at the requested resolution (full or preview)
-    // using the centralized ImageBuffer method for consistency and performance.
-    return m_sourceImage.generateHQStarMask(stars, w, h);
-}
-
-std::vector<float> MaskGenerationDialog::getStarMask() const {
-    return getStarMask(m_sourceImage.width(), m_sourceImage.height());
-}
-
-std::vector<float> MaskGenerationDialog::generateRangeMask([[maybe_unused]] const std::vector<float>& base) {
-
-    std::vector<float> comp = getComponentLightness();
-    
-    float L = m_lowerSl->value() / 100.0f;
-    float U = m_upperSl->value() / 100.0f;
-    float fuzz = m_fuzzSl->value() / 100.0f;
-    int smooth = m_smoothSl->value();
-    bool screen = m_screenCb->isChecked();
-    bool inv = m_invertCb->isChecked();
-    
-    int size = comp.size();
-    std::vector<float> m(size, 0.0f);
-    
-    #pragma omp parallel for
-    for (int i=0; i<size; ++i) {
-        float v = comp[i];
-        float val = 0.0f;
-        
-        // Hard limits logic with fuzziness
-        float lowerBound = L - fuzz;
-        float upperBound = U + fuzz;
-        
-        // Pure range
-        if (v >= L && v <= U) val = 1.0f;
-        else if (fuzz > 1e-6) {
-            // Ramp up
-            if (v >= lowerBound && v < L) {
-                val = (v - lowerBound) / fuzz;
-            }
-            // Ramp down
-            else if (v > U && v <= upperBound) {
-                val = (upperBound - v) / fuzz;
-            }
-        }
-        
-        val = std::clamp(val, 0.0f, 1.0f);
-        
-        if (screen) val *= v;
-        
-        m[i] = val;
-    }
-    
-    // Blur
-    if (smooth > 0) {
-        float sigma = smooth / 3.0f;
-        cv::Mat mat(m_sourceImage.height(), m_sourceImage.width(), CV_32FC1, m.data());
-        cv::GaussianBlur(mat, mat, cv::Size(0,0), sigma);
-    }
-    
-    // Invert
-    if (inv) {
-        for(float& v : m) v = 1.0f - v;
-    }
-    
-    return m;
-}
-
-void MaskGenerationDialog::updateLivePreview() {
-    if (!m_livePreview || !m_livePreview->isVisible()) return;
-    
-    // Use m_smallW, m_smallH for fast preview if available
-    MaskLayer m;
-    if (m_smallW > 0 && m_smallH > 0) {
-        m = getGeneratedMask(m_smallW, m_smallH);
-    } else {
-        m = getGeneratedMask();
-    }
-    
-    // Apply visualization settings
-    ImageBuffer::DisplayMode mode = static_cast<ImageBuffer::DisplayMode>(m_previewStretchCombo->currentData().toInt());
-
-    m_livePreview->updateMask(m.data, m.width, m.height, mode, false, false);
-}
-
-void MaskGenerationDialog::generatePreview() {
-    // Create LivePreviewDialog if doesn't exist
-    if (!m_livePreview) {
-        m_livePreview = new LivePreviewDialog(m_sourceImage.width(), m_sourceImage.height(), this);
-        // Do NOT nullify on finished, just hide if needed, or keep logic as is but handle close.
-        connect(m_livePreview, &QDialog::finished, []() {
-             // Optional: Handle cleanup or state
-        });
-    }
-    
-    // Generate and update mask (use small-res for consistency with live preview)
-    MaskLayer m;
-    if (m_smallW > 0 && m_smallH > 0) {
-        m = getGeneratedMask(m_smallW, m_smallH);
-    } else {
-        m = getGeneratedMask();
-    }
-    if (m.data.empty() || m.width == 0 || m.height == 0) {
-        QMessageBox::warning(this, tr("Preview"), tr("No mask data generated. Please draw shapes or select a mask type."));
-        return;
-    }
-
-    m_livePreview->updateMask(m.data, m.width, m.height,
-                              static_cast<ImageBuffer::DisplayMode>(m_previewStretchCombo->currentData().toInt()),
-                              false, false);
-    
-    // Show if hidden (reuse if already open)
-    if (!m_livePreview->isVisible()) {
-        m_livePreview->show();
-    }
-    m_livePreview->raise();
-    m_livePreview->activateWindow();
-}
-
-std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, int w, int h, float fuzzDeg) const {
-    // Return zeros if not RGB
-    if (m_sourceImage.channels() < 3) {
-        return std::vector<float>(w*h, 0.0f);
-    }
-    
-    // Resize source if needed
-    cv::Mat rgb8(h, w, CV_8UC3);
-    if (w == m_sourceImage.width() && h == m_sourceImage.height()) {
-        const std::vector<float>& data = m_sourceImage.data();
-        #pragma omp parallel for
-        for (int i = 0; i < h*w; ++i) {
-            rgb8.at<cv::Vec3b>(i)[0] = static_cast<uchar>(std::clamp(data[i*3] * 255.0f, 0.0f, 255.0f));
-            rgb8.at<cv::Vec3b>(i)[1] = static_cast<uchar>(std::clamp(data[i*3+1] * 255.0f, 0.0f, 255.0f));
-            rgb8.at<cv::Vec3b>(i)[2] = static_cast<uchar>(std::clamp(data[i*3+2] * 255.0f, 0.0f, 255.0f));
-        }
-    } else {
-        cv::Mat fullSrc(m_sourceImage.height(), m_sourceImage.width(), CV_32FC3, const_cast<float*>(m_sourceImage.data().data()));
-        cv::Mat smallSrc;
-        cv::resize(fullSrc, smallSrc, cv::Size(w, h), 0, 0, cv::INTER_AREA);
-        #pragma omp parallel for
-        for (int i = 0; i < h*w; ++i) {
-            float* p = reinterpret_cast<float*>(smallSrc.data) + i*3;
-            rgb8.at<cv::Vec3b>(i)[0] = static_cast<uchar>(std::clamp(p[0] * 255.0f, 0.0f, 255.0f));
-            rgb8.at<cv::Vec3b>(i)[1] = static_cast<uchar>(std::clamp(p[1] * 255.0f, 0.0f, 255.0f));
-            rgb8.at<cv::Vec3b>(i)[2] = static_cast<uchar>(std::clamp(p[2] * 255.0f, 0.0f, 255.0f));
-        }
-    }
-    
-    // Convert RGB to HLS
-    cv::Mat hls;
-    cv::cvtColor(rgb8, hls, cv::COLOR_RGB2HLS);
-    
-    // Define color ranges (in degrees, 0-360)
-    // Blue narrowed to 195-255, Violet added at 255-300, Magenta starts at 300
-    struct Range { float lo; float hi; };
-    std::vector<Range> ranges;
-    
-    if (color == "Red") {
-        ranges = {{0, 15}, {345, 360}};
-    } else if (color == "Orange") {
-        ranges = {{15, 45}};
-    } else if (color == "Yellow") {
-        ranges = {{45, 75}};
-    } else if (color == "Green") {
-        ranges = {{75, 165}};
-    } else if (color == "Cyan") {
-        ranges = {{165, 195}};
-    } else if (color == "Blue") {
-        ranges = {{195, 255}};
-    } else if (color == "Violet") {
-        ranges = {{255, 300}};
-    } else if (color == "Magenta") {
-        ranges = {{300, 345}};
-    } else {
-        return std::vector<float>(w*h, 0.0f);
-    }
-
-    // Helper: compute fuzzy hue mask value using circular angular distance.
-    // Returns 1.0 inside the range, linearly falls to 0 at +/-fuzzDeg outside.
-    auto hueFuzzyVal = [](float H, float lo, float hi, float fuzz) -> float {
-        if (H >= lo && H <= hi) return 1.0f;
-        if (fuzz < 1e-3f) return 0.0f;
-        // Circular distance to each boundary
-        auto circDist = [](float a, float b) {
-            float d = std::fabs(a - b);
-            return std::min(d, 360.0f - d);
-        };
-        float dist = std::min(circDist(H, lo), circDist(H, hi));
-        return (dist < fuzz) ? 1.0f - dist / fuzz : 0.0f;
-    };
-
-    // Create mask based on hue ranges with optional fuzziness
-    std::vector<float> mask(w*h, 0.0f);
-    
-    #pragma omp parallel for
-    for (int i = 0; i < h*w; ++i) {
-        float hue = (hls.at<cv::Vec3b>(i)[0] / 180.0f) * 360.0f;
-        float s = hls.at<cv::Vec3b>(i)[2] / 255.0f;
-        
-        if (s < 0.1f) continue; // Skip low saturation pixels (neutral/gray)
-
-        float maxVal = 0.0f;
-        for (const auto& r : ranges) {
-            maxVal = std::max(maxVal, hueFuzzyVal(hue, r.lo, r.hi, fuzzDeg));
-        }
-        mask[i] = std::clamp(maxVal, 0.0f, 1.0f);
-    }
-    
-    return mask;
-}
-
-std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, float fuzzDeg) const {
-    return getColorMask(color, m_sourceImage.width(), m_sourceImage.height(), fuzzDeg);
-}
-
-std::vector<float> MaskGenerationDialog::getLightness(int w, int h) const {
-    if (w == m_smallW && h == m_smallH && !m_smallLuma.empty()) {
+// Return the cached downsampled luma if dimensions match; otherwise compute on the fly.
+std::vector<float> MaskGenerationDialog::getLightness(int w, int h) const
+{
+    if (w == m_smallW && h == m_smallH && !m_smallLuma.empty())
         return m_smallLuma;
-    }
-    // If requesting full size
-    if (w == m_sourceImage.width() && h == m_sourceImage.height()) {
+
+    if (w == m_sourceImage.width() && h == m_sourceImage.height())
         return getComponentLightness();
-    }
-    // Arbitrary size - resize on the fly
+
     std::vector<float> L = getComponentLightness();
     std::vector<float> res(w * h);
     cv::Mat src(m_sourceImage.height(), m_sourceImage.width(), CV_32FC1, L.data());
     cv::Mat dst;
     cv::resize(src, dst, cv::Size(w, h), 0, 0, cv::INTER_AREA);
-    memcpy(res.data(), dst.data, res.size() * sizeof(float));
+    std::memcpy(res.data(), dst.data, res.size() * sizeof(float));
     return res;
+}
+
+// Compute the chrominance mask at a specific resolution (resizes source if needed).
+std::vector<float> MaskGenerationDialog::getChrominance(int w, int h) const
+{
+    if (w == m_sourceImage.width() && h == m_sourceImage.height())
+        return getComponentChrominance();
+
+    cv::Mat fullSrc(m_sourceImage.height(), m_sourceImage.width(), CV_32FC3,
+                    const_cast<float*>(m_sourceImage.data().data()));
+    cv::Mat src;
+    cv::resize(fullSrc, src, cv::Size(w, h), 0, 0, cv::INTER_AREA);
+
+    cv::Mat ycrcb;
+    cv::cvtColor(src, ycrcb, cv::COLOR_RGB2YCrCb);
+
+    std::vector<cv::Mat> chans;
+    cv::split(ycrcb, chans);
+
+    const cv::Scalar meanCr = cv::mean(chans[1]);
+    const cv::Scalar meanCb = cv::mean(chans[2]);
+
+    cv::Mat diffCr = chans[1] - meanCr;
+    cv::Mat diffCb = chans[2] - meanCb;
+    cv::Mat dist;
+    cv::sqrt(diffCr.mul(diffCr) + diffCb.mul(diffCb), dist);
+    cv::normalize(dist, dist, 0, 1, cv::NORM_MINMAX);
+
+    std::vector<float> res(w * h);
+    std::memcpy(res.data(), dist.data, res.size() * sizeof(float));
+    return res;
+}
+
+// Compute chrominance at native source resolution.
+std::vector<float> MaskGenerationDialog::getComponentChrominance() const
+{
+    const int w = m_sourceImage.width();
+    const int h = m_sourceImage.height();
+    cv::Mat src(h, w, CV_32FC3, const_cast<float*>(m_sourceImage.data().data()));
+
+    cv::Mat ycrcb;
+    cv::cvtColor(src, ycrcb, cv::COLOR_RGB2YCrCb);
+
+    std::vector<cv::Mat> chans;
+    cv::split(ycrcb, chans);
+
+    const cv::Scalar meanCr = cv::mean(chans[1]);
+    const cv::Scalar meanCb = cv::mean(chans[2]);
+
+    cv::Mat diffCr = chans[1] - meanCr;
+    cv::Mat diffCb = chans[2] - meanCb;
+    cv::Mat dist;
+    cv::sqrt(diffCr.mul(diffCr) + diffCb.mul(diffCb), dist);
+    cv::normalize(dist, dist, 0, 1, cv::NORM_MINMAX);
+
+    std::vector<float> res(w * h);
+    std::memcpy(res.data(), dist.data, res.size() * sizeof(float));
+    return res;
+}
+
+// Detect stars at full resolution then generate the star mask at the requested size.
+std::vector<float> MaskGenerationDialog::getStarMask(int w, int h) const
+{
+    auto stars = m_sourceImage.detectStarsHQ();
+    return m_sourceImage.generateHQStarMask(stars, w, h);
+}
+
+std::vector<float> MaskGenerationDialog::getStarMask() const
+{
+    return getStarMask(m_sourceImage.width(), m_sourceImage.height());
+}
+
+// Build a range-selection mask at full source resolution using current slider values.
+std::vector<float> MaskGenerationDialog::generateRangeMask([[maybe_unused]] const std::vector<float>& base)
+{
+    std::vector<float> comp = getComponentLightness();
+
+    const float L    = m_lowerSl->value() / 100.0f;
+    const float U    = m_upperSl->value() / 100.0f;
+    const float fuzz = m_fuzzSl->value()  / 100.0f;
+    const int smooth = m_smoothSl->value();
+    const bool screen = m_screenCb->isChecked();
+    const bool inv    = m_invertCb->isChecked();
+
+    const int          size = static_cast<int>(comp.size());
+    std::vector<float> m(size, 0.0f);
+
+    #pragma omp parallel for
+    for (int i = 0; i < size; ++i) {
+        const float v = comp[i];
+        float val = 0.0f;
+
+        if (v >= L && v <= U) {
+            val = 1.0f;
+        } else if (fuzz > 1e-6f) {
+            if      (v >= L - fuzz && v < L) val = (v - (L - fuzz)) / fuzz;
+            else if (v >  U        && v <= U + fuzz) val = ((U + fuzz) - v) / fuzz;
+        }
+
+        val = std::clamp(val, 0.0f, 1.0f);
+        if (screen) val *= v;
+        m[i] = val;
+    }
+
+    if (smooth > 0) {
+        const float sigma = smooth / 3.0f;
+        cv::Mat mat(m_sourceImage.height(), m_sourceImage.width(), CV_32FC1, m.data());
+        cv::GaussianBlur(mat, mat, cv::Size(0, 0), sigma);
+    }
+
+    if (inv)
+        for (float& v : m) v = 1.0f - v;
+
+    return m;
+}
+
+// Compute a hue-based colour mask with optional angular fuzziness.
+// Pixels with saturation below 0.1 are excluded as effectively neutral.
+std::vector<float> MaskGenerationDialog::getColorMask(const QString& color,
+                                                       int w, int h,
+                                                       float fuzzDeg) const
+{
+    if (m_sourceImage.channels() < 3)
+        return std::vector<float>(w * h, 0.0f);
+
+    // Build an 8-bit RGB matrix at the requested resolution
+    cv::Mat rgb8(h, w, CV_8UC3);
+
+    if (w == m_sourceImage.width() && h == m_sourceImage.height()) {
+        const std::vector<float>& data = m_sourceImage.data();
+        #pragma omp parallel for
+        for (int i = 0; i < h * w; ++i) {
+            rgb8.at<cv::Vec3b>(i)[0] = static_cast<uchar>(std::clamp(data[i*3+0] * 255.0f, 0.0f, 255.0f));
+            rgb8.at<cv::Vec3b>(i)[1] = static_cast<uchar>(std::clamp(data[i*3+1] * 255.0f, 0.0f, 255.0f));
+            rgb8.at<cv::Vec3b>(i)[2] = static_cast<uchar>(std::clamp(data[i*3+2] * 255.0f, 0.0f, 255.0f));
+        }
+    } else {
+        cv::Mat fullSrc(m_sourceImage.height(), m_sourceImage.width(), CV_32FC3,
+                        const_cast<float*>(m_sourceImage.data().data()));
+        cv::Mat smallSrc;
+        cv::resize(fullSrc, smallSrc, cv::Size(w, h), 0, 0, cv::INTER_AREA);
+        #pragma omp parallel for
+        for (int i = 0; i < h * w; ++i) {
+            const float* p = reinterpret_cast<float*>(smallSrc.data) + i * 3;
+            rgb8.at<cv::Vec3b>(i)[0] = static_cast<uchar>(std::clamp(p[0] * 255.0f, 0.0f, 255.0f));
+            rgb8.at<cv::Vec3b>(i)[1] = static_cast<uchar>(std::clamp(p[1] * 255.0f, 0.0f, 255.0f));
+            rgb8.at<cv::Vec3b>(i)[2] = static_cast<uchar>(std::clamp(p[2] * 255.0f, 0.0f, 255.0f));
+        }
+    }
+
+    cv::Mat hls;
+    cv::cvtColor(rgb8, hls, cv::COLOR_RGB2HLS);
+
+    // Hue ranges in degrees [0, 360].
+    // Blue is narrowed to 195-255; Violet occupies 255-300; Magenta from 300.
+    struct Range { float lo; float hi; };
+    std::vector<Range> ranges;
+
+    if      (color == "Red")     ranges = {{ 0, 15}, {345, 360}};
+    else if (color == "Orange")  ranges = {{15, 45}};
+    else if (color == "Yellow")  ranges = {{45, 75}};
+    else if (color == "Green")   ranges = {{75, 165}};
+    else if (color == "Cyan")    ranges = {{165, 195}};
+    else if (color == "Blue")    ranges = {{195, 255}};
+    else if (color == "Violet")  ranges = {{255, 300}};
+    else if (color == "Magenta") ranges = {{300, 345}};
+    else return std::vector<float>(w * h, 0.0f);
+
+    // Returns 1.0 inside the hue range; linearly falls to 0 at ±fuzzDeg outside.
+    // Uses circular angular distance to handle the 0/360 wrap correctly.
+    auto hueFuzzyVal = [](float H, float lo, float hi, float fuzz) -> float {
+        if (H >= lo && H <= hi) return 1.0f;
+        if (fuzz < 1e-3f) return 0.0f;
+        auto circDist = [](float a, float b) {
+            const float d = std::fabs(a - b);
+            return std::min(d, 360.0f - d);
+        };
+        const float dist = std::min(circDist(H, lo), circDist(H, hi));
+        return (dist < fuzz) ? 1.0f - dist / fuzz : 0.0f;
+    };
+
+    std::vector<float> mask(w * h, 0.0f);
+
+    #pragma omp parallel for
+    for (int i = 0; i < h * w; ++i) {
+        const float hue = (hls.at<cv::Vec3b>(i)[0] / 180.0f) * 360.0f;
+        const float sat =  hls.at<cv::Vec3b>(i)[2] / 255.0f;
+
+        if (sat < 0.1f) continue;
+
+        float maxVal = 0.0f;
+        for (const auto& r : ranges)
+            maxVal = std::max(maxVal, hueFuzzyVal(hue, r.lo, r.hi, fuzzDeg));
+
+        mask[i] = std::clamp(maxVal, 0.0f, 1.0f);
+    }
+
+    return mask;
+}
+
+std::vector<float> MaskGenerationDialog::getColorMask(const QString& color, float fuzzDeg) const
+{
+    return getColorMask(color, m_sourceImage.width(), m_sourceImage.height(), fuzzDeg);
+}
+
+// =============================================================================
+// Live Preview
+// =============================================================================
+
+// Refresh the live preview dialog if it is currently visible.
+// Uses the downsampled resolution for responsiveness.
+void MaskGenerationDialog::updateLivePreview()
+{
+    if (!m_livePreview || !m_livePreview->isVisible()) return;
+
+    const MaskLayer m = (m_smallW > 0 && m_smallH > 0)
+        ? getGeneratedMask(m_smallW, m_smallH)
+        : getGeneratedMask();
+
+    const auto mode = static_cast<ImageBuffer::DisplayMode>(
+        m_previewStretchCombo->currentData().toInt());
+
+    m_livePreview->updateMask(m.data, m.width, m.height, mode, false, false);
+}
+
+// Open (or re-use) the live preview dialog and populate it with the current mask.
+void MaskGenerationDialog::generatePreview()
+{
+    if (!m_livePreview) {
+        m_livePreview = new LivePreviewDialog(m_sourceImage.width(),
+                                              m_sourceImage.height(), this);
+        connect(m_livePreview, &QDialog::finished, []() {});
+    }
+
+    const MaskLayer m = (m_smallW > 0 && m_smallH > 0)
+        ? getGeneratedMask(m_smallW, m_smallH)
+        : getGeneratedMask();
+
+    if (m.data.empty() || m.width == 0 || m.height == 0) {
+        QMessageBox::warning(this, tr("Preview"),
+            tr("No mask data generated. Please draw shapes or select a mask type."));
+        return;
+    }
+
+    const auto mode = static_cast<ImageBuffer::DisplayMode>(
+        m_previewStretchCombo->currentData().toInt());
+
+    m_livePreview->updateMask(m.data, m.width, m.height, mode, false, false);
+
+    if (!m_livePreview->isVisible())
+        m_livePreview->show();
+
+    m_livePreview->raise();
+    m_livePreview->activateWindow();
 }

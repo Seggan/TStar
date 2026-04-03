@@ -1,5 +1,6 @@
 #include "AstapSolver.h"
 #include "../io/SimpleTiffWriter.h"
+
 #include <QSettings>
 #include <QDir>
 #include <QFile>
@@ -9,94 +10,114 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QElapsedTimer>
 #include <QMutexLocker>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-AstapSolver::AstapSolver(QObject* parent) : QObject(parent) {
+// ============================================================================
+// Construction / Destruction
+// ============================================================================
+
+AstapSolver::AstapSolver(QObject* parent) : QObject(parent)
+{
     if (QCoreApplication::instance()) {
-        connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [this]() {
-            cancelSolve();
-        });
+        connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
+                this, [this]() { cancelSolve(); });
     }
 }
 
-AstapSolver::~AstapSolver() {
+AstapSolver::~AstapSolver()
+{
     cancelSolve();
 }
 
-// Helper to check if a directory contains ASTAP catalog files
-bool AstapSolver::containsAstapCatalogs(const QString& path) {
+// ============================================================================
+// Catalog detection
+// ============================================================================
+
+bool AstapSolver::containsAstapCatalogs(const QString& path)
+{
     QDir dir(path);
     if (!dir.exists()) return false;
-    
-    // ASTAP catalogs use various extensions: .dat, .290, or numeric sky-zone suffixes (e.g. .1476)
-    // Common prefixes: d (Gaia), h (Hyghen), g (Hyperleda), q (Quasars), tyc (Tycho), w (UCAC4)
+
+    // ASTAP catalogs use a variety of extensions (.dat, .290, numeric sky-zone
+    // suffixes like .1476) and filename prefixes:
+    //   d = Gaia,  h = Hyghen,  g = Hyperleda,  q = Quasars,
+    //   tyc = Tycho,  w = UCAC4
     QStringList filters;
-    filters << "d*.*" << "h*.*" << "g*.*" << "q*.*" << "tyc*.*" << "w*.*" 
-            << "*.290" << "*.50" << "*.g17" << "*.g18" << "*.h17" << "*.h18" 
+    filters << "d*.*" << "h*.*" << "g*.*" << "q*.*" << "tyc*.*" << "w*.*"
+            << "*.290" << "*.50" << "*.g17" << "*.g18" << "*.h17" << "*.h18"
             << "*.290c" << "*.50c" << "*.opt" << "*.dat"
             << "d50_*" << "d05_*" << "h17_*" << "h18_*" << "w08_*";
-    
+
     auto checkInDir = [&](const QDir& d) -> bool {
         QStringList files = d.entryList(filters, QDir::Files);
         for (const auto& f : files) {
             QFileInfo info(f);
             QString ext = info.suffix();
-            
-            // Standard extensions
-            if (ext == "dat" || ext == "290" || ext == "50" || ext == "opt" || 
-                ext.endsWith("c") || ext.startsWith("g") || ext.startsWith("h")) return true;
-            
-            // Numeric sky-zone extensions (like .1476)
+
+            // Recognized standard extensions
+            if (ext == "dat" || ext == "290" || ext == "50" || ext == "opt" ||
+                ext.endsWith("c") || ext.startsWith("g") || ext.startsWith("h"))
+                return true;
+
+            // Numeric sky-zone extensions (e.g. .1476)
             if (!ext.isEmpty()) {
                 bool ok = false;
                 ext.toInt(&ok);
                 if (ok) return true;
             }
 
-            // Specific prefixes known to be ASTAP
-            if (f.startsWith("d") || f.startsWith("h") || f.startsWith("g") || 
-                f.startsWith("q") || f.startsWith("tyc") || f.startsWith("w")) {
+            // Known ASTAP filename prefixes
+            if (f.startsWith("d") || f.startsWith("h") || f.startsWith("g") ||
+                f.startsWith("q") || f.startsWith("tyc") || f.startsWith("w"))
                 return true;
-            }
         }
         return false;
     };
 
-    // 1. Check current directory
+    // Check the directory itself
     if (checkInDir(dir)) return true;
-    
-    // 2. Check all subdirectories (one level deep)
+
+    // Check immediate subdirectories (one level deep)
     QStringList subDirs = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     for (const QString& sub : subDirs) {
         if (checkInDir(QDir(dir.absoluteFilePath(sub)))) return true;
     }
-    
+
     return false;
 }
 
-QString AstapSolver::getAstapDatabasePath(const QString& overridePath) {
+// ============================================================================
+// Database path resolution
+// ============================================================================
+
+QString AstapSolver::getAstapDatabasePath(const QString& overridePath)
+{
     QSettings settings;
-    QString customDb = overridePath.isEmpty() ? 
-        settings.value("paths/astap_database").toString().trimmed() : overridePath.trimmed();
-    
-    // Helper to validate and optionally resolve .app bundles
+    QString customDb = overridePath.isEmpty()
+        ? settings.value("paths/astap_database").toString().trimmed()
+        : overridePath.trimmed();
+
+    // Helper: validates a path and resolves macOS .app bundle internals
     auto validateAndResolve = [&](const QString& path) -> QString {
         if (path.isEmpty()) return "";
         QDir dir(path);
         if (!dir.exists()) return "";
 
 #ifdef Q_OS_MAC
-        // On macOS, if the path is a .app bundle, check internal common locations
+        // If the path points to a .app bundle, probe common internal locations
         if (path.endsWith(".app") || path.endsWith(".app/")) {
             QString base = path;
             if (base.endsWith("/")) base.chop(1);
+
             QStringList internalPotentials;
             internalPotentials << base + "/Contents/Resources/Databases"
-                              << base + "/Contents/MacOS/Databases"
-                              << base + "/Contents/Resources"
-                              << base + "/Contents/MacOS";
+                               << base + "/Contents/MacOS/Databases"
+                               << base + "/Contents/Resources"
+                               << base + "/Contents/MacOS";
+
             for (const auto& p : internalPotentials) {
                 if (containsAstapCatalogs(p)) return QDir(p).absolutePath();
             }
@@ -104,37 +125,42 @@ QString AstapSolver::getAstapDatabasePath(const QString& overridePath) {
 #endif
 
         if (containsAstapCatalogs(path)) return QDir(path).absolutePath();
-        
-        // Check "Databases" subfolder
+
+        // Try a "Databases" subfolder
         QString dbSub = path + "/Databases";
         if (containsAstapCatalogs(dbSub)) return QDir(dbSub).absolutePath();
 
         return "";
     };
 
-    // 1. Try custom database path first, but validate/resolve it
+    // --- Strategy 1: User-specified or settings-stored custom path -----------
     QString resolvedCustom = validateAndResolve(customDb);
     if (!resolvedCustom.isEmpty()) return resolvedCustom;
 
-    // 2. Try to find catalogs alongside the detected executable
+    // --- Strategy 2: Alongside the detected ASTAP executable -----------------
     QString astapExec = getAstapExecutable();
     if (!astapExec.isEmpty()) {
         QFileInfo exeInfo(astapExec);
         QString astapDir = exeInfo.absolutePath();
-        
-        if (containsAstapCatalogs(astapDir)) return QDir(astapDir).absolutePath();
-        if (containsAstapCatalogs(astapDir + "/Databases")) return QDir(astapDir + "/Databases").absolutePath();
+
+        if (containsAstapCatalogs(astapDir))
+            return QDir(astapDir).absolutePath();
+        if (containsAstapCatalogs(astapDir + "/Databases"))
+            return QDir(astapDir + "/Databases").absolutePath();
 
 #ifdef Q_OS_MAC
-        // If the executable is deep in a bundle, also check bundle-relative Resources
-        if (astapDir.endsWith("/Contents/MacOS") || astapDir.endsWith("/Contents/Resources/deps")) {
-            QString contentsDir = astapDir.contains("/Resources/deps") ? 
-                QDir(astapDir + "/../..").absolutePath() : QDir(astapDir + "/..").absolutePath();
-            
+        // If the executable resides deep in a bundle, check bundle-relative paths
+        if (astapDir.endsWith("/Contents/MacOS") ||
+            astapDir.endsWith("/Contents/Resources/deps"))
+        {
+            QString contentsDir = astapDir.contains("/Resources/deps")
+                ? QDir(astapDir + "/../..").absolutePath()
+                : QDir(astapDir + "/..").absolutePath();
+
             QStringList bundlePotentials;
             bundlePotentials << contentsDir + "/Resources/Databases"
-                            << contentsDir + "/Resources/deps/Databases"
-                            << contentsDir + "/Resources";
+                             << contentsDir + "/Resources/deps/Databases"
+                             << contentsDir + "/Resources";
             for (const auto& p : bundlePotentials) {
                 if (containsAstapCatalogs(p)) return QDir(p).absolutePath();
             }
@@ -142,20 +168,22 @@ QString AstapSolver::getAstapDatabasePath(const QString& overridePath) {
 #endif
     }
 
-    // 3. Search multiple potential default locations (Synchronized with SettingsDialog)
+    // --- Strategy 3: Well-known default installation locations ----------------
     QStringList potentials;
+
 #ifdef Q_OS_WIN
-    potentials << "C:/Program Files/astap" 
-               << "C:/Program Files (x86)/astap" 
+    potentials << "C:/Program Files/astap"
+               << "C:/Program Files (x86)/astap"
                << "C:/ASTAP"
-               << QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/ASTAP"
+               << QStandardPaths::writableLocation(
+                      QStandardPaths::DocumentsLocation) + "/ASTAP"
                << QCoreApplication::applicationDirPath() + "/deps"
                << QCoreApplication::applicationDirPath();
 #elif defined(Q_OS_MAC)
     QString appDir = QCoreApplication::applicationDirPath(); // Contents/MacOS
     potentials << appDir + "/../Resources/deps/Databases"
                << appDir + "/../Resources/deps"
-               << appDir + "/deps" // In case it's flat
+               << appDir + "/deps"
                << "/usr/local/opt/astap/Databases"
                << "/usr/local/opt/astap"
                << "/opt/homebrew/opt/astap/Databases"
@@ -173,15 +201,23 @@ QString AstapSolver::getAstapDatabasePath(const QString& overridePath) {
     return "";
 }
 
-QString AstapSolver::getAstapExecutable() {
+// ============================================================================
+// Executable path resolution
+// ============================================================================
+
+QString AstapSolver::getAstapExecutable()
+{
     QSettings settings;
+
 #ifdef Q_OS_WIN
-    // Check bundled
+    // Bundled binaries shipped alongside TStar
     QString bundledCli = QCoreApplication::applicationDirPath() + "/deps/astap_cli.exe";
     if (QFile::exists(bundledCli)) return bundledCli;
+
     QString bundled = QCoreApplication::applicationDirPath() + "/deps/astap.exe";
     if (QFile::exists(bundled)) return bundled;
-    // Check default system
+
+    // Standard system installation paths
     QString sysPaths[] = {
         "C:/Program Files/astap/astap_cli.exe",
         "C:/Program Files (x86)/astap/astap_cli.exe",
@@ -191,8 +227,9 @@ QString AstapSolver::getAstapExecutable() {
     for (const auto& p : sysPaths) {
         if (QFile::exists(p)) return p;
     }
+
 #elif defined(Q_OS_MAC)
-    // Bundle locations in TStar.app
+    // Bundled binaries inside the TStar.app bundle
     const QString appDir = QCoreApplication::applicationDirPath();
     QString bundledCandidates[] = {
         appDir + "/../Resources/deps/astap",
@@ -204,45 +241,48 @@ QString AstapSolver::getAstapExecutable() {
         if (QFile::exists(p)) return p;
     }
 
-    // System path
-    if (QFile::exists("/Applications/ASTAP.app/Contents/MacOS/astap")) {
+    // System-wide ASTAP.app
+    if (QFile::exists("/Applications/ASTAP.app/Contents/MacOS/astap"))
         return "/Applications/ASTAP.app/Contents/MacOS/astap";
-    }
-    // Homebrew formula install (brew install astap)
-    if (QFile::exists("/usr/local/opt/astap/bin/astap")) return "/usr/local/opt/astap/bin/astap";
-    if (QFile::exists("/usr/local/opt/astap/astap")) return "/usr/local/opt/astap/astap";
-    if (QFile::exists("/usr/local/bin/astap")) return "/usr/local/bin/astap";
-    if (QFile::exists("/opt/homebrew/bin/astap")) return "/opt/homebrew/bin/astap";
+
+    // Homebrew installations
+    if (QFile::exists("/usr/local/opt/astap/bin/astap"))
+        return "/usr/local/opt/astap/bin/astap";
+    if (QFile::exists("/usr/local/opt/astap/astap"))
+        return "/usr/local/opt/astap/astap";
+    if (QFile::exists("/usr/local/bin/astap"))
+        return "/usr/local/bin/astap";
+    if (QFile::exists("/opt/homebrew/bin/astap"))
+        return "/opt/homebrew/bin/astap";
+
 #else
+    // Linux default
     if (QFile::exists("/opt/astap/astap")) return "/opt/astap/astap";
 #endif
 
-    // Legacy/manual override path: keep as fallback for compatibility.
+    // Legacy / manual override path (kept for backwards compatibility)
     QString customPath = settings.value("paths/astap").toString();
     if (!customPath.isEmpty()) {
-        #ifdef Q_OS_MAC
-        // If user selected the .app bundle, convert to internal binary when possible.
+#ifdef Q_OS_MAC
+        // Resolve .app bundles to the internal binary
         if (customPath.endsWith(".app") || customPath.endsWith(".app/")) {
             QString internal = customPath;
             if (internal.endsWith("/")) internal.chop(1);
             internal += "/Contents/MacOS/astap";
             if (QFile::exists(internal)) return internal;
         }
-        #endif
-
+#endif
         QFileInfo customInfo(customPath);
 
-        // Accept only files as executables. Directories are not valid executable paths.
-        if (!customInfo.exists() || !customInfo.isFile()) {
+        // Only accept regular files as executables (not directories)
+        if (!customInfo.exists() || !customInfo.isFile())
             return "";
-        }
 
-        // Prefer CLI binary when a GUI binary is configured.
+        // Prefer the CLI variant when the GUI binary is configured
         if (customInfo.fileName().compare("astap.exe", Qt::CaseInsensitive) == 0) {
             QString cliSibling = customInfo.absolutePath() + "/astap_cli.exe";
-            if (QFile::exists(cliSibling)) {
+            if (QFile::exists(cliSibling))
                 return cliSibling;
-            }
         }
         return customPath;
     }
@@ -250,38 +290,55 @@ QString AstapSolver::getAstapExecutable() {
     return "";
 }
 
-void AstapSolver::cancelSolve() {
+// ============================================================================
+// Cancellation
+// ============================================================================
+
+void AstapSolver::cancelSolve()
+{
     m_cancelRequested.store(true);
 }
 
-bool AstapSolver::terminateAstapProcess(QProcess& process, int terminateWaitMs) {
-    if (process.state() == QProcess::NotRunning) {
+// ============================================================================
+// Process termination (graceful -> kill -> platform-specific forced kill)
+// ============================================================================
+
+bool AstapSolver::terminateAstapProcess(QProcess& process, int terminateWaitMs)
+{
+    if (process.state() == QProcess::NotRunning)
         return true;
-    }
 
     process.terminate();
-    if (process.waitForFinished(terminateWaitMs)) {
+    if (process.waitForFinished(terminateWaitMs))
         return true;
-    }
 
     process.kill();
-    if (process.waitForFinished(terminateWaitMs)) {
+    if (process.waitForFinished(terminateWaitMs))
         return true;
-    }
 
 #ifdef Q_OS_WIN
     const qint64 pid = process.processId();
     if (pid > 0) {
-        QProcess::execute("taskkill", QStringList() << "/PID" << QString::number(pid) << "/T" << "/F");
+        QProcess::execute("taskkill",
+                          QStringList() << "/PID" << QString::number(pid)
+                                        << "/T" << "/F");
     }
 #endif
 
     return process.state() == QProcess::NotRunning;
 }
 
-void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint, double radiusDeg, double pixelScale) {
-    emit logMessage(tr("Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg").arg(raHint).arg(decHint).arg(radiusDeg));
-    
+// ============================================================================
+// solve --- Main entry point
+// ============================================================================
+
+void AstapSolver::solve(const ImageBuffer& image,
+                        double raHint, double decHint,
+                        double radiusDeg, double pixelScale)
+{
+    emit logMessage(tr("Starting ASTAP Solver. Center: %1, %2 Radius: %3 deg")
+                        .arg(raHint).arg(decHint).arg(radiusDeg));
+
     QString astapExec = getAstapExecutable();
     if (astapExec.isEmpty()) {
         NativeSolveResult res;
@@ -292,34 +349,44 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
 
     m_cancelRequested.store(false);
 
-    QThreadPool::globalInstance()->start([this, image, raHint, decHint, radiusDeg, pixelScale, astapExec]() {
+    QThreadPool::globalInstance()->start(
+        [this, image, raHint, decHint, radiusDeg, pixelScale, astapExec]()
+    {
         NativeSolveResult res;
-        
-        QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+
+        // -- Temporary file paths -----------------------------------------
+        QString tempDir  = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
         QString tempTiff = tempDir + "/tstar_astap_solve.tif";
-        QString tempIni = tempDir + "/tstar_astap_solve.ini";
-        QString tempWcs = tempDir + "/tstar_astap_solve.wcs";
-        
+        QString tempIni  = tempDir + "/tstar_astap_solve.ini";
+        QString tempWcs  = tempDir + "/tstar_astap_solve.wcs";
+
         QFile::remove(tempTiff);
         QFile::remove(tempIni);
         QFile::remove(tempWcs);
-        
+
         emit logMessage(tr("Saving temporary image for ASTAP..."));
-        
-        const int width = image.width();
-        const int height = image.height();
+
+        // -- Validate image buffer ----------------------------------------
+        const int width    = image.width();
+        const int height   = image.height();
         const int channels = image.channels();
+
         if (width <= 0 || height <= 0 || channels <= 0 || image.data().empty()) {
             res.errorMsg = tr("Invalid image buffer for ASTAP solve.");
-            QMetaObject::invokeMethod(this, "finished", Qt::QueuedConnection, Q_ARG(NativeSolveResult, res));
+            QMetaObject::invokeMethod(this, "finished", Qt::QueuedConnection,
+                                      Q_ARG(NativeSolveResult, res));
             return;
         }
 
-        // ASTAP is most reliable with a normalized single-channel luminance image.
-        std::vector<float> mono(static_cast<size_t>(width) * static_cast<size_t>(height));
+        // -- Convert to normalized single-channel luminance ---------------
+        // ASTAP works most reliably with a normalized grayscale image.
+        std::vector<float> mono(static_cast<size_t>(width) *
+                                static_cast<size_t>(height));
         const float* src = image.data().data();
+
         float minV = std::numeric_limits<float>::max();
         float maxV = std::numeric_limits<float>::lowest();
+
         for (size_t i = 0; i < mono.size(); ++i) {
             float v = 0.0f;
             if (channels == 1) {
@@ -327,94 +394,101 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
             } else {
                 const size_t base = i * static_cast<size_t>(channels);
                 int sampleCount = std::min(channels, 3);
-                for (int c = 0; c < sampleCount; ++c) {
+                for (int c = 0; c < sampleCount; ++c)
                     v += src[base + static_cast<size_t>(c)];
-                }
                 v /= static_cast<float>(sampleCount);
             }
 
-            if (!std::isfinite(v)) {
-                v = 0.0f;
-            }
-
+            if (!std::isfinite(v)) v = 0.0f;
             v = std::clamp(v, 0.0f, 1.0f);
+
             mono[i] = v;
             minV = std::min(minV, v);
             maxV = std::max(maxV, v);
         }
 
+        // Stretch to full [0,1] range for optimal star detection
         const float range = maxV - minV;
         if (range > 1e-6f) {
-            for (float& v : mono) {
+            for (float& v : mono)
                 v = (v - minV) / range;
-            }
         }
 
-        if (!SimpleTiffWriter::write(tempTiff, width, height, 1, SimpleTiffWriter::Format_uint16, mono)) {
+        // -- Write temporary TIFF -----------------------------------------
+        if (!SimpleTiffWriter::write(tempTiff, width, height, 1,
+                                     SimpleTiffWriter::Format_uint16, mono))
+        {
             res.errorMsg = tr("Failed to save temporary image.");
-            QMetaObject::invokeMethod(this, "finished", Qt::QueuedConnection, Q_ARG(NativeSolveResult, res));
+            QMetaObject::invokeMethod(this, "finished", Qt::QueuedConnection,
+                                      Q_ARG(NativeSolveResult, res));
             return;
         }
 
-        // Calculate parameters - ASTAP CLI expects the FOV of the HEIGHT dimension 
-        // if width > height (landscape) or the WIDTH if height > width (portrait).
-        // The ASTAP manual specifies: "-fov <v> image height (or width if smaller) in degrees"
+        // -- Calculate FOV and coordinate parameters ----------------------
+        // ASTAP expects the FOV of the shorter image dimension (in degrees).
         double fovDeg = (std::min(width, height) * pixelScale) / 3600.0;
-        
-        // For large FOV (>12°), apply conservative factor to account for optical distortion
-        // across wide field of view
+
+        // Apply a conservative reduction for large FOVs to account for
+        // optical distortion across wide fields of view.
         if (fovDeg > 12.0) {
-            double fovReduced = fovDeg * 0.92;  // Use 92% of calculated FOV for large fields
-            emit logMessage(tr("Large FOV detected: reducing from %1° to %2° for search stability")
-                            .arg(fovDeg, 0, 'f', 2).arg(fovReduced, 0, 'f', 2));
+            double fovReduced = fovDeg * 0.92;
+            emit logMessage(
+                tr("Large FOV detected: reducing from %1 deg to %2 deg for search stability")
+                    .arg(fovDeg, 0, 'f', 2).arg(fovReduced, 0, 'f', 2));
             fovDeg = fovReduced;
         }
-        
-        double raHours = raHint / 15.0;
-        double spdDeg = decHint + 90.0;
-        
-        emit logMessage(tr("Calculated FOV (Height): %1 degrees (dims=%2x%3, scale=%4 arcsec/px)")
-                        .arg(fovDeg, 0, 'f', 4).arg(width).arg(height).arg(pixelScale, 0, 'f', 3));
 
+        double raHours = raHint / 15.0;        // RA in hours
+        double spdDeg  = decHint + 90.0;        // South pole distance in degrees
+
+        emit logMessage(
+            tr("Calculated FOV (Height): %1 degrees (dims=%2x%3, scale=%4 arcsec/px)")
+                .arg(fovDeg, 0, 'f', 4).arg(width).arg(height)
+                .arg(pixelScale, 0, 'f', 3));
+
+        // -- Build command-line arguments ---------------------------------
         QStringList commonArgs;
-        commonArgs << "-f" << tempTiff;
-        commonArgs << "-progress";
-        commonArgs << "-z" << "0";
-        commonArgs << "-s" << "500"; // Explicit star limit for stability
+        commonArgs << "-f" << tempTiff
+                   << "-progress"
+                   << "-z" << "0"
+                   << "-s" << "500";  // Explicit star limit for stability
 
-        // Add database path if available
+        // Database path
         QString dbPath = getAstapDatabasePath();
         if (!dbPath.isEmpty()) {
             commonArgs << "-d" << dbPath;
             emit logMessage(tr("ASTAP Database found: %1").arg(dbPath));
         } else {
-            // ASTAP has its own internal logic to find databases if not specified.
-            // We only warn if we can't find it to pass specifically, but it's often not fatal.
-            emit logMessage(tr("Note: ASTAP database not explicitly located by TStar; ASTAP will use its internal search paths."));
+            emit logMessage(
+                tr("Note: ASTAP database not explicitly located by TStar; "
+                   "ASTAP will use its internal search paths."));
         }
 
+        // Coordinate hint arguments
         QStringList hintedArgs;
         bool hasHint = (raHint != 0.0 || decHint != 0.0);
         if (hasHint) {
-            hintedArgs << "-ra" << QString::number(raHours, 'f', 6);   // RA in hours
-            hintedArgs << "-spd" << QString::number(spdDeg, 'f', 6);   // South pole distance in degrees
-            hintedArgs << "-r" << QString::number(radiusDeg, 'f', 2);
+            hintedArgs << "-ra"  << QString::number(raHours, 'f', 6)
+                       << "-spd" << QString::number(spdDeg,  'f', 6)
+                       << "-r"   << QString::number(radiusDeg, 'f', 2);
         }
 
+        // FOV / scale arguments
         QStringList scaleArgs;
         if (fovDeg > 0.0) {
             scaleArgs << "-fov" << QString::number(fovDeg, 'f', 4);
         }
 
-        // Add extra user-defined args from settings
+        // User-defined extra arguments from application settings
         QSettings settings;
         QString extra = settings.value("paths/astap_extra").toString();
         QStringList extraArgs;
-        if (!extra.isEmpty()) {
+        if (!extra.isEmpty())
             extraArgs = extra.split(' ', Qt::SkipEmptyParts);
-        }
 
+        // -- Output parsing lambda ----------------------------------------
         auto parseOutputs = [&]() -> bool {
+            // Try .ini file first
             if (QFile::exists(tempIni)) {
                 bool ok = parseAstapIni(tempIni, height, res);
                 if (ok) {
@@ -425,9 +499,9 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
                 QFile f(tempIni);
                 if (f.open(QIODevice::ReadOnly)) {
                     QString content = QString::fromUtf8(f.readAll());
-                    if (content.contains("PLTSOLVD=F")) {
+                    if (content.contains("PLTSOLVD=F"))
                         res.errorMsg = tr("ASTAP was unable to solve the image.");
-                    } else {
+                    else {
                         res.errorMsg = tr("Failed to parse ASTAP output files.");
                         emit logMessage("INI Content: " + content);
                     }
@@ -435,17 +509,16 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
                 return false;
             }
 
+            // Fall back to .wcs file
             if (QFile::exists(tempWcs)) {
                 if (parseAstapWCS(tempWcs, height, res)) {
                     res.success = true;
                     return true;
                 }
-
                 res.errorMsg = tr("Failed to parse ASTAP WCS file.");
                 QFile f(tempWcs);
-                if (f.open(QIODevice::ReadOnly)) {
+                if (f.open(QIODevice::ReadOnly))
                     emit logMessage("WCS Content: " + QString::fromUtf8(f.readAll()));
-                }
                 return false;
             }
 
@@ -453,25 +526,30 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
             return false;
         };
 
-        auto executeAttempt = [&](const QString& label, const QStringList& args) -> bool {
+        // -- Single-attempt execution lambda ------------------------------
+        auto executeAttempt = [&](const QString& label,
+                                  const QStringList& args) -> bool
+        {
             QFile::remove(tempIni);
             QFile::remove(tempWcs);
 
             emit logMessage(tr("ASTAP attempt: %1").arg(label));
-            
-            // Log full path-quoted command for clarity
+
             QString cmd = "\"" + astapExec + "\" " + args.join(" ");
             emit logMessage(QString("Executing: %1").arg(cmd));
 
             QProcess p;
-            p.setProcessChannelMode(QProcess::MergedChannels); // Combine stdout/stderr
+            p.setProcessChannelMode(QProcess::MergedChannels);
             p.start(astapExec, args);
+
             if (!p.waitForStarted(10000)) {
                 res.errorMsg = tr("Failed to start ASTAP process.");
-                emit logMessage(tr("QProcess start error: %1").arg(p.errorString()));
+                emit logMessage(tr("QProcess start error: %1")
+                                    .arg(p.errorString()));
                 return false;
             }
 
+            // Register the running process for potential cancellation
             {
                 QMutexLocker locker(&m_processMutex);
                 m_runningProcess = &p;
@@ -479,26 +557,28 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
 
             auto clearRunningProcess = [&]() {
                 QMutexLocker locker(&m_processMutex);
-                if (m_runningProcess == &p) {
+                if (m_runningProcess == &p)
                     m_runningProcess = nullptr;
-                }
             };
 
+            // Flush ASTAP stdout/stderr to our log
             auto flushOutput = [&]() {
-                QString output = p.readAllStandardOutput() + p.readAllStandardError();
+                QString output = p.readAllStandardOutput() +
+                                 p.readAllStandardError();
                 const QStringList lines = output.split('\n');
                 for (const QString& line : lines) {
                     QString t = line.trimmed();
-                    if (!t.isEmpty()) {
+                    if (!t.isEmpty())
                         emit logMessage(t);
-                    }
                 }
             };
 
+            // Poll loop with timeout and cancellation support
             QElapsedTimer timer;
             timer.start();
             constexpr qint64 kAttemptTimeoutMs = 120000;
             bool finished = false;
+
             while (!(finished = p.waitForFinished(500))) {
                 flushOutput();
 
@@ -511,104 +591,142 @@ void AstapSolver::solve(const ImageBuffer& image, double raHint, double decHint,
                 }
 
                 if (timer.elapsed() > kAttemptTimeoutMs) {
-                    emit logMessage(tr("ASTAP timed out after %1 seconds. Terminating process...").arg(kAttemptTimeoutMs / 1000));
+                    emit logMessage(
+                        tr("ASTAP timed out after %1 seconds. "
+                           "Terminating process...")
+                            .arg(kAttemptTimeoutMs / 1000));
                     terminateAstapProcess(p, 2000);
                     clearRunningProcess();
                     res.errorMsg = tr("ASTAP timed out.");
                     return false;
                 }
             }
-
             Q_UNUSED(finished);
+
             flushOutput();
             clearRunningProcess();
 
             emit logMessage(tr("ASTAP exit code: %1").arg(p.exitCode()));
-            if (p.exitStatus() != QProcess::NormalExit) {
+            if (p.exitStatus() != QProcess::NormalExit)
                 emit logMessage(tr("ASTAP process did not exit normally."));
-            }
 
             return parseOutputs();
         };
 
+        // -- Build attempt sequence (progressive relaxation) --------------
         std::vector<QPair<QString, QStringList>> attempts;
+
         if (hasHint) {
-            attempts.push_back({tr("hinted solve (with scale/FOV)"), commonArgs + hintedArgs + scaleArgs + extraArgs});
+            attempts.push_back({
+                tr("hinted solve (with scale/FOV)"),
+                commonArgs + hintedArgs + scaleArgs + extraArgs
+            });
             if (!scaleArgs.isEmpty()) {
-                attempts.push_back({tr("hinted solve (without scale/FOV)"), commonArgs + hintedArgs + extraArgs});
+                attempts.push_back({
+                    tr("hinted solve (without scale/FOV)"),
+                    commonArgs + hintedArgs + extraArgs
+                });
             }
-            attempts.push_back({tr("blind solve"), commonArgs + QStringList{"-r", "180.0"} + extraArgs});
+            attempts.push_back({
+                tr("blind solve"),
+                commonArgs + QStringList{"-r", "180.0"} + extraArgs
+            });
         } else {
-            attempts.push_back({tr("blind solve"), commonArgs + QStringList{"-r", "180.0"} + scaleArgs + extraArgs});
+            attempts.push_back({
+                tr("blind solve"),
+                commonArgs + QStringList{"-r", "180.0"} + scaleArgs + extraArgs
+            });
             if (!scaleArgs.isEmpty()) {
-                attempts.push_back({tr("blind solve (without scale/FOV)"), commonArgs + QStringList{"-r", "180.0"} + extraArgs});
+                attempts.push_back({
+                    tr("blind solve (without scale/FOV)"),
+                    commonArgs + QStringList{"-r", "180.0"} + extraArgs
+                });
             }
         }
 
+        // Execute attempts sequentially, stopping on first success
         for (const auto& attempt : attempts) {
-            if (executeAttempt(attempt.first, attempt.second)) {
+            if (executeAttempt(attempt.first, attempt.second))
                 break;
-            }
         }
-        
-        // Cleanup
+
+        // -- Cleanup temporary files --------------------------------------
         QFile::remove(tempTiff);
         QFile::remove(tempIni);
         QFile::remove(tempWcs);
-        
-        QMetaObject::invokeMethod(this, "finished", Qt::QueuedConnection, Q_ARG(NativeSolveResult, res));
+
+        QMetaObject::invokeMethod(this, "finished", Qt::QueuedConnection,
+                                  Q_ARG(NativeSolveResult, res));
     });
 }
 
-static double parseFitsValue(const QString& content, const QString& key) {
-    // FITS header lines are "KEY     =                VALUE / comment"
-    // We look for key, then =, then value.
-    QRegularExpression re(key + "\\s*=\\s*([-+]?\\d*\\.?\\d+(?:[eE][-+]?\\d+)?)");
+// ============================================================================
+// FITS keyword parser (file-local helper)
+// ============================================================================
+
+static double parseFitsValue(const QString& content, const QString& key)
+{
+    // FITS header format: "KEY     =              VALUE / comment"
+    QRegularExpression re(
+        key + "\\s*=\\s*([-+]?\\d*\\.?\\d+(?:[eE][-+]?\\d+)?)");
     auto match = re.match(content);
-    if (match.hasMatch()) return match.captured(1).toDouble();
+    if (match.hasMatch())
+        return match.captured(1).toDouble();
     return 0.0;
 }
 
-bool AstapSolver::parseAstapWCS(const QString& wcsFile, int imageHeight, NativeSolveResult& res) {
+// ============================================================================
+// ASTAP output parsers
+// ============================================================================
+
+bool AstapSolver::parseAstapWCS(const QString& wcsFile, int imageHeight,
+                                NativeSolveResult& res)
+{
     QFile file(wcsFile);
     if (!file.open(QIODevice::ReadOnly)) return false;
-    
+
     QString content = QString::fromUtf8(file.readAll());
-    
+
     res.crval1 = parseFitsValue(content, "CRVAL1");
     res.crval2 = parseFitsValue(content, "CRVAL2");
     res.crpix1 = parseFitsValue(content, "CRPIX1");
-    // ASTAP solved a TIFF, so it evaluated Y upside down relative to TStar.
-    // Convert back from bottom-up FITS Y to TStar's raw memory Y.
-    res.crpix2 = imageHeight - parseFitsValue(content, "CRPIX2") + 1.0; 
-    res.cd[0][0] = parseFitsValue(content, "CD1_1");
-    res.cd[0][1] = -parseFitsValue(content, "CD1_2"); // dRA/dY inverted
-    res.cd[1][0] = parseFitsValue(content, "CD2_1");
-    res.cd[1][1] = -parseFitsValue(content, "CD2_2"); // dDec/dY inverted
-    
+
+    // ASTAP solved a TIFF with bottom-up FITS Y convention. Convert back
+    // to TStar's top-down raw memory Y coordinate system.
+    res.crpix2 = imageHeight - parseFitsValue(content, "CRPIX2") + 1.0;
+
+    res.cd[0][0] =  parseFitsValue(content, "CD1_1");
+    res.cd[0][1] = -parseFitsValue(content, "CD1_2");  // dRA/dY inverted
+    res.cd[1][0] =  parseFitsValue(content, "CD2_1");
+    res.cd[1][1] = -parseFitsValue(content, "CD2_2");  // dDec/dY inverted
+
     return res.cd[0][0] != 0.0;
 }
 
-bool AstapSolver::parseAstapIni(const QString& iniFile, int imageHeight, NativeSolveResult& res) {
+bool AstapSolver::parseAstapIni(const QString& iniFile, int imageHeight,
+                                NativeSolveResult& res)
+{
     QFile file(iniFile);
     if (!file.open(QIODevice::ReadOnly)) return false;
-    
+
     QString content = QString::fromUtf8(file.readAll());
-    
+
+    // Check explicit solve-status flags
     if (content.contains("PLTSOLVD=F")) return false;
-    if (!content.contains("PLTSOLVD=T") && !content.contains("Solved=T")) {
-        // Just try to parse keywords anyway if solve status is missing
-    }
-    
+
+    // If solve status is absent, attempt to parse keywords regardless
+
     res.crval1 = parseFitsValue(content, "CRVAL1");
     res.crval2 = parseFitsValue(content, "CRVAL2");
     res.crpix1 = parseFitsValue(content, "CRPIX1");
-    // Apply Y-axis reflection for ASTAP solving a raw TIFF image
+
+    // Y-axis reflection for ASTAP raw-TIFF coordinate convention
     res.crpix2 = imageHeight - parseFitsValue(content, "CRPIX2") + 1.0;
-    res.cd[0][0] = parseFitsValue(content, "CD1_1");
+
+    res.cd[0][0] =  parseFitsValue(content, "CD1_1");
     res.cd[0][1] = -parseFitsValue(content, "CD1_2");
-    res.cd[1][0] = parseFitsValue(content, "CD2_1");
+    res.cd[1][0] =  parseFitsValue(content, "CD2_1");
     res.cd[1][1] = -parseFitsValue(content, "CD2_2");
-    
+
     return res.cd[0][0] != 0.0;
 }

@@ -1,7 +1,14 @@
 /**
  * @file PreprocessingTypes.h
- * @brief Types and enumerations for image preprocessing
- * 
+ * @brief Core types, enumerations, and parameter structures for the
+ *        image preprocessing pipeline.
+ *
+ * This header defines all shared types used across the preprocessing
+ * subsystem, including calibration frame identifiers, Bayer/CFA
+ * pattern descriptors, demosaicing algorithm selectors, cosmetic
+ * correction parameters, and the main preprocessing configuration
+ * structure.
+ *
  * Copyright (C) 2024-2026 TStar Team
  */
 
@@ -13,156 +20,174 @@
 
 namespace Preprocessing {
 
-//=============================================================================
-// ENUMERATIONS
-//=============================================================================
+// ============================================================================
+//  Enumerations
+// ============================================================================
 
 /**
- * @brief Type of master calibration frame
+ * @brief Identifies the type of a master calibration frame.
  */
 enum class MasterType {
-    Bias = 0,    ///< Master Bias (offset)
-    Dark,        ///< Master Dark
-    Flat,        ///< Master Flat
-    DarkFlat     ///< Master Dark for flats
+    Bias = 0,   ///< Master bias (sensor offset / read noise)
+    Dark,       ///< Master dark (thermal signal)
+    Flat,       ///< Master flat (optical vignetting / dust)
+    DarkFlat    ///< Master dark specifically matched to flat exposures
 };
 
 /**
- * @brief Bayer pattern for CFA sensors
+ * @brief Bayer / CFA pattern layout for single-channel sensor data.
+ *
+ * Standard 2x2 Bayer patterns are listed explicitly.  XTrans refers
+ * to the Fujifilm 6x6 colour filter array.  Auto indicates that the
+ * pattern should be read from the file header at load time.
  */
 enum class BayerPattern {
-    Auto = -1,   ///< Auto-detect from header
-    None = 0,    ///< Not a Bayer image (mono or already debayered)
-    RGGB,        ///< Red-Green-Green-Blue
-    BGGR,        ///< Blue-Green-Green-Red  
-    GBRG,        ///< Green-Blue-Red-Green
-    GRBG,        ///< Green-Red-Blue-Green
-    XTrans       ///< Fujifilm X-Trans
+    Auto  = -1, ///< Auto-detect from FITS / XISF header
+    None  =  0, ///< Monochrome sensor or already-debayered data
+    RGGB,       ///< Red  - Green / Green - Blue
+    BGGR,       ///< Blue - Green / Green - Red
+    GBRG,       ///< Green - Blue / Red   - Green
+    GRBG,       ///< Green - Red  / Blue  - Green
+    XTrans      ///< Fujifilm X-Trans 6x6 CFA
 };
 
 /**
- * @brief Debayering algorithm
+ * @brief Selects the demosaicing (debayering) algorithm.
  */
 enum class DebayerAlgorithm {
-    Bilinear = 0,    ///< Simple bilinear interpolation
-    VNG,             ///< Variable Number of Gradients
-    AHD,             ///< Adaptive Homogeneity-Directed
-    SuperPixel,      ///< 2x2 superpixel (half resolution)
-    RCD              ///< Ratio Corrected Demosaicing
+    Bilinear = 0, ///< Simple bilinear interpolation (fast, lower quality)
+    VNG,          ///< Variable Number of Gradients
+    AHD,          ///< Adaptive Homogeneity-Directed
+    SuperPixel,   ///< 2x2 super-pixel binning (halves resolution)
+    RCD           ///< Ratio Corrected Demosaicing
 };
 
 /**
- * @brief Cosmetic correction type
+ * @brief Strategy for detecting and correcting cosmetic defects.
  */
 enum class CosmeticType {
-    None = 0,       ///< No correction
-    FromMaster,     ///< Use data from master dark (cold pixels)
-    Sigma,          ///< Statistical detection (sigma clipping)
-    Custom          ///< User-defined bad pixel map
+    None = 0,   ///< No cosmetic correction applied
+    FromMaster, ///< Derive defect map from the master dark frame
+    Sigma,      ///< Statistical sigma-clipping detection per image
+    Custom      ///< User-supplied bad-pixel map file
 };
 
-/**
- * @brief Progress callback type
- */
-using ProgressCallback = std::function<void(const QString&, double)>;
+// ============================================================================
+//  Callback Types
+// ============================================================================
 
 /**
- * @brief Cancellation check type
+ * @brief Callback for reporting progress.
+ * @param message  Human-readable status string.
+ * @param progress Fractional progress in the range [0.0, 1.0].
+ */
+using ProgressCallback = std::function<void(const QString& message, double progress)>;
+
+/**
+ * @brief Callback that returns true when the operation should be cancelled.
  */
 using CancelCheck = std::function<bool()>;
 
-//=============================================================================
-// STRUCTURES
-//=============================================================================
+// ============================================================================
+//  Data Structures
+// ============================================================================
 
 /**
- * @brief Statistics for a master frame
+ * @brief Descriptive statistics computed for a loaded master frame.
  */
 struct MasterStats {
-    double mean = 0.0;
-    double median = 0.0;
-    double sigma = 0.0;
-    double min = 0.0;
-    double max = 0.0;
-    double exposure = 0.0;
-    double temperature = 0.0;
-    int width = 0;
-    int height = 0;
-    int channels = 0;
+    double mean        = 0.0;
+    double median      = 0.0;
+    double sigma       = 0.0;
+    double min         = 0.0;
+    double max         = 0.0;
+    double exposure    = 0.0;   ///< Exposure time in seconds
+    double temperature = 0.0;   ///< CCD temperature in degrees Celsius
+    int    width       = 0;
+    int    height      = 0;
+    int    channels    = 0;
 };
 
 /**
- * @brief Parameters for cosmetic correction
+ * @brief Configuration for cosmetic (hot / cold pixel) correction.
  */
 struct CosmeticParams {
-    CosmeticType type = CosmeticType::None;
-    float coldSigma = 3.0f;       ///< Sigma for cold pixel detection
-    float hotSigma = 3.0f;        ///< Sigma for hot pixel detection  
-    double coldThreshold = 0.0;   ///< Absolute threshold for cold
-    double hotThreshold = 1.0;    ///< Absolute threshold for hot
-    QString badPixelMap;          ///< Path to custom bad pixel map
+    CosmeticType type      = CosmeticType::None;
+    float  coldSigma       = 3.0f;   ///< Sigma threshold for cold pixel detection
+    float  hotSigma        = 3.0f;   ///< Sigma threshold for hot pixel detection
+    double coldThreshold   = 0.0;    ///< Absolute threshold for cold pixels
+    double hotThreshold    = 1.0;    ///< Absolute threshold for hot pixels
+    QString badPixelMap;             ///< File path to a custom bad-pixel map
 };
 
 /**
- * @brief Parameters for dark optimization
+ * @brief Configuration for numerical dark-frame scaling optimisation.
+ *
+ * When enabled, the engine searches for the scale factor K in
+ * [K_min, K_max] that minimises the residual noise after dark
+ * subtraction.
  */
 struct DarkOptimParams {
-    bool enabled = false;
-    float K_min = 0.5f;           ///< Minimum scale factor
-    float K_max = 2.0f;           ///< Maximum scale factor
-    float tolerance = 0.001f;     ///< Convergence tolerance
-    int maxIterations = 100;      ///< Maximum iterations
+    bool  enabled       = false;
+    float K_min         = 0.5f;    ///< Lower bound of the search interval
+    float K_max         = 2.0f;    ///< Upper bound of the search interval
+    float tolerance     = 0.001f;  ///< Convergence tolerance for the solver
+    int   maxIterations = 100;     ///< Maximum number of solver iterations
 };
 
 /**
- * @brief Parameters for CFA equalization
+ * @brief Configuration for per-channel CFA equalisation.
  */
 struct CFAEqualizeParams {
-    bool enabled = false;
-    bool preserveTotal = true;    ///< Keep total intensity constant
+    bool enabled       = false;
+    bool preserveTotal = true;  ///< Scale channels so total intensity is preserved
 };
 
 /**
- * @brief Main preprocessing parameters
+ * @brief Aggregate parameter set for the entire preprocessing pipeline.
+ *
+ * Collect all options that control calibration frame paths, calibration
+ * flags, CFA handling, cosmetic correction, output format, and
+ * miscellaneous sensor fixes into a single transportable structure.
  */
 struct PreprocessParams {
-    // Master frames
-    QString masterBias;           ///< Path to master bias
-    QString masterDark;           ///< Path to master dark  
-    QString masterFlat;           ///< Path to master flat
-    QString masterDarkFlat;       ///< Path to dark for flat (optional)
-    
-    // Calibration flags
+    // -- Master frame file paths --
+    QString masterBias;         ///< Path to master bias frame
+    QString masterDark;         ///< Path to master dark frame
+    QString masterFlat;         ///< Path to master flat frame
+    QString masterDarkFlat;     ///< Path to dark-for-flat frame (optional)
+
+    // -- Calibration enable flags --
     bool useBias = true;
     bool useDark = true;
     bool useFlat = true;
-    
-    // Dark optimization
+
+    // -- Dark optimisation --
     DarkOptimParams darkOptim;
-    
-    // CFA handling
-    BayerPattern bayerPattern = BayerPattern::None;
-    bool debayer = false;
+
+    // -- CFA / debayering --
+    BayerPattern    bayerPattern     = BayerPattern::None;
+    bool            debayer          = false;
     DebayerAlgorithm debayerAlgorithm = DebayerAlgorithm::RCD;
     CFAEqualizeParams cfaEqualize;
-    
-    // Cosmetic correction
+
+    // -- Cosmetic correction --
     CosmeticParams cosmetic;
-    
-    // Output options
-    bool outputFloat = true;      ///< Output as 32-bit float
-    QString outputPrefix;         ///< Prefix for output files
-    QString outputDir;            ///< Output directory
-    
-    // Fixes
-    bool fixBadLines = false;     ///< Fix bad CCD lines
-    bool fixBanding = false;      ///< Fix sensor banding
-    bool fixXTrans = false;       ///< Fix X-Trans sensor artifacts
-    
-    // Advanced
-    double biasLevel = 1e30;      ///< Synthetic bias level (1e30 = use master file)
-    double pedestal = 0.0;       ///< Pedestal to add during calibration
-    bool equalizeFlat = false;   ///< Equalize CFA channels in master flat
+
+    // -- Output options --
+    bool    outputFloat  = true;   ///< Write output as 32-bit IEEE float FITS
+    QString outputPrefix;          ///< Filename prefix prepended to each output
+    QString outputDir;             ///< Directory for output files
+
+    // -- Sensor-specific fixes --
+    bool fixBadLines = false;      ///< Repair defective CCD rows / columns
+    bool fixBanding  = false;      ///< Reduce periodic sensor banding noise
+    bool fixXTrans   = false;      ///< Correct X-Trans phase-detect AF artefacts
+
+    // -- Advanced calibration options --
+    double biasLevel    = 1e30;    ///< Synthetic bias level (1e30 = use master file instead)
+    double pedestal     = 0.0;     ///< ADU pedestal added after dark subtraction
+    bool   equalizeFlat = false;   ///< Equalise CFA channel medians in the master flat
 };
 
 } // namespace Preprocessing

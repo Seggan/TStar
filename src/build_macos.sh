@@ -1,24 +1,32 @@
 #!/bin/bash
 # =============================================================================
 # TStar Build Script for macOS
-# Equivalent of build_all.bat for Windows
+#
+# Configures and builds the TStar application using CMake.
+# Supports optional --clean (force CMake reconfiguration) and --lto-on
+# (enable link-time optimization) flags.
+# This is the macOS equivalent of build_all.bat on Windows.
 # =============================================================================
 
-set -e  # Exit on error
+set -e
 
-# Check for --clean flag
+# -----------------------------------------------------------------------------
+# Parse command-line arguments
+# -----------------------------------------------------------------------------
+
 CLEAN_MODE=0
-if [ "$1" == "--clean" ]; then
-    CLEAN_MODE=1
-fi
-
-# Check for --lto-on flag
 LTO_MODE="OFF"
+
 for arg in "$@"; do
-    if [ "$arg" == "--lto-on" ]; then
-        LTO_MODE="ON"
-    fi
+    case "$arg" in
+        --clean)  CLEAN_MODE=1 ;;
+        --lto-on) LTO_MODE="ON" ;;
+    esac
 done
+
+# -----------------------------------------------------------------------------
+# Script initialization
+# -----------------------------------------------------------------------------
 
 echo "==========================================="
 echo " TStar Build Script (macOS)"
@@ -27,12 +35,11 @@ if [ $CLEAN_MODE -eq 1 ]; then
 fi
 echo "==========================================="
 
-# Move to project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 PROJECT_ROOT="$(pwd)"
 
-# Load utilities
+# Load shared utility functions
 if [ -f "$SCRIPT_DIR/macos_utils.sh" ]; then
     source "$SCRIPT_DIR/macos_utils.sh"
 else
@@ -40,22 +47,29 @@ else
     exit 1
 fi
 
-# --- CONFIGURATION ---
+# -----------------------------------------------------------------------------
+# Build configuration
+# -----------------------------------------------------------------------------
+
 CMAKE_CMD="cmake"
 BUILD_TYPE="Release"
 BUILD_DIR="build"
 GENERATOR="Unix Makefiles"
 
-# Check for Ninja (faster builds)
+# Prefer Ninja if available (faster incremental builds)
 if command -v ninja &> /dev/null; then
     GENERATOR="Ninja"
     echo "[INFO] Using Ninja generator"
 fi
 
-# --- 1. CHECK PREREQUISITES ---
+# -----------------------------------------------------------------------------
+# STEP 1: Check prerequisites
+# -----------------------------------------------------------------------------
+
 echo ""
 echo "[STEP 1] Checking prerequisites..."
 
+# Homebrew
 check_command brew || {
     log_error "Homebrew not found!"
     echo "Install with: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
@@ -66,6 +80,7 @@ echo "  - Homebrew: OK"
 HOMEBREW_PREFIX=$(get_homebrew_prefix)
 echo "  - Homebrew prefix: $HOMEBREW_PREFIX"
 
+# Qt 6
 QT_PREFIX=$(detect_qt_prefix)
 if [ -z "$QT_PREFIX" ] || [ ! -d "$QT_PREFIX" ]; then
     log_error "Qt6 not found!"
@@ -74,7 +89,7 @@ if [ -z "$QT_PREFIX" ] || [ ! -d "$QT_PREFIX" ]; then
 fi
 echo "  - Qt6: OK ($QT_PREFIX)"
 
-# Check other dependencies
+# Required Homebrew dependencies
 DEPS=("zlib" "opencv" "gsl" "cfitsio" "libomp" "libraw" "brotli")
 for dep in "${DEPS[@]}"; do
     DEP_PREFIX=$(brew --prefix "$dep" 2>/dev/null || echo "")
@@ -90,7 +105,7 @@ for dep in "${DEPS[@]}"; do
     fi
 done
 
-# Optional deps
+# Optional Homebrew dependencies
 for dep in "lz4" "zstd"; do
     DEP_PREFIX=$(brew --prefix "$dep" 2>/dev/null || echo "")
     if [ -z "$DEP_PREFIX" ] || [ ! -d "$DEP_PREFIX" ]; then
@@ -100,7 +115,10 @@ for dep in "lz4" "zstd"; do
     fi
 done
 
-# --- 2. SETUP PYTHON ENVIRONMENT ---
+# -----------------------------------------------------------------------------
+# STEP 2: Verify Python virtual environment
+# -----------------------------------------------------------------------------
+
 echo ""
 echo "[STEP 2] Checking Python environment..."
 
@@ -117,12 +135,15 @@ else
     echo "  - Python venv: OK"
 fi
 
-# --- 3. CMAKE CONFIGURATION ---
+# -----------------------------------------------------------------------------
+# STEP 3: CMake configuration
+# -----------------------------------------------------------------------------
+
 log_step 3 "Configuring CMake..."
 
 ensure_dir "$BUILD_DIR"
 
-# Clean CMake cache if requested
+# Optionally remove cached configuration
 if [ $CLEAN_MODE -eq 1 ]; then
     echo "[INFO] Cleaning CMake cache..."
     safe_rm_rf "$BUILD_DIR/CMakeCache.txt"
@@ -138,14 +159,17 @@ else
         -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
         -DCMAKE_OSX_DEPLOYMENT_TARGET="11.0" \
         -DENABLE_LTO="$LTO_MODE"
-    
+
     if [ $? -ne 0 ]; then
         echo "[ERROR] CMake configuration failed!"
         exit 1
     fi
 fi
 
-# --- 4. BUILD ---
+# -----------------------------------------------------------------------------
+# STEP 4: Build
+# -----------------------------------------------------------------------------
+
 echo ""
 echo "[STEP 4] Building TStar..."
 
@@ -157,7 +181,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# --- 5. VERIFY BUILD ---
+# -----------------------------------------------------------------------------
+# STEP 5: Verify build output
+# -----------------------------------------------------------------------------
+
 echo ""
 echo "[STEP 5] Verifying build..."
 
@@ -167,7 +194,7 @@ EXECUTABLE="$APP_BUNDLE/Contents/MacOS/TStar"
 if [ -f "$EXECUTABLE" ]; then
     echo "  - TStar.app: OK"
 else
-    # Fallback for non-bundle build
+    # Fallback: check for a non-bundle standalone binary
     if [ -f "$BUILD_DIR/TStar" ]; then
         echo "  - TStar (binary): OK"
         EXECUTABLE="$BUILD_DIR/TStar"
@@ -176,6 +203,10 @@ else
         exit 1
     fi
 fi
+
+# -----------------------------------------------------------------------------
+# Summary
+# -----------------------------------------------------------------------------
 
 echo ""
 echo "==========================================="

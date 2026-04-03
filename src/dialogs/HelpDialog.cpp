@@ -1,92 +1,123 @@
+// =============================================================================
+// HelpDialog.cpp
+// Constructs the Help & Tutorial dialog with full HTML documentation covering
+// all features, tools, keyboard shortcuts, scripting reference, and best
+// practices for the TStar astrophotography application.
+// =============================================================================
+
 #include "HelpDialog.h"
+
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QScrollArea>
 #include <QPushButton>
 #include <QScreen>
 #include <QGuiApplication>
 
-HelpDialog::HelpDialog(QWidget *parent) : DialogBase(parent, tr("Help & Tutorial"), 800, 600)
+// =============================================================================
+// Construction
+// =============================================================================
+
+HelpDialog::HelpDialog(QWidget* parent)
+    : DialogBase(parent, tr("Help & Tutorial"), 800, 600)
 {
     setWindowIcon(QIcon(":/images/Logo.png"));
     setupUI();
-
 }
+
+// =============================================================================
+// UI construction
+// =============================================================================
 
 void HelpDialog::setupUI()
 {
-    // Fixed size
     resize(800, 600);
-    
+
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(10, 10, 10, 10);
-    
-    // Text Browser for HTML content
+
+    // -- HTML text browser ----------------------------------------------------
     m_browser = new QTextBrowser(this);
     m_browser->setOpenExternalLinks(true);
     m_browser->setStyleSheet(
         "QTextBrowser { "
-        "   background-color: #1e1e1e; "
-        "   color: #e0e0e0; "
-        "   border: none; "
-        "   font-family: 'Segoe UI', Arial, sans-serif; "
-        "   font-size: 13px; "
-        "   padding: 10px; "
-        "}"
-    );
+        "  background-color: #1e1e1e; "
+        "  color: #e0e0e0; "
+        "  border: none; "
+        "  font-family: 'Segoe UI', Arial, sans-serif; "
+        "  font-size: 13px; "
+        "  padding: 10px; "
+        "}");
     m_browser->setHtml(buildHelpContent());
     mainLayout->addWidget(m_browser);
-    
-    // Close Button
+
+    // -- Close button ---------------------------------------------------------
     QPushButton* closeBtn = new QPushButton(tr("Close"), this);
     closeBtn->setFixedWidth(100);
     closeBtn->setStyleSheet(
-        "QPushButton { background-color: #3a7d44; color: white; padding: 6px 16px; border-radius: 4px; }"
-        "QPushButton:hover { background-color: #4a8d54; }"
-    );
+        "QPushButton { background-color: #3a7d44; color: white; "
+        "  padding: 6px 16px; border-radius: 4px; }"
+        "QPushButton:hover { background-color: #4a8d54; }");
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::accept);
-    
+
     QHBoxLayout* btnLayout = new QHBoxLayout();
     btnLayout->addStretch();
     btnLayout->addWidget(closeBtn);
     mainLayout->addLayout(btnLayout);
 }
 
+// =============================================================================
+// HTML content generation
+// =============================================================================
+
 QString HelpDialog::buildHelpContent()
 {
     QString html;
-    
-    // CSS Style (not translatable)
+
+    // -- Embedded CSS (not translatable) --------------------------------------
     html += R"(
 <style>
     h1 { color: #4a9eff; margin-bottom: 5px; }
-    h2 { color: #7ec8e3; margin-top: 20px; margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 4px; }
+    h2 { color: #7ec8e3; margin-top: 20px; margin-bottom: 8px;
+         border-bottom: 1px solid #444; padding-bottom: 4px; }
     h3 { color: #a0d0ff; margin-top: 15px; margin-bottom: 5px; }
-    p { margin: 6px 0; line-height: 1.5; }
+    p  { margin: 6px 0; line-height: 1.5; }
     ul { margin: 5px 0 10px 20px; }
     li { margin: 3px 0; }
-    code { background-color: #333; padding: 2px 5px; border-radius: 3px; font-family: Consolas, monospace; }
+    code { background-color: #333; padding: 2px 5px; border-radius: 3px;
+           font-family: Consolas, monospace; }
     .shortcut { color: #ffcc00; }
-    .tip { color: #88ff88; font-style: italic; }
+    .tip      { color: #88ff88; font-style: italic; }
 </style>
 )";
 
-    // Title
+    // -- Title ----------------------------------------------------------------
     html += "<h1>" + tr("TStar - Astrophotography Processing") + "</h1>";
-    html += "<p>" + tr("Welcome to TStar! This guide covers all features and tools available in the application.") + "</p>";
+    html += "<p>" + tr("Welcome to TStar! This guide covers all features and "
+                       "tools available in the application.") + "</p>";
 
-    // Getting Started
+    // -- Getting Started ------------------------------------------------------
     html += "<h2>" + tr("Getting Started") + "</h2>";
-    html += "<p>" + tr("TStar supports FITS/FIT, XISF, TIFF/TIF, PNG, JPG/JPEG, BMP and (when LibRaw support is available) major camera RAW formats such as CR2/CR3/NEF/ARW/DNG/ORF/RW2/RAF and others.") + "</p>";
+    html += "<p>" + tr("TStar supports FITS/FIT, XISF, TIFF/TIF, PNG, "
+                       "JPG/JPEG, BMP and (when LibRaw support is available) "
+                       "major camera RAW formats such as CR2/CR3/NEF/ARW/DNG/"
+                       "ORF/RW2/RAF and others.") + "</p>";
     html += "<ul>";
-    html += "<li><b>" + tr("Open Image:") + "</b> " + tr("Click Open or press Ctrl+O") + "</li>";
-    html += "<li><b>" + tr("Save Image:") + "</b> " + tr("Click Save or press Ctrl+S") + "</li>";
-    html += "<li><b>" + tr("Drag & Drop:") + "</b> " + tr("Drag files directly onto the workspace") + "</li>";
+    html += "<li><b>" + tr("Open Image:") + "</b> "
+            + tr("Click Open or press Ctrl+O") + "</li>";
+    html += "<li><b>" + tr("Save Image:") + "</b> "
+            + tr("Click Save or press Ctrl+S") + "</li>";
+    html += "<li><b>" + tr("Drag & Drop:") + "</b> "
+            + tr("Drag files directly onto the workspace") + "</li>";
     html += "</ul>";
 
-    // Workspace Projects
+    // -- Workspace Projects ---------------------------------------------------
     html += "<h2>" + tr("Workspace Projects") + "</h2>";
-    html += "<p>" + tr("Organize your astrophotography workflow using Workspace Projects. A project maintains a dedicated working directory where all associated images, calibration files, and processing results are stored.") + "</p>";
-    
+    html += "<p>" + tr("Organize your astrophotography workflow using Workspace "
+                       "Projects. A project maintains a dedicated working "
+                       "directory where all associated images, calibration "
+                       "files, and processing results are stored.") + "</p>";
+
     html += "<h3>" + tr("Creating a New Project") + "</h3>";
     html += "<p>" + tr("To create a new workspace project:") + "</p>";
     html += "<ul>";
@@ -95,7 +126,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("The project becomes active and sets its directory as the working location") + "</li>";
     html += "<li>" + tr("All subsequent File > Open and File > Save operations default to the project directory") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Opening an Existing Project") + "</h3>";
     html += "<p>" + tr("To work with an existing project:") + "</p>";
     html += "<ul>";
@@ -103,7 +134,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Or use File > Recent Projects to quickly access recently opened projects") + "</li>";
     html += "<li>" + tr("The project's working directory automatically becomes the default location for file operations") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Project Benefits") + "</h3>";
     html += "<ul>";
     html += "<li>" + tr("Isolation: Keep different imaging sessions completely separate") + "</li>";
@@ -111,7 +142,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Context: Scripts and processing operations maintain awareness of project-specific paths") + "</li>";
     html += "<li>" + tr("Portability: Move entire projects to different machines with all relative paths intact") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Working with Projects") + "</h3>";
     html += "<ul>";
     html += "<li>" + tr("Multiple Projects: Open only one project at a time; closing a project resets working directory to AppData") + "</li>";
@@ -120,7 +151,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Closing Project: Use File > Close Project to deactivate the current project") + "</li>";
     html += "</ul>";
 
-    // Navigation Controls
+    // -- Navigation Controls --------------------------------------------------
     html += "<h2>" + tr("Navigation Controls") + "</h2>";
     html += "<ul>";
     html += "<li><b>" + tr("Zoom In/Out:") + "</b> " + tr("Mouse wheel or Ctrl + and Ctrl -") + "</li>";
@@ -139,7 +170,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Use the magnifier (cursor-following loupe) for precise focus checks while navigating") + "</li>";
     html += "</ul>";
 
-    // Display Modes
+    // -- Display Modes --------------------------------------------------------
     html += "<h2>" + tr("Display Modes") + "</h2>";
     html += "<p>" + tr("Use the dropdown menu in the toolbar to change visualization:") + "</p>";
     html += "<ul>";
@@ -152,14 +183,15 @@ QString HelpDialog::buildHelpContent()
     html += "<p class=\"tip\">" + tr("Tip: Toggle RGB Link to stretch channels independently or together.") + "</p>";
 
     html += "<h3>" + tr("24-bit Display Stretch") + "</h3>";
-    html += "<p>" + tr("Enable in Settings for smoother gradients and reduced banding in auto-stretched previews. Uses high-precision floating-point calculations instead of 16-bit histogram binning.") + "</p>";
+    html += "<p>" + tr("Enable in Settings for smoother gradients and reduced banding in auto-stretched previews. "
+                       "Uses high-precision floating-point calculations instead of 16-bit histogram binning.") + "</p>";
 
-    // Stretch Tools
+    // -- Stretch Tools --------------------------------------------------------
     html += "<h2>" + tr("Stretch Tools") + "</h2>";
-    
+
     html += "<h3>" + tr("Auto Stretch (Statistical)") + "</h3>";
     html += "<p>" + tr("Automatically stretches the image based on statistical analysis. Ideal for quick previews.") + "</p>";
-    
+
     html += "<h3>" + tr("GHS (Generalized Hyperbolic Stretch)") + "</h3>";
     html += "<p>" + tr("Advanced stretch tool with full control:") + "</p>";
     html += "<ul>";
@@ -169,13 +201,13 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>LP/HP (" + tr("Protection") + "):</b> " + tr("Protect shadows/highlights from clipping") + "</li>";
     html += "<li><b>BP (" + tr("Black Point") + "):</b> " + tr("Set black clipping level") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Curves Transformation") + "</h3>";
     html += "<p>" + tr("Adjust tonal curves for each RGB channel independently or together.") + "</p>";
-    
+
     html += "<h3>" + tr("Histogram Transformation") + "</h3>";
     html += "<p>" + tr("Manual histogram stretch with shadows, midtones, and highlights controls.") + "</p>";
-    
+
     html += "<h3>" + tr("ArcSinh Stretch") + "</h3>";
     html += "<p>" + tr("Specialized stretch that preserves star colors while increasing contrast.") + "</p>";
 
@@ -187,9 +219,9 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>" + tr("SCNR:") + "</b> " + tr("Optional green noise removal during the stretch.") + "</li>";
     html += "</ul>";
 
-    // Color Management
+    // -- Color Management -----------------------------------------------------
     html += "<h2>" + tr("Color Management") + "</h2>";
-    
+
     html += "<h3>" + tr("Auto Background Extraction (ABE)") + "</h3>";
     html += "<p>" + tr("Removes gradients and light pollution from your image:") + "</p>";
     html += "<ul>";
@@ -197,14 +229,14 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Adjust polynomial order for model complexity") + "</li>";
     html += "<li>" + tr("Choose Subtract or Divide mode") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Photometric Color Calibration (PCC)") + "</h3>";
     html += "<p>" + tr("Calibrates colors using star catalog data:") + "</p>";
     html += "<ul>";
     html += "<li>" + tr("Requires plate-solved image (WCS data)") + "</li>";
     html += "<li>" + tr("Uses reference stars for accurate color calibration") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Background Neutralization") + "</h3>";
     html += "<p>" + tr("Neutralizes color casts in the background sky:") + "</p>";
     html += "<ul>";
@@ -219,7 +251,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Compares measured star colors (Image) vs expected colors (Catalog)") + "</li>";
     html += "<li>" + tr("Useful for verifying calibration accuracy") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("SCNR (Selective Color Noise Reduction)") + "</h3>";
     html += "<p>" + tr("Removes green color cast common in OSC/DSLR images.") + "</p>";
 
@@ -230,7 +262,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Works with plate-solved images and measured star photometry") + "</li>";
     html += "<li>" + tr("Supports model fitting and optional chromatic gradient correction") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Saturation") + "</h3>";
     html += "<p>" + tr("Adjust color saturation with protection for highlights and shadows.") + "</p>";
 
@@ -266,9 +298,9 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Use Smoothness to feather the selection edges") + "</li>";
     html += "</ul>";
 
-    // AI Processing
+    // -- AI Processing --------------------------------------------------------
     html += "<h2>" + tr("AI Processing") + "</h2>";
-    
+
     html += "<h3>" + tr("Cosmic Clarity") + "</h3>";
     html += "<p>" + tr("AI-powered deconvolution and noise reduction:") + "</p>";
     html += "<ul>";
@@ -276,7 +308,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Reduces noise without losing detail") + "</li>";
     html += "<li>" + tr("Requires external Cosmic Clarity installation") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("GraXpert") + "</h3>";
     html += "<p>" + tr("AI-based gradient removal:") + "</p>";
     html += "<ul>";
@@ -285,7 +317,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("More powerful than traditional ABE") + "</li>";
     html += "<li>" + tr("Requires external GraXpert installation") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("StarNet++") + "</h3>";
     html += "<p>" + tr("AI star removal for starless processing:") + "</p>";
     html += "<ul>";
@@ -293,13 +325,14 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Optionally creates a star-only mask") + "</li>";
     html += "<li>" + tr("Requires external StarNet installation") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Aberration Remover (RAR)") + "</h3>";
     html += "<p>" + tr("Removes chromatic aberration and optical artifacts.") + "</p>";
 
-    // Image Pipeline
+    // -- Image Pipeline -------------------------------------------------------
     html += "<h2>" + tr("Image Pipeline") + "</h2>";
-    html += "<p>" + tr("TStar includes a comprehensive pipeline for preprocessing and stacking astronomical images. Follow these steps in order: Conversion → Calibration → Registration → Stacking.") + "</p>";
+    html += "<p>" + tr("TStar includes a comprehensive pipeline for preprocessing and stacking astronomical images. "
+                       "Follow these steps in order: Conversion -> Calibration -> Registration -> Stacking.") + "</p>";
 
     html += "<h3>" + tr("Image Conversion") + "</h3>";
     html += "<p>" + tr("Convert raw images to a standardized format before processing:") + "</p>";
@@ -310,7 +343,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>" + tr("Batch Processing:") + "</b> " + tr("Convert multiple files at once") + "</li>";
     html += "<li><b>" + tr("Metadata Handling:") + "</b> " + tr("FITS keywords and image properties are automatically transferred to preserve EXIF data") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Image Calibration") + "</h3>";
     html += "<p>" + tr("Corrects light frames using master calibration images to remove instrumental signature and improve image quality:") + "</p>";
     html += "<ul>";
@@ -334,7 +367,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>" + tr("Star Detection:") + "</b> " + tr("Identifies bright stars in each image as reference points") + "</li>";
     html += "<li><b>" + tr("Transformation:") + "</b> " + tr("Computes translation, rotation, and optional scale corrections") + "</li>";
     html += "<li><b>" + tr("Sub-pixel Accuracy:") + "</b> " + tr("Aligns images with precision better than a single pixel for optimal stacking results") + "</li>";
-    html += "<li><b>" + tr("Reference Frame:") + "</b> " + tr("First image in sequence used as reference (or manually selected)")  + "</li>";
+    html += "<li><b>" + tr("Reference Frame:") + "</b> " + tr("First image in sequence used as reference (or manually selected)") + "</li>";
     html += "</ul>";
     html += "<p>" + tr("Registration Parameters:") + "</p>";
     html += "<ul>";
@@ -345,7 +378,8 @@ QString HelpDialog::buildHelpContent()
     html += "<p class=\"tip\">" + tr("Tip: Registration must be completed before stacking; misaligned frames will produce low-quality stacks") + "</p>";
 
     html += "<h3>" + tr("Image Stacking") + "</h3>";
-    html += "<p>" + tr("Combines registered images to reduce noise and increase signal-to-noise ratio (SNR). Different stacking modes offer various trade-offs between noise reduction and artifact rejection:") + "</p>";
+    html += "<p>" + tr("Combines registered images to reduce noise and increase signal-to-noise ratio (SNR). "
+                       "Different stacking modes offer various trade-offs between noise reduction and artifact rejection:") + "</p>";
     html += "<ul>";
     html += "<li><b>" + tr("Average:") + "</b> " + tr("Simple mean of all pixels. Fast but sensitive to outliers (cosmic rays, hot pixels).") + "</li>";
     html += "<li><b>" + tr("Median:") + "</b> " + tr("Middle value of sorted pixels. Excellent outlier rejection but slower than average.") + "</li>";
@@ -371,7 +405,8 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Configure Normalization: Select normalization method for frame scaling") + "</li>";
     html += "<li>" + tr("Execute Stack: Combine and output final integrated image") + "</li>";
     html += "</ol>";
-    html += "<p class=\"tip\">" + tr("Tip: More frames allow aggressive rejection. With N=3 frames, use median. With N>10, can use Kappa-Sigma with σ=2.5") + "</p>";
+    html += "<p class=\"tip\">" + tr("Tip: More frames allow aggressive rejection. With N=3 frames, use median. "
+                                     "With N>10, can use Kappa-Sigma with ?=2.5") + "</p>";
 
     html += "<h3>" + tr("Output & Quality Assessment") + "</h3>";
     html += "<p>" + tr("After stacking, the result is ready for post-processing:") + "</p>";
@@ -383,18 +418,20 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Stretching & Enhancement: Apply GHS, curves, or AI tools for final presentation") + "</li>";
     html += "</ul>";
 
-    // Channel Operations
+    // -- Channel Operations ---------------------------------------------------
     html += "<h2>" + tr("Channel Operations") + "</h2>";
-    
+
     html += "<h3>" + tr("Extract Channels") + "</h3>";
     html += "<p>" + tr("Splits RGB image into separate R, G, B windows.") + "</p>";
-    
+
     html += "<h3>" + tr("Combine Channels") + "</h3>";
     html += "<p>" + tr("Combines separate channel images into one RGB image.") + "</p>";
-    
+
     html += "<h3>" + tr("Linear Fit") + "</h3>";
-    html += "<p>" + tr("Equalizes the intensity of RGB channels by matching their medians. This is essential for achieving a neutral color balance before combining separate channels into a color image.") + "</p>";
-    
+    html += "<p>" + tr("Equalizes the intensity of RGB channels by matching their medians. "
+                       "This is essential for achieving a neutral color balance before combining "
+                       "separate channels into a color image.") + "</p>";
+
     html += "<h3>" + tr("Star Recomposition") + "</h3>";
     html += "<p>" + tr("Blends starless and star-only images with adjustable parameters.") + "</p>";
 
@@ -405,18 +442,21 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>" + tr("Range Masking:") + "</b> " + tr("Control the range of pixels from the top image that are applied using Low/High range and feathering.") + "</li>";
     html += "<li><b>" + tr("Channel Choice:") + "</b> " + tr("Select specific channels (R, G, B, or All) when blending a monochrome image onto a color one.") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Debayer") + "</h3>";
     html += "<p>" + tr("Converts RAW Bayer pattern images to full color.") + "</p>";
 
     html += "<h3>" + tr("Extract Luminance") + "</h3>";
-    html += "<p>" + tr("Extracts the luminance (brightness) channel from an RGB image into a separate grayscale window. Useful for processing the L channel independently before recombining.") + "</p>";
+    html += "<p>" + tr("Extracts the luminance (brightness) channel from an RGB image into a separate grayscale window. "
+                       "Useful for processing the L channel independently before recombining.") + "</p>";
 
     html += "<h3>" + tr("Recombine Luminance") + "</h3>";
-    html += "<p>" + tr("Replaces the luminance channel of an RGB image with a processed version. Select the source luminance and target color image, then blend with adjustable intensity.") + "</p>";
+    html += "<p>" + tr("Replaces the luminance channel of an RGB image with a processed version. "
+                       "Select the source luminance and target color image, then blend with adjustable intensity.") + "</p>";
 
     html += "<h3>" + tr("Remove Pedestal") + "</h3>";
-    html += "<p>" + tr("Automatically detects and subtracts the minimum pixel value (black floor) from the image. Essential before stretching to ensure true black levels.") + "</p>";
+    html += "<p>" + tr("Automatically detects and subtracts the minimum pixel value (black floor) from the image. "
+                       "Essential before stretching to ensure true black levels.") + "</p>";
 
     html += "<h3>" + tr("Perfect Palette Picker") + "</h3>";
     html += "<p>" + tr("Create stunning narrowband composites with full control:") + "</p>";
@@ -466,9 +506,9 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Export individual layers to new windows") + "</li>";
     html += "</ul>";
 
-    // Utilities
+    // -- Utilities ------------------------------------------------------------
     html += "<h2>" + tr("Utilities") + "</h2>";
-    
+
     html += "<h3>" + tr("Plate Solving") + "</h3>";
     html += "<p>" + tr("Identifies the exact sky coordinates of your image:") + "</p>";
     html += "<ul>";
@@ -477,20 +517,20 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Supports ASTAP integration for professional solving and automatic database path handling") + "</li>";
     html += "<li>" + tr("Can use bundled/local solver resources and catalog data for robust plate solutions") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Pixel Math") + "</h3>";
     html += "<p>" + tr("Apply mathematical expressions to images:") + "</p>";
     html += "<ul>";
     html += "<li>" + tr("Combine images with formulas") + "</li>";
     html += "<li>" + tr("Use variables like $T (target), $R, $G, $B") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Star Analysis") + "</h3>";
     html += "<p>" + tr("Analyzes star quality metrics (FWHM, roundness, etc.)") + "</p>";
-    
+
     html += "<h3>" + tr("FITS Header Editor") + "</h3>";
     html += "<p>" + tr("View and edit FITS header metadata.") + "</p>";
-    
+
     html += "<h3>" + tr("Image Annotator") + "</h3>";
     html += "<p>" + tr("Manual + automatic annotation system for scientific overlays and presentation exports:") + "</p>";
     html += "<ul>";
@@ -518,7 +558,8 @@ QString HelpDialog::buildHelpContent()
     html += "</ul>";
 
     html += "<h3>" + tr("Aberration Inspector") + "</h3>";
-    html += "<p>" + tr("Displays a 3x3 grid of zoomed panels from the corners, edges, and center of your image. Useful for evaluating optical quality, coma, and field curvature across your frame.") + "</p>";
+    html += "<p>" + tr("Displays a 3x3 grid of zoomed panels from the corners, edges, and center of your image. "
+                       "Useful for evaluating optical quality, coma, and field curvature across your frame.") + "</p>";
 
     html += "<h3>" + tr("Blink Comparator") + "</h3>";
     html += "<p>" + tr("Overlay and compare two active views by alternating their display:") + "</p>";
@@ -543,7 +584,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Rotate by any angle in degrees") + "</li>";
     html += "<li>" + tr("Batch Crop: applies the same crop to all currently open images") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Image Binning") + "</h3>";
     html += "<p>" + tr("Reduce image dimensions by combining adjacent pixels:") + "</p>";
     html += "<ul>";
@@ -552,7 +593,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Useful for reducing file size while preserving essential data integrity") + "</li>";
     html += "<li>" + tr("Ideal for preprocessing undersampled or noisy data") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Image Upscale") + "</h3>";
     html += "<p>" + tr("Enlarge images with selectable interpolation methods:") + "</p>";
     html += "<ul>";
@@ -561,7 +602,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>" + tr("Bicubic:") + "</b> " + tr("Higher quality with smooth gradations (recommended for most astrophotography images)") + "</li>";
     html += "<li><b>" + tr("Lanczos4:") + "</b> " + tr("Highest quality interpolation, best for detailed astronomical data (slower)") + "</li>";
     html += "</ul>";
-    
+
     html += "<h3>" + tr("Star Halo Removal") + "</h3>";
     html += "<p>" + tr("Tool to detect and subtract halos around bright stars, improving image clarity and preventing halo overlaps.") + "</p>";
 
@@ -575,7 +616,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Preserves capture metadata in FITS headers") + "</li>";
     html += "</ul>";
 
-    // Masks
+    // -- Masks ----------------------------------------------------------------
     html += "<h2>" + tr("Masks") + "</h2>";
     html += "<p>" + tr("Create and apply masks for selective processing:") + "</p>";
     html += "<ul>";
@@ -587,7 +628,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>" + tr("Show Overlay:") + "</b> " + tr("Toggle mask visualization") + "</li>";
     html += "</ul>";
 
-    // Main Toolbar and View Controls
+    // -- Main Toolbar and View Controls ---------------------------------------
     html += "<h2>" + tr("Main Toolbar & View Controls") + "</h2>";
     html += "<ul>";
     html += "<li><b>" + tr("Display Modes:") + "</b> " + tr("Linear, Auto Stretch, Histogram, ArcSinh, Square Root, and Logarithmic") + "</li>";
@@ -602,9 +643,9 @@ QString HelpDialog::buildHelpContent()
     html += "<li><b>" + tr("Magnifier Loupe:") + "</b> " + tr("Cursor-following magnifier for precise local inspection") + "</li>";
     html += "</ul>";
 
-    // Effects
+    // -- Effects --------------------------------------------------------------
     html += "<h2>" + tr("Effects") + "</h2>";
-    
+
     html += "<h3>" + tr("AstroSpike") + "</h3>";
     html += "<p>" + tr("Adds artificial diffraction spikes to bright stars for aesthetic effect.") + "</p>";
 
@@ -615,7 +656,7 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("White balance and color controls integrated with the TStar workflow") + "</li>";
     html += "</ul>";
 
-    // Scripting & Automation
+    // -- Scripting & Automation -----------------------------------------------
     html += "<h2>" + tr("Scripting & Automation") + "</h2>";
     html += "<p>" + tr("TStar supports scripting for automating processing workflows:") + "</p>";
 
@@ -634,19 +675,19 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Automate complex multi-step image processing workflows") + "</li>";
     html += "</ul>";
 
-    // Keyboard Shortcuts
+    // -- Keyboard Shortcuts ---------------------------------------------------
     html += "<h2>" + tr("Keyboard Shortcuts") + "</h2>";
     html += "<table border=\"0\" cellpadding=\"3\">";
-    html += "<tr><td><span class=\"shortcut\">Ctrl+O</span></td><td>" + tr("Open file") + "</td></tr>";
-    html += "<tr><td><span class=\"shortcut\">Ctrl+S</span></td><td>" + tr("Save file") + "</td></tr>";
-    html += "<tr><td><span class=\"shortcut\">Ctrl+Z</span></td><td>" + tr("Undo") + "</td></tr>";
-    html += "<tr><td><span class=\"shortcut\">Ctrl+Shift+Z</span></td><td>" + tr("Redo") + "</td></tr>";
-    html += "<tr><td><span class=\"shortcut\">Ctrl+0</span></td><td>" + tr("Fit to window") + "</td></tr>";
-    html += "<tr><td><span class=\"shortcut\">Ctrl +</span></td><td>" + tr("Zoom in") + "</td></tr>";
-    html += "<tr><td><span class=\"shortcut\">Ctrl -</span></td><td>" + tr("Zoom out") + "</td></tr>";
+    html += "<tr><td><span class=\"shortcut\">Ctrl+O</span></td><td>"       + tr("Open file")      + "</td></tr>";
+    html += "<tr><td><span class=\"shortcut\">Ctrl+S</span></td><td>"       + tr("Save file")      + "</td></tr>";
+    html += "<tr><td><span class=\"shortcut\">Ctrl+Z</span></td><td>"       + tr("Undo")           + "</td></tr>";
+    html += "<tr><td><span class=\"shortcut\">Ctrl+Shift+Z</span></td><td>" + tr("Redo")           + "</td></tr>";
+    html += "<tr><td><span class=\"shortcut\">Ctrl+0</span></td><td>"       + tr("Fit to window")  + "</td></tr>";
+    html += "<tr><td><span class=\"shortcut\">Ctrl +</span></td><td>"       + tr("Zoom in")        + "</td></tr>";
+    html += "<tr><td><span class=\"shortcut\">Ctrl -</span></td><td>"       + tr("Zoom out")       + "</td></tr>";
     html += "</table>";
 
-    // Tips
+    // -- Tips & Best Practices ------------------------------------------------
     html += "<h2>" + tr("Tips & Best Practices") + "</h2>";
     html += "<ul>";
     html += "<li>" + tr("Always work on a copy of your original data") + "</li>";
@@ -656,45 +697,47 @@ QString HelpDialog::buildHelpContent()
     html += "<li>" + tr("Check the Console panel for processing messages") + "</li>";
     html += "</ul>";
 
-    // Scripting Reference Appendix
+    // -- Scripting Reference Appendix -----------------------------------------
     html += "<h2>" + tr("Appendix: Scripting Commands Reference") + "</h2>";
-    html += "<p>" + tr("TStar scripts (.tss) use a simple command-based syntax. Parameters in [brackets] are optional.") + "</p>";
-    
+    html += "<p>" + tr("TStar scripts (.tss) use a simple command-based syntax. "
+                       "Parameters in [brackets] are optional.") + "</p>";
+
     html += "<h3>" + tr("File & Directory") + "</h3>";
     html += "<ul>";
-    html += "<li><code>cd &lt;path&gt;</code>: " + tr("Change working directory") + "</li>";
-    html += "<li><code>load &lt;filename&gt;</code>: " + tr("Load an image into the script context") + "</li>";
-    html += "<li><code>save &lt;filename&gt; [--32b|--16b]</code>: " + tr("Save current image (default 32-bit float)") + "</li>";
-    html += "<li><code>close</code>: " + tr("Close the current image") + "</li>";
+    html += "<li><code>cd &lt;path&gt;</code>: "                              + tr("Change working directory")                         + "</li>";
+    html += "<li><code>load &lt;filename&gt;</code>: "                        + tr("Load an image into the script context")             + "</li>";
+    html += "<li><code>save &lt;filename&gt; [--32b|--16b]</code>: "          + tr("Save current image (default 32-bit float)")         + "</li>";
+    html += "<li><code>close</code>: "                                        + tr("Close the current image")                           + "</li>";
     html += "</ul>";
 
     html += "<h3>" + tr("Stacking & Sequencing") + "</h3>";
     html += "<ul>";
-    html += "<li><code>stack &lt;prefix&gt; [method] [rejection] [sigma] [--out=...]</code>: " + tr("Stack a sequence") + "</li>";
-    html += "<li><code>calibrate &lt;prefix&gt; [--bias=...] [--dark=...] [--flat=...]</code>: " + tr("Calibrate sequence") + "</li>";
-    html += "<li><code>register &lt;prefix&gt; [--drizzle] [--norotation]</code>: " + tr("Align images in sequence") + "</li>";
-    html += "<li><code>autostack &lt;project_path&gt;</code>: " + tr("Run full automated pipeline") + "</li>";
+    html += "<li><code>stack &lt;prefix&gt; [method] [rejection] [sigma] [--out=...]</code>: "  + tr("Stack a sequence")             + "</li>";
+    html += "<li><code>calibrate &lt;prefix&gt; [--bias=...] [--dark=...] [--flat=...]</code>: " + tr("Calibrate sequence")           + "</li>";
+    html += "<li><code>register &lt;prefix&gt; [--drizzle] [--norotation]</code>: "             + tr("Align images in sequence")      + "</li>";
+    html += "<li><code>autostack &lt;project_path&gt;</code>: "                                  + tr("Run full automated pipeline")   + "</li>";
     html += "</ul>";
 
     html += "<h3>" + tr("Preprocessing & Recovery") + "</h3>";
     html += "<ul>";
-    html += "<li><code>debayer [--pattern=...] [--algo=...]</code>: " + tr("Debayer current image or sequence") + "</li>";
-    html += "<li><code>background [--degree=...]</code>: " + tr("Remove gradients (ABE)") + "</li>";
-    html += "<li><code>starnet [--nostarmask] [--stride=...]</code>: " + tr("Run StarNet++ star removal") + "</li>";
-    html += "<li><code>rgbcomp &lt;r&gt; &lt;g&gt; &lt;b&gt; [-out=...]</code>: " + tr("Create RGB from mono channels") + "</li>";
+    html += "<li><code>debayer [--pattern=...] [--algo=...]</code>: "                            + tr("Debayer current image or sequence")    + "</li>";
+    html += "<li><code>background [--degree=...]</code>: "                                       + tr("Remove gradients (ABE)")               + "</li>";
+    html += "<li><code>starnet [--nostarmask] [--stride=...]</code>: "                           + tr("Run StarNet++ star removal")           + "</li>";
+    html += "<li><code>rgbcomp &lt;r&gt; &lt;g&gt; &lt;b&gt; [-out=...]</code>: "               + tr("Create RGB from mono channels")        + "</li>";
     html += "</ul>";
 
     html += "<h3>" + tr("Image math & Geometry") + "</h3>";
     html += "<ul>";
-    html += "<li><code>pm &lt;expression&gt;</code>: " + tr("Execute PixelMath formula") + "</li>";
-    html += "<li><code>rotate &lt;angle&gt;</code> | <code>resample &lt;factor&gt;</code>: " + tr("Geometric transformations") + "</li>";
-    html += "<li><code>crop [x y w h]</code>: " + tr("Crop image to box or selection") + "</li>";
-    html += "<li><code>fmul &lt;val&gt;</code> | <code>offset &lt;val&gt;</code> | <code>neg</code>: " + tr("Basic pixel math") + "</li>";
+    html += "<li><code>pm &lt;expression&gt;</code>: "                                                                     + tr("Execute PixelMath formula")    + "</li>";
+    html += "<li><code>rotate &lt;angle&gt;</code> | <code>resample &lt;factor&gt;</code>: "                                + tr("Geometric transformations")    + "</li>";
+    html += "<li><code>crop [x y w h]</code>: "                                                                            + tr("Crop image to box or selection") + "</li>";
+    html += "<li><code>fmul &lt;val&gt;</code> | <code>offset &lt;val&gt;</code> | <code>neg</code>: "                     + tr("Basic pixel math")             + "</li>";
     html += "</ul>";
 
-    // Footer
+    // -- Footer ---------------------------------------------------------------
     html += "<p style=\"margin-top: 30px; color: #888;\">";
-    html += "TStar © 2026 Fabio Tempera | <a href=\"https://github.com/Ft2801/TStar\" style=\"color: #4a9eff;\">GitHub</a>";
+    html += "TStar (C) 2026 Fabio Tempera | "
+            "<a href=\"https://github.com/Ft2801/TStar\" style=\"color: #4a9eff;\">GitHub</a>";
     html += "</p>";
 
     return html;

@@ -2,6 +2,7 @@
 #include "ImageViewer.h"
 #include "MainWindowCallbacks.h"
 #include "Icons.h"
+
 #include <QStyle>
 #include <QMenu>
 #include <QScreen>
@@ -29,342 +30,397 @@
 #include <QTimer>
 #include <QElapsedTimer>
 
+// ---------------------------------------------------------------------------
+// FixedUI
+// Compile-time UI constants shared across all subwindow components.
+// ---------------------------------------------------------------------------
 namespace FixedUI {
-    constexpr int sidebarWidth = 26;
-    constexpr int titleBarHeight = 30;
-    constexpr int buttonSize = 24;
-    constexpr int iconSize = 16;
-    constexpr int dragPixmapSize = 32;
-    constexpr int minShadedWidth = 200;
-    constexpr int borderWidth = 2;
-    constexpr int minWindowWidth = 200;
+    constexpr int sidebarWidth    = 26;
+    constexpr int titleBarHeight  = 30;
+    constexpr int buttonSize      = 24;
+    constexpr int iconSize        = 16;
+    constexpr int dragPixmapSize  = 32;
+    constexpr int minShadedWidth  = 200;
+    constexpr int borderWidth     = 2;
+    constexpr int minWindowWidth  = 200;
     constexpr int minWindowHeight = 150;
-    constexpr int resizeMargin = 8;
+    constexpr int resizeMargin    = 8;
 }
 
-// Helper to create QIcon from SVG string
-static QIcon iconFromSvg(const QString& svg, QWidget* widget = nullptr) {
+// ---------------------------------------------------------------------------
+// iconFromSvg
+// Rasterises an SVG string into a QIcon at the standard icon size.
+// ---------------------------------------------------------------------------
+static QIcon iconFromSvg(const QString& svg, QWidget* widget = nullptr)
+{
     Q_UNUSED(widget);
     QByteArray ba = svg.toUtf8();
     QSvgRenderer renderer(ba);
-    int size = FixedUI::iconSize;
+
+    const int size = FixedUI::iconSize;
     QPixmap pix(size, size);
     pix.fill(Qt::transparent);
     QPainter painter(&pix);
     renderer.render(&painter);
+
     return QIcon(pix);
 }
 
-// --- NameStrip ---
-NameStrip::NameStrip(QWidget *parent) : QWidget(parent) {
+// ===========================================================================
+// NameStrip
+// ===========================================================================
+
+NameStrip::NameStrip(QWidget* parent) : QWidget(parent)
+{
     setFixedWidth(FixedUI::sidebarWidth);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Minimum);
     setCursor(Qt::OpenHandCursor);
     setAcceptDrops(true);
 }
 
-void NameStrip::dragMoveEvent(QDragMoveEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt") ||
-        event->mimeData()->hasFormat("application/x-tstar-duplicate")) {
+void NameStrip::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link")      ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt")     ||
+        event->mimeData()->hasFormat("application/x-tstar-duplicate"))
+    {
         event->acceptProposedAction();
     }
 }
 
-void NameStrip::setTitle(const QString& title) {
-    // Truncate to max 15 chars with ellipsis to prevent layout issues
+void NameStrip::setTitle(const QString& title)
+{
+    // Truncate long titles with an ellipsis to prevent layout overflow
     const int maxChars = 15;
-    if (title.length() > maxChars) {
-        m_title = title.left(maxChars - 1) + QChar(0x2026); // Unicode ellipsis
-    } else {
-        m_title = title;
-    }
-    
-    QFontMetrics fm(QFont("Segoe UI", 9));
-    int textLen = fm.horizontalAdvance(m_title);
-    int desiredHeight = textLen + 40;
+    m_title = (title.length() > maxChars)
+        ? title.left(maxChars - 1) + QChar(0x2026)
+        : title;
+
+    const QFontMetrics fm(QFont("Segoe UI", 9));
+    const int textLen       = fm.horizontalAdvance(m_title);
+    const int desiredHeight = textLen + 40;
     setFixedHeight(desiredHeight);
     update();
 }
 
-int NameStrip::preferredHeight() const {
-    QFontMetrics fm(QFont("Segoe UI", 9));
+int NameStrip::preferredHeight() const
+{
+    const QFontMetrics fm(QFont("Segoe UI", 9));
     return fm.horizontalAdvance(m_title) + 40;
 }
 
-void NameStrip::paintEvent(QPaintEvent *) {
+void NameStrip::paintEvent(QPaintEvent*)
+{
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    p.fillRect(rect(), QColor("#3a3a3a")); // Standard gray
+    p.fillRect(rect(), QColor("#3a3a3a"));
     p.setPen(Qt::white);
     p.setFont(QFont("Segoe UI", 9));
+
+    // Rotate the painter to render the title text vertically (bottom-to-top)
     p.save();
-    p.translate(0, height()); 
+    p.translate(0, height());
     p.rotate(-90);
-    QRect textRect(0, 0, height(), width());
-    p.drawText(textRect, Qt::AlignCenter, m_title);
+    p.drawText(QRect(0, 0, height(), width()), Qt::AlignCenter, m_title);
     p.restore();
+
     p.setPen(QColor("#222222"));
-    p.drawRect(0,0,width()-1, height()-1);
+    p.drawRect(0, 0, width() - 1, height() - 1);
 }
 
-void NameStrip::mouseDoubleClickEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
+void NameStrip::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
         emit renameRequested();
-    }
 }
 
-void NameStrip::dragEnterEvent(QDragEnterEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt")) {
+void NameStrip::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link") ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt"))
+    {
         event->acceptProposedAction();
     }
 }
 
-void NameStrip::dropEvent(QDropEvent *event) {
+void NameStrip::dropEvent(QDropEvent* event)
+{
+    // Walk the parent chain to find the owning CustomMdiSubWindow
     QWidget* widget = this;
-    while(widget && !widget->inherits("CustomMdiSubWindow")) {
+    while (widget && !widget->inherits("CustomMdiSubWindow"))
         widget = widget->parentWidget();
-    }
-    CustomMdiSubWindow* win = qobject_cast<CustomMdiSubWindow*>(widget);
-    if(win) win->handleDrop(event);
+
+    if (auto* win = qobject_cast<CustomMdiSubWindow*>(widget))
+        win->handleDrop(event);
 }
 
-void NameStrip::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
+void NameStrip::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
         m_dragStartPos = event->pos();
-    }
 }
 
-void NameStrip::mouseMoveEvent(QMouseEvent *event) {
+void NameStrip::mouseMoveEvent(QMouseEvent* event)
+{
     if (!(event->buttons() & Qt::LeftButton)) return;
-    if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance()) return;
-    
-    QDrag *drag = new QDrag(this);
-    QMimeData *mimeData = new QMimeData();
-    
+    if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance())
+        return;
+
     QWidget* widget = this;
-    while(widget && !widget->inherits("CustomMdiSubWindow")) {
+    while (widget && !widget->inherits("CustomMdiSubWindow"))
         widget = widget->parentWidget();
-    }
-    CustomMdiSubWindow* sourceWin = qobject_cast<CustomMdiSubWindow*>(widget);
-    
-    if (sourceWin) {
-        // Use "duplicate" mime type as expected by MainWindow
-        QByteArray ptrData = QByteArray::number((quintptr)sourceWin, 16);
-        mimeData->setData("application/x-tstar-duplicate", ptrData);
-        drag->setMimeData(mimeData);
-        
-        int dragSize = FixedUI::dragPixmapSize;
-        QPixmap pix(dragSize, dragSize);
-        pix.fill(Qt::cyan); // Cyan for duplicate
-        drag->setPixmap(pix);
-        drag->exec(Qt::CopyAction);
-    }
+
+    auto* sourceWin = qobject_cast<CustomMdiSubWindow*>(widget);
+    if (!sourceWin) return;
+
+    QMimeData* mimeData = new QMimeData();
+    mimeData->setData("application/x-tstar-duplicate",
+                      QByteArray::number((quintptr)sourceWin, 16));
+
+    QDrag* drag = new QDrag(this);
+    drag->setMimeData(mimeData);
+
+    QPixmap pix(FixedUI::dragPixmapSize, FixedUI::dragPixmapSize);
+    pix.fill(Qt::cyan);    // Cyan identifies a duplicate drag
+    drag->setPixmap(pix);
+    drag->exec(Qt::CopyAction);
 }
 
-// --- LinkStrip ---
-LinkStrip::LinkStrip(QWidget *parent) : QWidget(parent) {
+// ===========================================================================
+// LinkStrip
+// ===========================================================================
+
+LinkStrip::LinkStrip(QWidget* parent) : QWidget(parent)
+{
     setFixedWidth(FixedUI::sidebarWidth);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     setCursor(Qt::OpenHandCursor);
     setAcceptDrops(true);
 }
 
-void LinkStrip::setLinked(bool linked) {
+void LinkStrip::setLinked(bool linked)
+{
     if (m_linked == linked) return;
     m_linked = linked;
     update();
 }
 
-void LinkStrip::paintEvent(QPaintEvent *) {
+void LinkStrip::paintEvent(QPaintEvent*)
+{
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    
-    QColor bg = m_linked ? QColor("#2a5a2a") : QColor("#3a3a3a");
-    p.fillRect(rect(), bg);
-    
+
+    p.fillRect(rect(), m_linked ? QColor("#2a5a2a") : QColor("#3a3a3a"));
     p.setPen(m_linked ? Qt::green : Qt::white);
     p.setFont(QFont("Segoe UI", 9));
+
     p.save();
-    p.translate(0, height()); 
+    p.translate(0, height());
     p.rotate(-90);
-    QRect textRect(0, 0, height(), width());
-    p.drawText(textRect, Qt::AlignCenter, m_linked ? tr("LINKED") : tr("LINK"));
+    p.drawText(QRect(0, 0, height(), width()), Qt::AlignCenter,
+               m_linked ? tr("LINKED") : tr("LINK"));
     p.restore();
-    
+
     p.setPen(QColor("#222222"));
-    p.drawRect(0,0,width()-1, height()-1);
+    p.drawRect(0, 0, width() - 1, height() - 1);
 }
 
-void LinkStrip::mousePressEvent(QMouseEvent *event) {
+void LinkStrip::mousePressEvent(QMouseEvent* event)
+{
     if (event->button() == Qt::LeftButton) {
         m_dragStartPos = event->pos();
-        m_dragging = false;
+        m_dragging     = false;
     }
 }
 
-void LinkStrip::mouseMoveEvent(QMouseEvent *event) {
+void LinkStrip::mouseMoveEvent(QMouseEvent* event)
+{
     if (!(event->buttons() & Qt::LeftButton)) return;
-    if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance()) return;
+    if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance())
+        return;
 
     m_dragging = true;
 
-    QDrag *drag = new QDrag(this);
-    QMimeData *mimeData = new QMimeData();
-
     QWidget* widget = this;
-    while(widget && !widget->inherits("CustomMdiSubWindow")) {
+    while (widget && !widget->inherits("CustomMdiSubWindow"))
         widget = widget->parentWidget();
-    }
-    CustomMdiSubWindow* sourceWin = qobject_cast<CustomMdiSubWindow*>(widget);
-    if (sourceWin) {
-        QByteArray ptrData = QByteArray::number((quintptr)sourceWin, 16);
-        mimeData->setData("application/x-tstar-link", ptrData);
-        drag->setMimeData(mimeData);
-        int dragSize = FixedUI::dragPixmapSize;
-        QPixmap pix(dragSize, dragSize);
-        pix.fill(Qt::green);
-        drag->setPixmap(pix);
-        drag->exec(Qt::LinkAction);
-    }
+
+    auto* sourceWin = qobject_cast<CustomMdiSubWindow*>(widget);
+    if (!sourceWin) return;
+
+    QMimeData* mimeData = new QMimeData();
+    mimeData->setData("application/x-tstar-link",
+                      QByteArray::number((quintptr)sourceWin, 16));
+
+    QDrag* drag = new QDrag(this);
+    drag->setMimeData(mimeData);
+
+    QPixmap pix(FixedUI::dragPixmapSize, FixedUI::dragPixmapSize);
+    pix.fill(Qt::green);   // Green identifies a link drag
+    drag->setPixmap(pix);
+    drag->exec(Qt::LinkAction);
+
     m_dragging = false;
 }
 
-void LinkStrip::mouseReleaseEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton && !m_dragging && m_linked) {
-        emit linkToggled(); // Unlink only on pure click (no drag occurred)
-    }
+void LinkStrip::mouseReleaseEvent(QMouseEvent* event)
+{
+    // A pure click (no drag) on a linked strip requests unlinking
+    if (event->button() == Qt::LeftButton && !m_dragging && m_linked)
+        emit linkToggled();
+
     m_dragging = false;
 }
 
-void LinkStrip::dragEnterEvent(QDragEnterEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt")) {
+void LinkStrip::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link") ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt"))
+    {
         event->acceptProposedAction();
     }
 }
 
-void LinkStrip::dragMoveEvent(QDragMoveEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt")) {
+void LinkStrip::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link") ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt"))
+    {
         event->acceptProposedAction();
     }
 }
 
-void LinkStrip::dropEvent(QDropEvent *event) {
+void LinkStrip::dropEvent(QDropEvent* event)
+{
     QWidget* widget = this;
-    while(widget && !widget->inherits("CustomMdiSubWindow")) {
+    while (widget && !widget->inherits("CustomMdiSubWindow"))
         widget = widget->parentWidget();
-    }
-    CustomMdiSubWindow* win = qobject_cast<CustomMdiSubWindow*>(widget);
-    if(win) win->handleDrop(event);
+
+    if (auto* win = qobject_cast<CustomMdiSubWindow*>(widget))
+        win->handleDrop(event);
 }
 
-// --- AdaptStrip ---
-AdaptStrip::AdaptStrip(QWidget *parent) : QWidget(parent) {
+// ===========================================================================
+// AdaptStrip
+// ===========================================================================
+
+AdaptStrip::AdaptStrip(QWidget* parent) : QWidget(parent)
+{
     setFixedWidth(FixedUI::sidebarWidth);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     setCursor(Qt::OpenHandCursor);
     setAcceptDrops(true);
 }
 
-void AdaptStrip::paintEvent(QPaintEvent *) {
+void AdaptStrip::paintEvent(QPaintEvent*)
+{
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     p.fillRect(rect(), QColor("#3a3a3a"));
-    
     p.setPen(Qt::white);
     p.setFont(QFont("Segoe UI", 9));
+
     p.save();
-    p.translate(0, height()); 
+    p.translate(0, height());
     p.rotate(-90);
-    QRect textRect(0, 0, height(), width());
-    p.drawText(textRect, Qt::AlignCenter, tr("ADAPT"));
+    p.drawText(QRect(0, 0, height(), width()), Qt::AlignCenter, tr("ADAPT"));
     p.restore();
-    
+
     p.setPen(QColor("#222222"));
-    p.drawRect(0,0,width()-1, height()-1);
+    p.drawRect(0, 0, width() - 1, height() - 1);
 }
 
-void AdaptStrip::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
+void AdaptStrip::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
         m_dragStartPos = event->pos();
-    }
 }
 
-void AdaptStrip::mouseMoveEvent(QMouseEvent *event) {
+void AdaptStrip::mouseMoveEvent(QMouseEvent* event)
+{
     if (!(event->buttons() & Qt::LeftButton)) return;
-    if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance()) return;
-    
-    QDrag *drag = new QDrag(this);
-    QMimeData *mimeData = new QMimeData();
-    
+    if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance())
+        return;
+
     QWidget* widget = this;
-    while(widget && !widget->inherits("CustomMdiSubWindow")) {
+    while (widget && !widget->inherits("CustomMdiSubWindow"))
         widget = widget->parentWidget();
-    }
-    CustomMdiSubWindow* sourceWin = qobject_cast<CustomMdiSubWindow*>(widget);
-    
-    if (sourceWin) {
-        QByteArray ptrData = QByteArray::number((quintptr)sourceWin, 16);
-        mimeData->setData("application/x-tstar-adapt", ptrData);
-        drag->setMimeData(mimeData);
-        
-        int dragSize = FixedUI::dragPixmapSize;
-        QPixmap pix(dragSize, dragSize);
-        pix.fill(Qt::yellow);
-        drag->setPixmap(pix);
-        drag->exec(Qt::MoveAction);
-    }
+
+    auto* sourceWin = qobject_cast<CustomMdiSubWindow*>(widget);
+    if (!sourceWin) return;
+
+    QMimeData* mimeData = new QMimeData();
+    mimeData->setData("application/x-tstar-adapt",
+                      QByteArray::number((quintptr)sourceWin, 16));
+
+    QDrag* drag = new QDrag(this);
+    drag->setMimeData(mimeData);
+
+    QPixmap pix(FixedUI::dragPixmapSize, FixedUI::dragPixmapSize);
+    pix.fill(Qt::yellow);  // Yellow identifies an adapt drag
+    drag->setPixmap(pix);
+    drag->exec(Qt::MoveAction);
 }
 
-void AdaptStrip::dragEnterEvent(QDragEnterEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt")) {
+void AdaptStrip::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link") ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt"))
+    {
         event->acceptProposedAction();
     }
 }
 
-void AdaptStrip::dragMoveEvent(QDragMoveEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt")) {
+void AdaptStrip::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link") ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt"))
+    {
         event->acceptProposedAction();
     }
 }
 
-void AdaptStrip::dropEvent(QDropEvent *event) {
+void AdaptStrip::dropEvent(QDropEvent* event)
+{
     QWidget* widget = this;
-    while(widget && !widget->inherits("CustomMdiSubWindow")) {
+    while (widget && !widget->inherits("CustomMdiSubWindow"))
         widget = widget->parentWidget();
-    }
-    CustomMdiSubWindow* win = qobject_cast<CustomMdiSubWindow*>(widget);
-    if(win) win->handleDrop(event);
+
+    if (auto* win = qobject_cast<CustomMdiSubWindow*>(widget))
+        win->handleDrop(event);
 }
 
-// --- Custom Title Bar ---
+// ===========================================================================
+// CustomTitleBar
+// ===========================================================================
 
-CustomTitleBar::CustomTitleBar(QWidget *parent) : QWidget(parent) {
-    setAttribute(Qt::WA_StyledBackground, true); // Ensure background is painted
+CustomTitleBar::CustomTitleBar(QWidget* parent) : QWidget(parent)
+{
+    setAttribute(Qt::WA_StyledBackground, true);
     setFixedHeight(FixedUI::titleBarHeight);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_active = false;
-    
+
     QHBoxLayout* layout = new QHBoxLayout(this);
-    int margin = 5;
-    layout->setContentsMargins(margin, 0, margin, 4);
+    layout->setContentsMargins(5, 0, 5, 4);
     layout->setSpacing(4);
-    
+
     m_titleLabel = new QLabel("", this);
-    m_titleLabel->setStyleSheet("color: #ddd; font-weight: bold; font-family: 'Segoe UI'; font-size: 11px; background: transparent;");
-    
-    // Zoom Label (Left of title)
+    m_titleLabel->setStyleSheet(
+        "color: #ddd; font-weight: bold; font-family: 'Segoe UI'; "
+        "font-size: 11px; background: transparent;"
+    );
+
     m_zoomLabel = new QLabel("", this);
-    m_zoomLabel->setStyleSheet("QLabel { color: #aaa; font-family: 'Segoe UI'; font-size: 10px; background-color: transparent; margin-right: 5px; border: none; }");
-    m_zoomLabel->setVisible(false); // Hide initially
-    
-    int btnSize = FixedUI::buttonSize;
-    int icnSize = FixedUI::iconSize;
+    m_zoomLabel->setStyleSheet(
+        "QLabel { color: #aaa; font-family: 'Segoe UI'; font-size: 10px; "
+        "background-color: transparent; margin-right: 5px; border: none; }"
+    );
+    m_zoomLabel->setVisible(false);
+
+    const int btnSize = FixedUI::buttonSize;
+    const int icnSize = FixedUI::iconSize;
+
     auto configBtn = [&](QPushButton* btn, const QString& svg, const QString& hoverColor) {
         btn->setFixedSize(btnSize, btnSize);
         btn->setIcon(iconFromSvg(svg, this));
@@ -375,63 +431,66 @@ CustomTitleBar::CustomTitleBar(QWidget *parent) : QWidget(parent) {
             "QPushButton:hover { background: %1; border-radius: 2px; }"
         ).arg(hoverColor));
     };
-    
-    m_minBtn = new QPushButton(this);
-    configBtn(m_minBtn, Icons::WIN_SHADE, "#555");
-    m_maxBtn = new QPushButton(this);
-    configBtn(m_maxBtn, Icons::WIN_RESTORE, "#555");
-    m_closeBtn = new QPushButton(this);
-    configBtn(m_closeBtn, Icons::WIN_CLOSE, "#c00");
 
-    // Right-aligned buttons
+    m_minBtn   = new QPushButton(this);
+    configBtn(m_minBtn,   Icons::WIN_SHADE,   "#555");
+    m_maxBtn   = new QPushButton(this);
+    configBtn(m_maxBtn,   Icons::WIN_RESTORE, "#555");
+    m_closeBtn = new QPushButton(this);
+    configBtn(m_closeBtn, Icons::WIN_CLOSE,   "#c00");
+
     m_rightSpacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
     layout->addWidget(m_titleLabel);
-    layout->addWidget(m_zoomLabel); 
+    layout->addWidget(m_zoomLabel);
     layout->addSpacerItem(m_rightSpacer);
     layout->addWidget(m_minBtn);
     layout->addWidget(m_maxBtn);
     layout->addWidget(m_closeBtn);
-    
+
     connect(m_closeBtn, &QPushButton::clicked, this, &CustomTitleBar::closeClicked);
-    connect(m_minBtn, &QPushButton::clicked, this, &CustomTitleBar::minimizeClicked);
-    connect(m_maxBtn, &QPushButton::clicked, this, &CustomTitleBar::maximizeClicked);
-    
+    connect(m_minBtn,   &QPushButton::clicked, this, &CustomTitleBar::minimizeClicked);
+    connect(m_maxBtn,   &QPushButton::clicked, this, &CustomTitleBar::maximizeClicked);
+
     updateStyle();
 }
 
-void CustomTitleBar::setTitle(const QString& title) {
+void CustomTitleBar::setTitle(const QString& title)
+{
     m_titleLabel->setProperty("fullTitle", title);
+
     if (m_shaded) {
-        // Elide title to fit fixed shaded width
-        QFontMetrics fm(m_titleLabel->font());
-        int btnSize = FixedUI::buttonSize;
-        int buttonsW = 3 * btnSize + 20;
-        int available = 1.5 * FixedUI::minShadedWidth - buttonsW - 16;
+        // When shaded the window has a fixed narrow width; elide the title to fit
+        const QFontMetrics fm(m_titleLabel->font());
+        const int buttonsW  = 3 * FixedUI::buttonSize + 20;
+        const int available = static_cast<int>(1.5 * FixedUI::minShadedWidth) - buttonsW - 16;
         m_titleLabel->setText(fm.elidedText(title, Qt::ElideRight, std::max(available, 20)));
     } else {
         m_titleLabel->setText(title);
     }
 }
 
-void CustomTitleBar::setActive(bool active) {
+void CustomTitleBar::setActive(bool active)
+{
     if (m_active == active) return;
     m_active = active;
     updateStyle();
 }
 
-void CustomTitleBar::setShaded(bool shaded) {
+void CustomTitleBar::setShaded(bool shaded)
+{
     m_shaded = shaded;
     m_minBtn->setIcon(iconFromSvg(m_shaded ? Icons::WIN_UNSHADE : Icons::WIN_SHADE));
-    // Hide maximize button when shaded
     setMaximizeButtonVisible(!shaded);
-    // Re-apply title with correct elision for shaded state
+
+    // Re-apply title with correct elision for the new width constraint
     QString fullTitle = m_titleLabel->property("fullTitle").toString();
     if (fullTitle.isEmpty()) fullTitle = m_titleLabel->text();
     setTitle(fullTitle);
 }
 
-void CustomTitleBar::setZoom(int percent) {
+void CustomTitleBar::setZoom(int percent)
+{
     if (percent <= 0) {
         m_zoomLabel->setVisible(false);
     } else {
@@ -440,70 +499,86 @@ void CustomTitleBar::setZoom(int percent) {
     }
 }
 
-void CustomTitleBar::setMaximized(bool maximized) {
+void CustomTitleBar::setMaximized(bool maximized)
+{
     m_maximized = maximized;
     m_maxBtn->setIcon(iconFromSvg(m_maximized ? Icons::WIN_MAXIMIZE : Icons::WIN_RESTORE));
 }
 
-void CustomTitleBar::setMaximizeButtonVisible(bool visible) {
+void CustomTitleBar::setMaximizeButtonVisible(bool visible)
+{
     m_maxBtn->setVisible(visible);
 }
 
-void CustomTitleBar::updateStyle() {
-    QString bg = m_active ? "#3a4b5b" : "#2a2a2a";
+void CustomTitleBar::updateStyle()
+{
+    const QString bg = m_active ? "#3a4b5b" : "#2a2a2a";
     setStyleSheet(QString("background-color: %1; border-bottom: 1px solid #222;").arg(bg));
 }
 
-void CustomTitleBar::mousePressEvent(QMouseEvent *event) {
+void CustomTitleBar::mousePressEvent(QMouseEvent* event)
+{
     if (event->button() == Qt::LeftButton) {
         m_dragPos = event->globalPosition().toPoint();
         event->accept();
     }
 }
 
-void CustomTitleBar::mouseMoveEvent(QMouseEvent *event) {
-    if (event->buttons() & Qt::LeftButton) {
-        QWidget* p = parentWidget(); 
-        while (p) {
-            QMdiSubWindow* sub = qobject_cast<QMdiSubWindow*>(p);
-            if (sub && !sub->isMaximized()) {
-                 QPoint delta = event->globalPosition().toPoint() - m_dragPos;
-                 sub->move(sub->pos() + delta);
-                 m_dragPos = event->globalPosition().toPoint();
-                 event->accept();
-                 return;
-            }
-            p = p->parentWidget();
+void CustomTitleBar::mouseMoveEvent(QMouseEvent* event)
+{
+    if (!(event->buttons() & Qt::LeftButton)) return;
+
+    // Walk the parent chain to find the QMdiSubWindow and move it
+    QWidget* p = parentWidget();
+    while (p) {
+        QMdiSubWindow* sub = qobject_cast<QMdiSubWindow*>(p);
+        if (sub && !sub->isMaximized()) {
+            const QPoint delta = event->globalPosition().toPoint() - m_dragPos;
+            sub->move(sub->pos() + delta);
+            m_dragPos = event->globalPosition().toPoint();
+            event->accept();
+            return;
         }
+        p = p->parentWidget();
     }
 }
 
-void CustomTitleBar::mouseDoubleClickEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
+void CustomTitleBar::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
         emit minimizeClicked();
-    }
 }
 
-// --- Custom MDI SubWindow ---
+// ===========================================================================
+// CustomMdiSubWindow
+// ===========================================================================
 
-CustomMdiSubWindow::CustomMdiSubWindow(QWidget *parent) : QMdiSubWindow(parent) {
+CustomMdiSubWindow::CustomMdiSubWindow(QWidget* parent) : QMdiSubWindow(parent)
+{
     setWindowFlags(Qt::FramelessWindowHint | Qt::SubWindow);
     setAttribute(Qt::WA_DeleteOnClose);
-    
     setAcceptDrops(true);
     installEventFilter(this);
+
+    // -- Container frame (draws the 2px border) --------------------------
     m_container = new QFrame(this);
     m_container->setObjectName("SubWindowContainer");
-    m_container->setStyleSheet("#SubWindowContainer { border: 2px solid #444; background: #202020; padding: 2px; }");
+    m_container->setStyleSheet(
+        "#SubWindowContainer { border: 2px solid #444; background: #202020; padding: 2px; }"
+    );
+
     m_mainLayout = new QVBoxLayout(m_container);
-    m_mainLayout->setContentsMargins(0, 0, 0, 0); 
+    m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
+
+    // -- Title bar -------------------------------------------------------
     m_titleBar = new CustomTitleBar(m_container);
-    connect(m_titleBar, &CustomTitleBar::closeClicked, this, &CustomMdiSubWindow::animateClose);
+    connect(m_titleBar, &CustomTitleBar::closeClicked,    this, &CustomMdiSubWindow::animateClose);
     connect(m_titleBar, &CustomTitleBar::minimizeClicked, this, &CustomMdiSubWindow::showMinimized);
-    connect(m_titleBar, &CustomTitleBar::maximizeClicked, [this](){
+
+    connect(m_titleBar, &CustomTitleBar::maximizeClicked, [this]() {
         if (m_isMaximized) {
-            // If shaded, we MUST unshade first before restoring to normal
+            // Restore from maximised state, unshading first if required
             if (m_shaded) {
                 m_shaded = false;
                 m_titleBar->setShaded(false);
@@ -517,34 +592,30 @@ CustomMdiSubWindow::CustomMdiSubWindow(QWidget *parent) : QMdiSubWindow(parent) 
             showNormal();
             m_isMaximized = false;
             m_titleBar->setMaximized(false);
-            
-            // Restore valid normal geometry if available
+
             if (!m_validNormalGeometry.isNull()) {
                 setGeometry(m_validNormalGeometry);
             } else {
-                resize(800, 600); // Reasonable fallback
-                // Center on screen
+                resize(800, 600);
                 if (QMdiArea* area = mdiArea()) {
-                     setGeometry(QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter, size(), area->viewport()->rect()));
+                    setGeometry(QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter,
+                                                    size(), area->viewport()->rect()));
                 }
             }
-            
+
             if (m_contentArea) {
-                 m_contentArea->show();
-                 m_contentArea->resize(width(), height() - m_titleBar->height());
-            }
-            
-            // Auto-fit image to new window size
-            if (ImageViewer* v = viewer()) {
-                QTimer::singleShot(50, v, &ImageViewer::fitToWindow);
-            }
-        } else {
-            // Save valid normal geometry before maximizing
-            if (!m_shaded) {
-                m_validNormalGeometry = geometry();
+                m_contentArea->show();
+                m_contentArea->resize(width(), height() - m_titleBar->height());
             }
 
-            // If shaded, we need to unshade first with robust logic
+            if (ImageViewer* v = viewer())
+                QTimer::singleShot(50, v, &ImageViewer::fitToWindow);
+
+        } else {
+            // Maximise, handling the shaded state gracefully
+            if (!m_shaded)
+                m_validNormalGeometry = geometry();
+
             if (m_shaded) {
                 m_shaded = false;
                 m_titleBar->setShaded(false);
@@ -554,90 +625,93 @@ CustomMdiSubWindow::CustomMdiSubWindow(QWidget *parent) : QMdiSubWindow(parent) 
                 setMinimumHeight(0);
                 m_titleBar->show();
                 m_contentArea->show();
-                 
-                 // 2. Expand to full viewport to ensure maximize works visually
-                 if (QMdiArea* area = mdiArea()) {
-                     if (QWidget* vp = area->viewport()) setGeometry(vp->rect());
-                     else setGeometry(area->rect());
-                 } else {
-                     setGeometry(0, 0, 1920, 1080);
-                 }
-                 
-                 // 3. Defer maximize
-                 QTimer::singleShot(50, this, [this](){
-                     showMaximized();
-                     m_isMaximized = true;
-                     m_titleBar->setMaximized(true);
-                     if (m_contentArea) {
-                         m_contentArea->show();
-                         m_contentArea->resize(width(), height() - m_titleBar->height()); 
-                     }
-                     
-                     if (ImageViewer* v = viewer()) {
-                         v->fitToWindow();
-                         QTimer::singleShot(10, v, &ImageViewer::fitToWindow);
-                     }
-                 });
-                 return; 
+
+                if (QMdiArea* area = mdiArea()) {
+                    if (QWidget* vp = area->viewport()) setGeometry(vp->rect());
+                    else                                 setGeometry(area->rect());
+                } else {
+                    setGeometry(0, 0, 1920, 1080);
+                }
+
+                // Defer the actual maximise call to allow the unshade resize to settle
+                QTimer::singleShot(50, this, [this]() {
+                    showMaximized();
+                    m_isMaximized = true;
+                    m_titleBar->setMaximized(true);
+                    if (m_contentArea) {
+                        m_contentArea->show();
+                        m_contentArea->resize(width(), height() - m_titleBar->height());
+                    }
+                    if (ImageViewer* v = viewer()) {
+                        v->fitToWindow();
+                        QTimer::singleShot(10, v, &ImageViewer::fitToWindow);
+                    }
+                });
+                return;
             }
-            
+
             showMaximized();
             m_isMaximized = true;
             m_titleBar->setMaximized(true);
-            // Auto-fit image to new window size
-            if (ImageViewer* v = viewer()) {
+
+            if (ImageViewer* v = viewer())
                 QTimer::singleShot(50, v, &ImageViewer::fitToWindow);
-            }
         }
     });
 
     m_mainLayout->addWidget(m_titleBar);
+
+    // -- Content area ----------------------------------------------------
     m_contentArea = new QWidget(m_container);
     m_contentArea->setStyleSheet("background: #202020;");
     m_contentLayout = new QHBoxLayout(m_contentArea);
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
     m_contentLayout->setSpacing(0);
-    
-    // Left Strip Container
-    QWidget* leftStrip = new QWidget(m_contentArea);
-    leftStrip->setFixedWidth(FixedUI::sidebarWidth);
+
+    // Left strip container (holds NameStrip, LinkStrip, AdaptStrip)
+    QWidget*     leftStrip  = new QWidget(m_contentArea);
     QVBoxLayout* leftLayout = new QVBoxLayout(leftStrip);
+    leftStrip->setFixedWidth(FixedUI::sidebarWidth);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(0);
-    
+
     m_nameStrip = new NameStrip(leftStrip);
     connect(m_nameStrip, &NameStrip::renameRequested, this, &CustomMdiSubWindow::requestRename);
-    
+
     m_linkStrip = new LinkStrip(leftStrip);
-    connect(m_linkStrip, &LinkStrip::linkToggled, [this](){
+    connect(m_linkStrip, &LinkStrip::linkToggled, [this]() {
+        // Unlink this viewer from all peers when the user clicks LINKED
         ImageViewer* v = m_contentArea->findChild<ImageViewer*>();
         if (v && v->isLinked()) {
             if (QMdiArea* area = mdiArea()) {
                 QVector<QPair<ImageViewer*, CustomMdiSubWindow*>> others;
                 for (QMdiSubWindow* sub : area->subWindowList()) {
                     if (sub == this) continue;
-                    CustomMdiSubWindow* otherWin = qobject_cast<CustomMdiSubWindow*>(sub);
+                    auto* otherWin = qobject_cast<CustomMdiSubWindow*>(sub);
                     if (!otherWin) continue;
                     ImageViewer* ov = otherWin->viewer();
                     if (ov && ov->isLinked())
                         others.append({ov, otherWin});
                 }
-
-                for (auto& p : others) {
-                    disconnect(v,       &ImageViewer::viewChanged, p.first, &ImageViewer::syncView);
-                    disconnect(p.first, &ImageViewer::viewChanged, v,       &ImageViewer::syncView);
+                for (auto& pair : others) {
+                    disconnect(v,          &ImageViewer::viewChanged, pair.first, &ImageViewer::syncView);
+                    disconnect(pair.first, &ImageViewer::viewChanged, v,          &ImageViewer::syncView);
                 }
-
                 v->setLinked(false);
 
-                for (auto& p : others) {
+                // Unlink peers that no longer have any linked partner
+                for (auto& pair : others) {
                     bool hasPeer = false;
                     for (auto& q : others) {
-                        if (q.first != p.first && q.first->isLinked()) { hasPeer = true; break; }
+                        if (q.first != pair.first && q.first->isLinked()) {
+                            hasPeer = true;
+                            break;
+                        }
                     }
                     if (!hasPeer) {
-                        p.first->setLinked(false);
-                        if (p.second->m_linkStrip) p.second->m_linkStrip->setLinked(false);
+                        pair.first->setLinked(false);
+                        if (pair.second->m_linkStrip)
+                            pair.second->m_linkStrip->setLinked(false);
                     }
                 }
             } else {
@@ -652,44 +726,57 @@ CustomMdiSubWindow::CustomMdiSubWindow(QWidget *parent) : QMdiSubWindow(parent) 
     leftLayout->addWidget(m_nameStrip);
     leftLayout->addWidget(m_linkStrip);
     leftLayout->addWidget(m_adaptStrip);
-    leftLayout->addStretch();  
-    
+    leftLayout->addStretch();
+
     m_contentLayout->addWidget(leftStrip);
     m_mainLayout->addWidget(m_contentArea, 1);
-    
+
     QMdiSubWindow::setWidget(m_container);
     setAcceptDrops(true);
     installRecursiveFilter(m_container);
     setMouseTracking(true);
 }
 
-void CustomMdiSubWindow::installRecursiveFilter(QWidget* w) {
+// ---------------------------------------------------------------------------
+// installRecursiveFilter
+// Installs this subwindow as an event filter on all descendant widgets so
+// that resize-handle and drag-and-drop events can be intercepted regardless
+// of which child widget receives them.
+// ---------------------------------------------------------------------------
+void CustomMdiSubWindow::installRecursiveFilter(QWidget* w)
+{
     if (!w) return;
+
     w->installEventFilter(this);
     w->setMouseTracking(true);
     w->setAttribute(Qt::WA_Hover);
-    
-    if (QAbstractScrollArea* scrollArea = qobject_cast<QAbstractScrollArea*>(w)) {
+
+    // Viewport of scroll areas must be filtered separately
+    if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(w)) {
         if (QWidget* vp = scrollArea->viewport()) {
             vp->installEventFilter(this);
             vp->setMouseTracking(true);
             vp->setAttribute(Qt::WA_Hover);
         }
     }
-    
+
     for (QObject* child : w->children()) {
-        if (QWidget* cw = qobject_cast<QWidget*>(child)) {
+        if (auto* cw = qobject_cast<QWidget*>(child))
             installRecursiveFilter(cw);
-        }
     }
 }
 
-void CustomMdiSubWindow::mousePressEvent(QMouseEvent *event) {
+// ---------------------------------------------------------------------------
+// Mouse event handlers for manual edge resizing
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::mousePressEvent(QMouseEvent* event)
+{
     if (event->button() == Qt::LeftButton && !m_shaded && !isMaximized()) {
         m_activeEdges = getResizeEdge(event->pos());
         if (m_activeEdges != None) {
-            m_resizing = true;
-            m_dragStartPos = event->globalPosition().toPoint();
+            m_resizing          = true;
+            m_dragStartPos      = event->globalPosition().toPoint();
             m_dragStartGeometry = geometry();
             event->accept();
             return;
@@ -698,32 +785,27 @@ void CustomMdiSubWindow::mousePressEvent(QMouseEvent *event) {
     QMdiSubWindow::mousePressEvent(event);
 }
 
-void CustomMdiSubWindow::mouseMoveEvent(QMouseEvent *event) {
+void CustomMdiSubWindow::mouseMoveEvent(QMouseEvent* event)
+{
     if (m_resizing) {
-        QPoint delta = event->globalPosition().toPoint() - m_dragStartPos;
-        QRect newGeom = m_dragStartGeometry;
+        const QPoint delta = event->globalPosition().toPoint() - m_dragStartPos;
+        QRect newGeom      = m_dragStartGeometry;
 
-        if (m_activeEdges & Left) {
-            newGeom.setLeft(m_dragStartGeometry.left() + delta.x());
-        } else if (m_activeEdges & Right) {
-            newGeom.setRight(m_dragStartGeometry.right() + delta.x());
-        }
+        if (m_activeEdges & Left)   newGeom.setLeft(m_dragStartGeometry.left()     + delta.x());
+        else if (m_activeEdges & Right) newGeom.setRight(m_dragStartGeometry.right() + delta.x());
+        if (m_activeEdges & Top)    newGeom.setTop(m_dragStartGeometry.top()       + delta.y());
+        else if (m_activeEdges & Bottom) newGeom.setBottom(m_dragStartGeometry.bottom() + delta.y());
 
-        if (m_activeEdges & Top) {
-            newGeom.setTop(m_dragStartGeometry.top() + delta.y());
-        } else if (m_activeEdges & Bottom) {
-            newGeom.setBottom(m_dragStartGeometry.bottom() + delta.y());
-        }
-
-        int minW = FixedUI::minWindowWidth;
-        int minH = FixedUI::minWindowHeight;
-        if (newGeom.width() < minW) {
-            if (m_activeEdges & Left) newGeom.setLeft(newGeom.right() - minW);
-            else newGeom.setRight(newGeom.left() + minW);
+        // Enforce minimum dimensions
+        const int minW = FixedUI::minWindowWidth;
+        const int minH = FixedUI::minWindowHeight;
+        if (newGeom.width()  < minW) {
+            if (m_activeEdges & Left) newGeom.setLeft(newGeom.right()  - minW);
+            else                      newGeom.setRight(newGeom.left()  + minW);
         }
         if (newGeom.height() < minH) {
-            if (m_activeEdges & Top) newGeom.setTop(newGeom.bottom() - minH);
-            else newGeom.setBottom(newGeom.top() + minH);
+            if (m_activeEdges & Top)  newGeom.setTop(newGeom.bottom()  - minH);
+            else                      newGeom.setBottom(newGeom.top()  + minH);
         }
 
         setGeometry(newGeom);
@@ -734,9 +816,10 @@ void CustomMdiSubWindow::mouseMoveEvent(QMouseEvent *event) {
     }
 }
 
-void CustomMdiSubWindow::mouseReleaseEvent(QMouseEvent *event) {
+void CustomMdiSubWindow::mouseReleaseEvent(QMouseEvent* event)
+{
     if (m_resizing) {
-        m_resizing = false;
+        m_resizing    = false;
         m_activeEdges = None;
         unsetCursor();
         event->accept();
@@ -745,156 +828,179 @@ void CustomMdiSubWindow::mouseReleaseEvent(QMouseEvent *event) {
     }
 }
 
-void CustomMdiSubWindow::leaveEvent(QEvent *event) {
+void CustomMdiSubWindow::leaveEvent(QEvent* event)
+{
     if (!m_resizing) unsetCursor();
     QMdiSubWindow::leaveEvent(event);
 }
 
-int CustomMdiSubWindow::getResizeEdge(const QPoint& pos) {
-    int edge = None;
-    int margin = FixedUI::resizeMargin;
-    if (pos.x() < margin) edge |= Left;
+// ---------------------------------------------------------------------------
+// getResizeEdge
+// Maps a local mouse position to a bitmask of resize edge flags.
+// ---------------------------------------------------------------------------
+int CustomMdiSubWindow::getResizeEdge(const QPoint& pos)
+{
+    int edge         = None;
+    const int margin = FixedUI::resizeMargin;
+
+    if (pos.x() < margin)          edge |= Left;
     if (pos.x() > width() - margin) edge |= Right;
-    if (pos.y() < margin) edge |= Top;
+    if (pos.y() < margin)           edge |= Top;
     if (pos.y() > height() - margin) edge |= Bottom;
+
     return edge;
 }
 
-void CustomMdiSubWindow::updateCursor(const QPoint& pos) {
+// ---------------------------------------------------------------------------
+// updateCursor
+// Sets the appropriate resize cursor based on the edge under the pointer.
+// ---------------------------------------------------------------------------
+void CustomMdiSubWindow::updateCursor(const QPoint& pos)
+{
     if (m_shaded || m_isMaximized) {
         unsetCursor();
         return;
     }
-    int edge = getResizeEdge(pos);
-    if (edge == (Left | Top) || edge == (Right | Bottom)) setCursor(Qt::SizeFDiagCursor);
-    else if (edge == (Left | Bottom) || edge == (Right | Top)) setCursor(Qt::SizeBDiagCursor);
-    else if (edge & Left || edge & Right) setCursor(Qt::SizeHorCursor);
-    else if (edge & Top || edge & Bottom) setCursor(Qt::SizeVerCursor);
-    else unsetCursor();
+
+    const int edge = getResizeEdge(pos);
+
+    if      (edge == (Left | Top)    || edge == (Right | Bottom)) setCursor(Qt::SizeFDiagCursor);
+    else if (edge == (Left | Bottom) || edge == (Right | Top))    setCursor(Qt::SizeBDiagCursor);
+    else if (edge & Left  || edge & Right)                         setCursor(Qt::SizeHorCursor);
+    else if (edge & Top   || edge & Bottom)                        setCursor(Qt::SizeVerCursor);
+    else                                                            unsetCursor();
 }
 
-void CustomMdiSubWindow::showMinimized() {
+// ---------------------------------------------------------------------------
+// Shading (collapse to title bar only)
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::showMinimized()
+{
     toggleShade();
 }
 
-void CustomMdiSubWindow::showMaximized() {
+void CustomMdiSubWindow::showMaximized()
+{
     m_isMaximized = true;
     m_titleBar->setMaximized(true);
     QMdiSubWindow::showMaximized();
     emit layoutChanged();
 }
 
-void CustomMdiSubWindow::showNormal() {
+void CustomMdiSubWindow::showNormal()
+{
     m_isMaximized = false;
     m_titleBar->setMaximized(false);
     QMdiSubWindow::showNormal();
     emit layoutChanged();
 }
 
-void CustomMdiSubWindow::toggleShade() {
+void CustomMdiSubWindow::toggleShade()
+{
+    // Debounce: ignore rapid consecutive calls within 200 ms
     static QElapsedTimer lastCallTimer;
-    if (lastCallTimer.isValid() && lastCallTimer.elapsed() < 200) {
-        return;
-    }
+    if (lastCallTimer.isValid() && lastCallTimer.elapsed() < 200) return;
     lastCallTimer.start();
-    
+
     m_shaded = !m_shaded;
     m_titleBar->setShaded(m_shaded);
-    
-    QPoint center = geometry().center();
-    
+
+    const QPoint center = geometry().center();
+
     if (m_shaded) {
-        if (!m_isMaximized) {
+        if (!m_isMaximized)
             m_validNormalGeometry = geometry();
-        }
 
-        m_wasMaximized = m_isMaximized; 
+        m_wasMaximized  = m_isMaximized;
         m_originalHeight = height();
-        m_originalWidth = width(); 
+        m_originalWidth  = width();
 
+        // Grab a thumbnail of the content before hiding it
         ImageViewer* v = viewer();
-        QPixmap thumb = (v && v->viewport()) 
-                        ? v->viewport()->grab() 
-                        : (m_contentArea->isVisible() ? m_contentArea->grab() : QPixmap());
-        
+        QPixmap thumb = (v && v->viewport())
+            ? v->viewport()->grab()
+            : (m_contentArea->isVisible() ? m_contentArea->grab() : QPixmap());
+
         m_contentArea->hide();
-        int newH = m_titleBar->height() + FixedUI::borderWidth;
-        
-        int totalW = 1.5 * FixedUI::minShadedWidth; 
-        
-        int newX = center.x() - totalW / 2;
-        int newY = geometry().top(); 
-        
-        setGeometry(newX, newY, totalW, newH);
+
+        const int newH  = m_titleBar->height() + FixedUI::borderWidth;
+        const int totalW = static_cast<int>(1.5 * FixedUI::minShadedWidth);
+        setGeometry(center.x() - totalW / 2, geometry().top(), totalW, newH);
+
         emit shadingChanged(true, thumb);
-        
+
     } else {
         setMinimumWidth(0);
         setMaximumWidth(16777215);
-        setMaximumHeight(16777215); 
+        setMaximumHeight(16777215);
         setMinimumHeight(0);
-        
         m_titleBar->show();
         m_contentArea->show();
-        
-        bool restoreMax = m_wasMaximized;
+
+        const bool restoreMax = m_wasMaximized;
         if (isMaximized()) QMdiSubWindow::showNormal();
 
         if (restoreMax) {
             if (QMdiArea* area = mdiArea()) {
-                if (QWidget* vp = area->viewport()) {
-                    setGeometry(vp->rect());
-                } else {
-                    setGeometry(area->rect());
-                }
+                if (QWidget* vp = area->viewport()) setGeometry(vp->rect());
+                else                                setGeometry(area->rect());
             } else {
-                 setGeometry(0, 0, 1920, 1080); 
+                setGeometry(0, 0, 1920, 1080);
             }
-            
-            QTimer::singleShot(50, this, [this](){
+
+            QTimer::singleShot(50, this, [this]() {
                 showMaximized();
                 if (m_contentArea) {
-                    m_contentArea->show(); 
+                    m_contentArea->show();
                     m_contentArea->resize(width(), height() - m_titleBar->height());
                 }
-                
                 if (width() < 500) {
-                    if (QMdiArea* area = mdiArea()) setGeometry(area->viewport()->rect());
+                    if (QMdiArea* area = mdiArea())
+                        setGeometry(area->viewport()->rect());
                 }
-                
                 if (ImageViewer* v = viewer()) {
                     v->fitToWindow();
                     QTimer::singleShot(10, v, &ImageViewer::fitToWindow);
                 }
             });
         } else {
-            int newX = center.x() - m_originalWidth / 2;
-            int newY = geometry().top();
-            setGeometry(newX, newY, m_originalWidth, m_originalHeight);
+            setGeometry(center.x() - m_originalWidth / 2,
+                        geometry().top(),
+                        m_originalWidth, m_originalHeight);
         }
+
         emit shadingChanged(false, QPixmap());
     }
 
     emit layoutChanged();
 }
 
-bool CustomMdiSubWindow::event(QEvent *event) {
+// ---------------------------------------------------------------------------
+// Event and Event Filter
+// ---------------------------------------------------------------------------
+
+bool CustomMdiSubWindow::event(QEvent* event)
+{
     return QMdiSubWindow::event(event);
 }
 
-bool CustomMdiSubWindow::eventFilter(QObject *obj, QEvent *event) {
-    QWidget* sender = qobject_cast<QWidget*>(obj);
-    
+bool CustomMdiSubWindow::eventFilter(QObject* obj, QEvent* event)
+{
+    auto* sender = qobject_cast<QWidget*>(obj);
+
+    // Install the filter on newly added child widgets automatically
     if (event->type() == QEvent::ChildAdded) {
-        QChildEvent* ce = static_cast<QChildEvent*>(event);
-        if (QWidget* cw = qobject_cast<QWidget*>(ce->child())) {
+        auto* ce = static_cast<QChildEvent*>(event);
+        if (auto* cw = qobject_cast<QWidget*>(ce->child()))
             installRecursiveFilter(cw);
-        }
     }
 
-    if (!sender || (!m_container->isAncestorOf(sender) && sender != m_container)) 
+    // Restrict further handling to widgets inside the container
+    if (!sender || (!m_container->isAncestorOf(sender) && sender != m_container))
         return QMdiSubWindow::eventFilter(obj, event);
 
+    // Never intercept button events; they are handled by their own connections
     if (qobject_cast<QPushButton*>(sender)) return false;
 
     auto mapToSubWindow = [this, sender](const QPoint& localPos) {
@@ -902,345 +1008,408 @@ bool CustomMdiSubWindow::eventFilter(QObject *obj, QEvent *event) {
     };
 
     if (event->type() == QEvent::MouseButtonPress) {
-        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-        if (mouseEvent->button() == Qt::LeftButton && !m_shaded && !isMaximized()) {
-            QPoint posInSub = mapToSubWindow(mouseEvent->pos());
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton && !m_shaded && !isMaximized()) {
+            const QPoint posInSub = mapToSubWindow(me->pos());
             m_activeEdges = getResizeEdge(posInSub);
             if (m_activeEdges != None) {
-                m_resizing = true;
-                m_dragStartPos = mouseEvent->globalPosition().toPoint();
+                m_resizing          = true;
+                m_dragStartPos      = me->globalPosition().toPoint();
                 m_dragStartGeometry = geometry();
-                return true; 
+                return true;
             }
         }
+
     } else if (event->type() == QEvent::MouseMove) {
-        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        auto* me = static_cast<QMouseEvent*>(event);
         if (m_resizing) {
-            QPoint delta = mouseEvent->globalPosition().toPoint() - m_dragStartPos;
-            QRect newGeom = m_dragStartGeometry;
+            const QPoint delta = me->globalPosition().toPoint() - m_dragStartPos;
+            QRect newGeom      = m_dragStartGeometry;
 
-            if (m_activeEdges & Left) newGeom.setLeft(m_dragStartGeometry.left() + delta.x());
+            if (m_activeEdges & Left)   newGeom.setLeft(m_dragStartGeometry.left()     + delta.x());
             else if (m_activeEdges & Right) newGeom.setRight(m_dragStartGeometry.right() + delta.x());
-
-            if (m_activeEdges & Top) newGeom.setTop(m_dragStartGeometry.top() + delta.y());
+            if (m_activeEdges & Top)    newGeom.setTop(m_dragStartGeometry.top()       + delta.y());
             else if (m_activeEdges & Bottom) newGeom.setBottom(m_dragStartGeometry.bottom() + delta.y());
 
-            int minW = FixedUI::minWindowWidth;
-            int minH = FixedUI::minWindowHeight;
-            if (newGeom.width() < minW) {
-                if (m_activeEdges & Left) newGeom.setLeft(newGeom.right() - minW);
-                else newGeom.setRight(newGeom.left() + minW);
+            const int minW = FixedUI::minWindowWidth;
+            const int minH = FixedUI::minWindowHeight;
+            if (newGeom.width()  < minW) {
+                if (m_activeEdges & Left) newGeom.setLeft(newGeom.right()  - minW);
+                else                      newGeom.setRight(newGeom.left()  + minW);
             }
             if (newGeom.height() < minH) {
-                if (m_activeEdges & Top) newGeom.setTop(newGeom.bottom() - minH);
-                else newGeom.setBottom(newGeom.top() + minH);
+                if (m_activeEdges & Top)  newGeom.setTop(newGeom.bottom()  - minH);
+                else                      newGeom.setBottom(newGeom.top()  + minH);
             }
 
             setGeometry(newGeom);
             return true;
         } else {
-            updateCursor(mapToSubWindow(mouseEvent->pos()));
+            updateCursor(mapToSubWindow(me->pos()));
         }
+
     } else if (event->type() == QEvent::MouseButtonRelease) {
         if (m_resizing) {
-            m_resizing = false;
+            m_resizing    = false;
             m_activeEdges = None;
             unsetCursor();
             return true;
         }
+
     } else if (event->type() == QEvent::HoverMove) {
-         QHoverEvent* hoverEvent = static_cast<QHoverEvent*>(event);
-         updateCursor(mapToSubWindow(hoverEvent->position().toPoint()));
-    } else if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
-        QDragMoveEvent* dragEvent = static_cast<QDragMoveEvent*>(event);
-        if (dragEvent->mimeData()->hasFormat("application/x-tstar-link")) {
-            dragEvent->acceptProposedAction();
+        auto* he = static_cast<QHoverEvent*>(event);
+        updateCursor(mapToSubWindow(he->position().toPoint()));
+
+    } else if (event->type() == QEvent::DragEnter ||
+               event->type() == QEvent::DragMove)
+    {
+        auto* de = static_cast<QDragMoveEvent*>(event);
+        if (de->mimeData()->hasFormat("application/x-tstar-link")) {
+            de->acceptProposedAction();
             return true;
         }
+
     } else if (event->type() == QEvent::Drop) {
-        QDropEvent* dropEvent = static_cast<QDropEvent*>(event);
-        if (dropEvent->mimeData()->hasFormat("application/x-tstar-link")) {
-            handleDrop(dropEvent);
+        auto* de = static_cast<QDropEvent*>(event);
+        if (de->mimeData()->hasFormat("application/x-tstar-link")) {
+            handleDrop(de);
             return true;
         }
+
     } else if (event->type() == QEvent::DragLeave) {
         event->accept();
-        return true; 
+        return true;
     }
-    
+
     return QMdiSubWindow::eventFilter(obj, event);
 }
 
-void CustomMdiSubWindow::setToolWindow(bool isTool) {
+// ---------------------------------------------------------------------------
+// Tool-window mode (hides the left sidebar strips)
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::setToolWindow(bool isTool)
+{
     m_isToolWindow = isTool;
-    if (m_nameStrip && m_nameStrip->parentWidget()) {
+    if (m_nameStrip && m_nameStrip->parentWidget())
         m_nameStrip->parentWidget()->setVisible(!isTool);
-    }
 }
 
-void CustomMdiSubWindow::setActiveState(bool active) {
+// ---------------------------------------------------------------------------
+// Active state (highlighted border)
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::setActiveState(bool active)
+{
     if (m_titleBar) m_titleBar->setActive(active);
-    if (active) {
-        m_container->setStyleSheet("#SubWindowContainer { border: 2px solid #00aaff; background: #202020; padding: 2px; }");
-    } else {
-        m_container->setStyleSheet("#SubWindowContainer { border: 2px solid #444; background: #202020; padding: 2px; }");
-    }
+
+    m_container->setStyleSheet(active
+        ? "#SubWindowContainer { border: 2px solid #00aaff; background: #202020; padding: 2px; }"
+        : "#SubWindowContainer { border: 2px solid #444;    background: #202020; padding: 2px; }"
+    );
 }
 
-void CustomMdiSubWindow::setWidget(QWidget *widget) {
+// ---------------------------------------------------------------------------
+// setWidget
+// Attaches a content widget (typically an ImageViewer) to the subwindow and
+// connects the relevant signals for zoom display, title modification markers,
+// and view synchronisation.
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::setWidget(QWidget* widget)
+{
     if (!widget) return;
+
     m_contentLayout->addWidget(widget, 1);
     widget->setParent(m_contentArea);
     widget->show();
     installRecursiveFilter(widget);
-    if (ImageViewer* v = qobject_cast<ImageViewer*>(widget)) {
+
+    if (auto* v = qobject_cast<ImageViewer*>(widget)) {
         adjustToImageSize();
-        connect(v, &ImageViewer::unlinked, [this](){
+
+        connect(v, &ImageViewer::unlinked, [this]() {
             if (m_linkStrip) m_linkStrip->setLinked(false);
         });
 
-        connect(v, &ImageViewer::modifiedChanged, [this](bool mod){
+        connect(v, &ImageViewer::modifiedChanged, [this](bool mod) {
             QString title = windowTitle();
             if (mod) {
                 if (!title.endsWith("*")) setSubWindowTitle(title + "*");
             } else {
-                if (title.endsWith("*")) {
-                    setSubWindowTitle(title.left(title.length() - 1));
-                }
-            }
-        });
-        
-        connect(v, &ImageViewer::viewChanged, [this](float scale, float, float){
-            if (m_titleBar) {
-                int percent = static_cast<int>(scale * 100.0f + 0.5f);
-                m_titleBar->setZoom(percent);
+                if (title.endsWith("*"))  setSubWindowTitle(title.left(title.length() - 1));
             }
         });
 
-        if (m_titleBar) {
-             int percent = static_cast<int>(v->getScale() * 100.0f + 0.5f);
-             m_titleBar->setZoom(percent);
-        }
+        connect(v, &ImageViewer::viewChanged, [this](float scale, float, float) {
+            if (m_titleBar)
+                m_titleBar->setZoom(static_cast<int>(scale * 100.0f + 0.5f));
+        });
+
+        if (m_titleBar)
+            m_titleBar->setZoom(static_cast<int>(v->getScale() * 100.0f + 0.5f));
     }
 }
 
-ImageViewer* CustomMdiSubWindow::viewer() const {
+ImageViewer* CustomMdiSubWindow::viewer() const
+{
     return m_contentArea->findChild<ImageViewer*>();
 }
 
-void CustomMdiSubWindow::adjustToImageSize() {
+// ---------------------------------------------------------------------------
+// adjustToImageSize
+// Resizes the subwindow to tightly fit the loaded image buffer dimensions,
+// capped at 90% of the parent MDI area.
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::adjustToImageSize()
+{
     ImageViewer* v = m_contentArea->findChild<ImageViewer*>();
     if (!v) return;
+
     const ImageBuffer& buf = v->getBuffer();
     if (!buf.isValid()) return;
-    
-    int sidebar = FixedUI::sidebarWidth;
-    int titleH = FixedUI::titleBarHeight;
-    int border = FixedUI::borderWidth;
-    
-    int w = buf.width();
-    int h = buf.height();
-    int totalW = w + sidebar + border;
-    int totalH = h + titleH + border;
-    
+
+    const int sidebar = FixedUI::sidebarWidth;
+    const int titleH  = FixedUI::titleBarHeight;
+    const int border  = FixedUI::borderWidth;
+
+    int totalW = buf.width()  + sidebar + border;
+    int totalH = buf.height() + titleH  + border;
+
     if (parentWidget()) {
-        QSize area = parentWidget()->size();
-        if (totalW > area.width() * 0.9) totalW = area.width() * 0.9;
-        if (totalH > area.height() * 0.9) totalH = area.height() * 0.9;
+        const QSize area = parentWidget()->size();
+        if (totalW > area.width()  * 0.9) totalW = static_cast<int>(area.width()  * 0.9);
+        if (totalH > area.height() * 0.9) totalH = static_cast<int>(area.height() * 0.9);
     }
+
     resize(totalW, totalH);
 }
 
-void CustomMdiSubWindow::requestRename() {
-    bool ok;
-    QString text = QInputDialog::getText(this, tr("Rename View"),
-                                         tr("New Name:"), QLineEdit::Normal,
-                                         windowTitle(), &ok);
+// ---------------------------------------------------------------------------
+// requestRename
+// Prompts the user for a new window title via an input dialog.
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::requestRename()
+{
+    bool    ok;
+    QString text = QInputDialog::getText(this, tr("Rename View"), tr("New Name:"),
+                                         QLineEdit::Normal, windowTitle(), &ok);
     if (ok && !text.isEmpty()) {
         setSubWindowTitle(text);
-        if (ImageViewer* v = m_contentArea->findChild<ImageViewer*>()) {
-             v->getBuffer().setName(text); 
-        }
+        if (auto* v = m_contentArea->findChild<ImageViewer*>())
+            v->getBuffer().setName(text);
     }
 }
 
-void CustomMdiSubWindow::setSubWindowTitle(const QString& title) {
-    setWindowTitle(title); 
-    if (m_titleBar) m_titleBar->setTitle(title);
+void CustomMdiSubWindow::setSubWindowTitle(const QString& title)
+{
+    setWindowTitle(title);
+    if (m_titleBar)  m_titleBar->setTitle(title);
     if (m_nameStrip) {
         m_nameStrip->setTitle(title);
-        int h = m_nameStrip->preferredHeight();
-        if (m_linkStrip) m_linkStrip->setFixedHeight(h);
+        const int h = m_nameStrip->preferredHeight();
+        if (m_linkStrip)  m_linkStrip->setFixedHeight(h);
         if (m_adaptStrip) m_adaptStrip->setFixedHeight(h);
     }
     emit layoutChanged();
 }
 
-void CustomMdiSubWindow::resizeEvent(QResizeEvent *event) {
+// ---------------------------------------------------------------------------
+// Layout change propagation
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::resizeEvent(QResizeEvent* event)
+{
     QMdiSubWindow::resizeEvent(event);
     emit layoutChanged();
 }
 
-void CustomMdiSubWindow::moveEvent(QMoveEvent *event) {
+void CustomMdiSubWindow::moveEvent(QMoveEvent* event)
+{
     QMdiSubWindow::moveEvent(event);
     emit layoutChanged();
 }
 
-void CustomMdiSubWindow::dragEnterEvent(QDragEnterEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt") ||
-        event->mimeData()->hasFormat("application/x-tstar-duplicate")) {
+// ---------------------------------------------------------------------------
+// Drag-and-drop forwarding
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link")      ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt")     ||
+        event->mimeData()->hasFormat("application/x-tstar-duplicate"))
+    {
         event->acceptProposedAction();
     } else {
         QMdiSubWindow::dragEnterEvent(event);
     }
 }
 
-void CustomMdiSubWindow::dragMoveEvent(QDragMoveEvent *event) {
-    if (event->mimeData()->hasFormat("application/x-tstar-link") || 
-        event->mimeData()->hasFormat("application/x-tstar-adapt") ||
-        event->mimeData()->hasFormat("application/x-tstar-duplicate")) {
+void CustomMdiSubWindow::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasFormat("application/x-tstar-link")      ||
+        event->mimeData()->hasFormat("application/x-tstar-adapt")     ||
+        event->mimeData()->hasFormat("application/x-tstar-duplicate"))
+    {
         event->acceptProposedAction();
     } else {
         QMdiSubWindow::dragMoveEvent(event);
     }
 }
 
-void CustomMdiSubWindow::dropEvent(QDropEvent *event) {
+void CustomMdiSubWindow::dropEvent(QDropEvent* event)
+{
     handleDrop(event);
 }
 
-void CustomMdiSubWindow::handleDrop(QDropEvent* event) {
+// ---------------------------------------------------------------------------
+// handleDrop
+// Processes the three supported drop actions:
+//   - x-tstar-link:      Synchronise pan/zoom between two viewers
+//   - x-tstar-adapt:     Copy geometry from the source window
+//   - (fallback):        Delegate to the base class
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::handleDrop(QDropEvent* event)
+{
     if (event->mimeData()->hasFormat("application/x-tstar-link")) {
-        QByteArray data = event->mimeData()->data("application/x-tstar-link");
-        bool ok;
-        quintptr ptrVal = data.toULongLong(&ok, 16);
-        if (ok) {
-            CustomMdiSubWindow* sourceWin = reinterpret_cast<CustomMdiSubWindow*>(ptrVal);
-            if (sourceWin && sourceWin != this) {
-                ImageViewer* sourcePtr = sourceWin->findChild<ImageViewer*>();
-                ImageViewer* targetPtr = this->findChild<ImageViewer*>(); 
-                
-                if (sourcePtr && targetPtr) {
-                    struct Member { ImageViewer* viewer; CustomMdiSubWindow* win; };
-                    QVector<Member> group;
-                    group.append({sourcePtr, sourceWin});
-                    group.append({targetPtr, this});
+        bool     ok;
+        quintptr ptrVal    = event->mimeData()->data("application/x-tstar-link").toULongLong(&ok, 16);
+        if (!ok) return;
 
-                    if (QMdiArea* area = mdiArea()) {
-                        for (QMdiSubWindow* sub : area->subWindowList()) {
-                            if (sub == sourceWin || sub == this) continue;
-                            CustomMdiSubWindow* csw = qobject_cast<CustomMdiSubWindow*>(sub);
-                            if (!csw) continue;
-                            ImageViewer* v = csw->viewer();
-                            if (v && v->isLinked())
-                                group.append({v, csw});
-                        }
-                    }
+        auto* sourceWin = reinterpret_cast<CustomMdiSubWindow*>(ptrVal);
+        if (!sourceWin || sourceWin == this) return;
 
-                    for (int i = 0; i < group.size(); ++i) {
-                        for (int j = i + 1; j < group.size(); ++j) {
-                            connect(group[i].viewer, &ImageViewer::viewChanged,
-                                    group[j].viewer, &ImageViewer::syncView,
-                                    Qt::UniqueConnection);
-                            connect(group[j].viewer, &ImageViewer::viewChanged,
-                                    group[i].viewer, &ImageViewer::syncView,
-                                    Qt::UniqueConnection);
-                        }
-                    }
+        ImageViewer* sourcePtr = sourceWin->findChild<ImageViewer*>();
+        ImageViewer* targetPtr = this->findChild<ImageViewer*>();
+        if (!sourcePtr || !targetPtr) return;
 
-                    float srcScale = sourcePtr->getScale();
-                    float srcH     = sourcePtr->getHBarLoc();
-                    float srcV     = sourcePtr->getVBarLoc();
-                    for (int i = 1; i < group.size(); ++i)
-                        group[i].viewer->syncView(srcScale, srcH, srcV);
+        // Collect all currently linked viewers into a group so the new link
+        // inherits the existing synchronisation network
+        struct Member { ImageViewer* viewer; CustomMdiSubWindow* win; };
+        QVector<Member> group;
+        group.append({sourcePtr, sourceWin});
+        group.append({targetPtr, this});
 
-                    for (auto& m : group) {
-                        m.viewer->setLinked(true);
-                        if (m.win->m_linkStrip) m.win->m_linkStrip->setLinked(true);
-                    }
-
-                    QPointer<CustomMdiSubWindow> sourceWinSafe = sourceWin;
-                    for (int i = 1; i < group.size(); ++i) {
-                        QPointer<ImageViewer>        partnerSafe    = group[i].viewer;
-                        QPointer<CustomMdiSubWindow> partnerWinSafe = group[i].win;
-                        QPointer<ImageViewer>        srcSafe        = sourcePtr;
-
-                        connect(sourcePtr, &QObject::destroyed,
-                                [partnerSafe, partnerWinSafe, srcSafe]() {
-                            if (!partnerSafe) return;
-                            QMdiArea* area = partnerWinSafe ? partnerWinSafe->mdiArea() : nullptr;
-                            bool hasOthers = false;
-                            if (area) {
-                                for (QMdiSubWindow* sub : area->subWindowList()) {
-                                    ImageViewer* v = sub->findChild<ImageViewer*>();
-                                    if (v && v != partnerSafe && v != srcSafe && v->isLinked()) {
-                                        hasOthers = true; break;
-                                    }
-                                }
-                            }
-                            if (!hasOthers) {
-                                partnerSafe->setLinked(false);
-                                if (partnerWinSafe && partnerWinSafe->m_linkStrip)
-                                    partnerWinSafe->m_linkStrip->setLinked(false);
-                            }
-                        });
-
-                        connect(group[i].viewer, &QObject::destroyed,
-                                [srcSafe, sourceWinSafe, partnerSafe]() {
-                            if (!srcSafe) return;
-                            QMdiArea* area = sourceWinSafe ? sourceWinSafe->mdiArea() : nullptr;
-                            bool hasOthers = false;
-                            if (area) {
-                                for (QMdiSubWindow* sub : area->subWindowList()) {
-                                    ImageViewer* v = sub->findChild<ImageViewer*>();
-                                    if (v && v != srcSafe && v != partnerSafe && v->isLinked()) {
-                                        hasOthers = true; break;
-                                    }
-                                }
-                            }
-                            if (!hasOthers) {
-                                srcSafe->setLinked(false);
-                                if (sourceWinSafe && sourceWinSafe->m_linkStrip)
-                                    sourceWinSafe->m_linkStrip->setLinked(false);
-                            }
-                        });
-                    }
-                }
+        if (QMdiArea* area = mdiArea()) {
+            for (QMdiSubWindow* sub : area->subWindowList()) {
+                if (sub == sourceWin || sub == this) continue;
+                auto* csw = qobject_cast<CustomMdiSubWindow*>(sub);
+                if (!csw) continue;
+                ImageViewer* v = csw->viewer();
+                if (v && v->isLinked())
+                    group.append({v, csw});
             }
         }
+
+        // Connect every pair in the group bidirectionally
+        for (int i = 0; i < group.size(); ++i) {
+            for (int j = i + 1; j < group.size(); ++j) {
+                connect(group[i].viewer, &ImageViewer::viewChanged,
+                        group[j].viewer, &ImageViewer::syncView, Qt::UniqueConnection);
+                connect(group[j].viewer, &ImageViewer::viewChanged,
+                        group[i].viewer, &ImageViewer::syncView, Qt::UniqueConnection);
+            }
+        }
+
+        // Synchronise all viewers to the source pan/zoom position
+        const float srcScale = sourcePtr->getScale();
+        const float srcH     = sourcePtr->getHBarLoc();
+        const float srcV     = sourcePtr->getVBarLoc();
+        for (int i = 1; i < group.size(); ++i)
+            group[i].viewer->syncView(srcScale, srcH, srcV);
+
+        // Mark all group members as linked
+        for (auto& m : group) {
+            m.viewer->setLinked(true);
+            if (m.win->m_linkStrip) m.win->m_linkStrip->setLinked(true);
+        }
+
+        // Automatically unlink remaining group members when a viewer is destroyed
+        QPointer<CustomMdiSubWindow> sourceWinSafe = sourceWin;
+        for (int i = 1; i < group.size(); ++i) {
+            QPointer<ImageViewer>          partnerSafe    = group[i].viewer;
+            QPointer<CustomMdiSubWindow>   partnerWinSafe = group[i].win;
+            QPointer<ImageViewer>          srcSafe        = sourcePtr;
+
+            connect(sourcePtr, &QObject::destroyed,
+                    [partnerSafe, partnerWinSafe, srcSafe]() {
+                        if (!partnerSafe) return;
+                        QMdiArea* area = partnerWinSafe ? partnerWinSafe->mdiArea() : nullptr;
+                        bool hasOthers = false;
+                        if (area) {
+                            for (QMdiSubWindow* sub : area->subWindowList()) {
+                                ImageViewer* v = sub->findChild<ImageViewer*>();
+                                if (v && v != partnerSafe && v != srcSafe && v->isLinked()) {
+                                    hasOthers = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!hasOthers) {
+                            partnerSafe->setLinked(false);
+                            if (partnerWinSafe && partnerWinSafe->m_linkStrip)
+                                partnerWinSafe->m_linkStrip->setLinked(false);
+                        }
+                    });
+
+            connect(group[i].viewer, &QObject::destroyed,
+                    [srcSafe, sourceWinSafe, partnerSafe]() {
+                        if (!srcSafe) return;
+                        QMdiArea* area = sourceWinSafe ? sourceWinSafe->mdiArea() : nullptr;
+                        bool hasOthers = false;
+                        if (area) {
+                            for (QMdiSubWindow* sub : area->subWindowList()) {
+                                ImageViewer* v = sub->findChild<ImageViewer*>();
+                                if (v && v != srcSafe && v != partnerSafe && v->isLinked()) {
+                                    hasOthers = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!hasOthers) {
+                            srcSafe->setLinked(false);
+                            if (sourceWinSafe && sourceWinSafe->m_linkStrip)
+                                sourceWinSafe->m_linkStrip->setLinked(false);
+                        }
+                    });
+        }
+
         event->accept();
+
     } else if (event->mimeData()->hasFormat("application/x-tstar-adapt")) {
-        bool ok = false;
+        bool     ok;
         quintptr ptr = event->mimeData()->data("application/x-tstar-adapt").toULongLong(&ok, 16);
         if (ok) {
-            CustomMdiSubWindow* source = reinterpret_cast<CustomMdiSubWindow*>(ptr);
+            auto* source = reinterpret_cast<CustomMdiSubWindow*>(ptr);
             if (source && source != this) {
-                 if (source->isMaximized()) showMaximized();
-                 else {
-                     showNormal();
-                     resize(source->size());
-                 }
-                 event->acceptProposedAction();
-                 return;
+                if (source->isMaximized()) showMaximized();
+                else { showNormal(); resize(source->size()); }
+                event->acceptProposedAction();
             }
         }
     } else {
-         QMdiSubWindow::dropEvent(event);
+        QMdiSubWindow::dropEvent(event);
     }
 }
 
-bool CustomMdiSubWindow::canClose() {
-    if (property("bypassCloseChecks").toBool()) {
-        return true;
-    }
+// ---------------------------------------------------------------------------
+// canClose
+// Checks whether the window can safely be closed, prompting the user if
+// there are unsaved changes or if a processing tool is currently using the viewer.
+// ---------------------------------------------------------------------------
 
-    if (m_isToolWindow) {
-        return true;
-    }
-    
+bool CustomMdiSubWindow::canClose()
+{
+    if (property("bypassCloseChecks").toBool()) return true;
+    if (m_isToolWindow)                          return true;
+
     ImageViewer* v = viewer();
     if (v) {
+        // Check if a tool dialog is currently using this viewer
         MainWindowCallbacks* mw = nullptr;
         QWidget* p = this;
         while (p) {
@@ -1248,39 +1417,42 @@ bool CustomMdiSubWindow::canClose() {
             if (mw) break;
             p = p->parentWidget();
         }
-
         if (mw) {
             QString toolName;
             if (mw->isViewerInUse(v, &toolName)) {
-                QMessageBox::warning(this, tr("View in use"), tr("This view is currently in use by the '%1' tool. Please close the tool or select different views before closing this image.").arg(toolName));
+                QMessageBox::warning(this, tr("View in use"),
+                    tr("This view is currently in use by the '%1' tool. "
+                       "Please close the tool or select different views before "
+                       "closing this image.").arg(toolName));
                 return false;
             }
         }
-        
+
+        // Prompt the user if the image has unsaved modifications
         if (v->isModified()) {
-            int ret = QMessageBox::question(this, tr("Unsaved Changes"),
-                tr("The image '%1' has unsaved changes. Do you want to close it?").arg(windowTitle()),
+            const int ret = QMessageBox::question(this, tr("Unsaved Changes"),
+                tr("The image '%1' has unsaved changes. Do you want to close it?")
+                    .arg(windowTitle()),
                 QMessageBox::Yes | QMessageBox::No);
-            if (ret == QMessageBox::No) {
-                return false;
-            }
+            if (ret == QMessageBox::No) return false;
         }
     }
+
     return true;
 }
 
-void CustomMdiSubWindow::animateClose() {
-    if (m_isClosing) return;
+// ---------------------------------------------------------------------------
+// Animation: fade-out close
+// ---------------------------------------------------------------------------
 
-    if (!canClose()) return;
+void CustomMdiSubWindow::animateClose()
+{
+    if (m_isClosing) return;
+    if (!canClose())  return;
 
     m_isClosing = true;
 
-    if (m_anim) {
-        m_anim->stop();
-        delete m_anim;
-        m_anim = nullptr;
-    }
+    if (m_anim) { m_anim->stop(); delete m_anim; m_anim = nullptr; }
 
     if (!m_effect) {
         m_effect = new QGraphicsOpacityEffect(this);
@@ -1293,15 +1465,17 @@ void CustomMdiSubWindow::animateClose() {
     m_anim->setStartValue(1.0);
     m_anim->setEndValue(0.0);
     m_anim->setEasingCurve(QEasingCurve::Linear);
-    
-    connect(m_anim, &QPropertyAnimation::finished, this, [this](){
+
+    connect(m_anim, &QPropertyAnimation::finished, this, []() {});
+    connect(m_anim, &QPropertyAnimation::finished, this, [this]() {
         QMdiSubWindow::close();
     });
-    
+
     m_anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-void CustomMdiSubWindow::closeEvent(QCloseEvent* event) {
+void CustomMdiSubWindow::closeEvent(QCloseEvent* event)
+{
     if (m_skipCloseAnimation) {
         if (canClose()) {
             event->accept();
@@ -1320,36 +1494,41 @@ void CustomMdiSubWindow::closeEvent(QCloseEvent* event) {
     }
 }
 
-void CustomMdiSubWindow::showEvent(QShowEvent* event) {
+// ---------------------------------------------------------------------------
+// Animation: fade-in on show
+// ---------------------------------------------------------------------------
+
+void CustomMdiSubWindow::showEvent(QShowEvent* event)
+{
     QMdiSubWindow::showEvent(event);
     startFadeIn();
 }
 
-void CustomMdiSubWindow::startFadeIn() {
-    if (m_anim) {
-        m_anim->stop();
-        delete m_anim;
-    }
+void CustomMdiSubWindow::startFadeIn()
+{
+    if (m_anim) { m_anim->stop(); delete m_anim; }
+
     if (!m_effect) {
         m_effect = new QGraphicsOpacityEffect(this);
         setGraphicsEffect(m_effect);
     }
-    
+
     m_effect->setOpacity(0.0);
     m_anim = new QPropertyAnimation(m_effect, "opacity", this);
     m_anim->setDuration(250);
     m_anim->setStartValue(0.0);
     m_anim->setEndValue(1.0);
     m_anim->setEasingCurve(QEasingCurve::OutQuad);
-    
-    connect(m_anim, &QPropertyAnimation::finished, this, [this](){
+
+    connect(m_anim, &QPropertyAnimation::finished, this, [this]() {
         setGraphicsEffect(nullptr);
         m_effect = nullptr;
     });
-    
+
     m_anim->start();
 }
 
-void CustomMdiSubWindow::startFadeOut() {
+void CustomMdiSubWindow::startFadeOut()
+{
     animateClose();
 }

@@ -1,64 +1,104 @@
+// =============================================================================
+// AperturePhotometry.cpp
+//
+// Implementation of circular aperture photometry with robust sky estimation
+// and Levenberg-Marquardt PSF fitting for sub-pixel centroiding.
+// =============================================================================
+
 #include "AperturePhotometry.h"
 #include "PsfFitter.h"
+
 #include <algorithm>
 #include <numeric>
 #include <cmath>
 
-// Minimum sky pixels for valid photometry (Standard: MIN_SKY = 5)
-static constexpr int MIN_SKY = 5;
+// Minimum number of sky annulus pixels required for a valid background estimate.
+static constexpr int MIN_SKY_PIXELS = 5;
+
+// =============================================================================
+// Construction and configuration
+// =============================================================================
 
 AperturePhotometry::AperturePhotometry() {}
 
-void AperturePhotometry::setConfig(const ApertureConfig& cfg) {
+void AperturePhotometry::setConfig(const ApertureConfig& cfg)
+{
     m_config = cfg;
 }
 
-// Standard robustmean implementation using Hampel function
-double AperturePhotometry::robustMean(std::vector<double>& data, double* stdev) {
+// =============================================================================
+// Robust mean estimation using the Hampel M-estimator
+//
+// Uses the Median Absolute Deviation (MAD) as an initial scale estimate,
+// then iteratively refines the location using the three-part Hampel
+// influence function (redescending M-estimator).
+//
+// Reference: Hampel, F. R. et al., "Robust Statistics" (Wiley, 1986).
+// =============================================================================
+
+double AperturePhotometry::robustMean(std::vector<double>& data, double* stdev)
+{
+    // --- Degenerate cases ---
+
     if (data.empty()) {
         if (stdev) *stdev = 0.0;
         return 0.0;
     }
+
     if (data.size() == 1) {
         if (stdev) *stdev = 0.0;
         return data[0];
     }
-    
-    // Quick median using partial sort
-    size_t n = data.size();
-    size_t mid = n / 2;
+
+    // --- Initial location and scale via median and MAD ---
+
+    const size_t n   = data.size();
+    const size_t mid = n / 2;
+
     std::nth_element(data.begin(), data.begin() + mid, data.end());
     double median = data[mid];
-    
-    // Compute MAD for scale estimate
+
     std::vector<double> absdev(n);
     for (size_t i = 0; i < n; ++i) {
         absdev[i] = std::abs(data[i] - median);
     }
     std::nth_element(absdev.begin(), absdev.begin() + mid, absdev.end());
-    double mad = absdev[mid];
-    double scale = mad / 0.6745;  // MAD to sigma conversion
-    
+
+    double mad   = absdev[mid];
+    double scale = mad / 0.6745; // MAD-to-sigma conversion factor for normal distribution
+
     if (scale < 1e-10) {
-        // All values nearly identical
+        // All values are effectively identical; no iteration needed.
         if (stdev) *stdev = 0.0;
         return median;
     }
-    
-    // Hampel M-estimator iterations (Standard robustmean)
+
+    // --- Hampel M-estimator iteration ---
+    //
+    // The Hampel influence function has three regions controlled by
+    // thresholds a, b, c applied to the standardized residual |r|:
+    //   |r| < a      : psi(r) = r               (linear)
+    //   a <= |r| < b : psi(r) = a * sign(r)     (constant)
+    //   b <= |r| < c : psi(r) = a * sign(r) * (c - |r|) / (c - b)  (descending)
+    //   |r| >= c     : psi(r) = 0               (rejected)
+
     constexpr double hampel_a = 1.7;
     constexpr double hampel_b = 3.4;
     constexpr double hampel_c = 8.5;
-    constexpr int max_iter = 50;
-    
+    constexpr int    max_iter = 50;
+
+    // Hampel psi (influence) function
     auto hampel = [](double x) -> double {
         double ax = std::abs(x);
         if (ax < hampel_a) return x;
         if (ax < hampel_b) return (x >= 0 ? hampel_a : -hampel_a);
-        if (ax < hampel_c) return hampel_a * (x >= 0 ? 1 : -1) * (hampel_c - ax) / (hampel_c - hampel_b);
+        if (ax < hampel_c)
+            return hampel_a * (x >= 0 ? 1.0 : -1.0)
+                   * (hampel_c - ax) / (hampel_c - hampel_b);
         return 0.0;
     };
-    
+
+    // Derivative of the Hampel psi function (for Newton-type update)
     auto dhampel = [](double x) -> double {
         double ax = std::abs(x);
         if (ax < hampel_a) return 1.0;
@@ -66,144 +106,202 @@ double AperturePhotometry::robustMean(std::vector<double>& data, double* stdev) 
         if (ax < hampel_c) return hampel_a / (hampel_b - hampel_c);
         return 0.0;
     };
-    
-    double a = median;
-    double s = scale;
+
+    double a        = median;
+    double s        = scale;
     double c_factor = s * s * n * n / (n - 1);
-    double dt = 0;
-    
+    double dt       = 0.0;
+
     for (int iter = 0; iter < max_iter; ++iter) {
-        double sum1 = 0, sum2 = 0, sum3 = 0;
+        double sum_psi  = 0.0;
+        double sum_dpsi = 0.0;
+        double sum_psi2 = 0.0;
+
         for (size_t i = 0; i < n; ++i) {
-            double r = (data[i] - a) / s;
+            double r   = (data[i] - a) / s;
             double psi = hampel(r);
-            sum1 += psi;
-            sum2 += dhampel(r);
-            sum3 += psi * psi;
+            sum_psi  += psi;
+            sum_dpsi += dhampel(r);
+            sum_psi2 += psi * psi;
         }
-        
-        if (std::abs(sum2) < 1e-10) break;
-        
-        double d = s * sum1 / sum2;
+
+        if (std::abs(sum_dpsi) < 1e-10) break;
+
+        double d = s * sum_psi / sum_dpsi;
         a += d;
-        dt = c_factor * sum3 / (sum2 * sum2);
-        
+        dt = c_factor * sum_psi2 / (sum_dpsi * sum_dpsi);
+
+        // Convergence check: stop when the correction is negligible
         if (iter > 2 && (d * d < 1e-4 * dt || std::abs(d) < 1e-8)) break;
     }
-    
-    if (stdev) *stdev = (dt > 0 ? std::sqrt(dt) : 0.0);
+
+    if (stdev) *stdev = (dt > 0.0 ? std::sqrt(dt) : 0.0);
     return a;
 }
 
-double AperturePhotometry::getMagnitude(double intensity) {
-    if (intensity <= 0) return 99.999;
+// =============================================================================
+// Instrumental magnitude from integrated signal intensity
+// =============================================================================
+
+double AperturePhotometry::getMagnitude(double intensity)
+{
+    if (intensity <= 0.0) return 99.999;
     return -2.5 * std::log10(intensity);
 }
 
-double AperturePhotometry::getMagError(double intensity, double area, int nsky, 
-                                        double skysig, double gain, double* snr) {
-    // err1 = sky variance × aperture area
-    // err2 = photon noise (intensity / camera gain)
-    // err3 = sky uncertainty (skyvar/nsky × area²)
-    if (intensity <= 0 || area <= 0 || nsky <= 0) {
+// =============================================================================
+// Magnitude error and signal-to-noise ratio
+//
+// Noise model (three independent components):
+//   err1 = sky_variance * aperture_area           (sky background noise)
+//   err2 = intensity / gain                       (Poisson photon noise)
+//   err3 = (sky_variance / n_sky) * area^2         (sky subtraction uncertainty)
+//
+// SNR is reported in decibels: 10 * log10(signal / noise).
+// Magnitude error uses the Pogson constant: 2.5 / ln(10) = 1.0857.
+// =============================================================================
+
+double AperturePhotometry::getMagError(double intensity, double area, int nsky,
+                                       double skysig, double gain, double* snr)
+{
+    if (intensity <= 0.0 || area <= 0.0 || nsky <= 0) {
         if (snr) *snr = 0.0;
         return 9.999;
     }
+
     double skyvar = skysig * skysig;
     double sigsq  = skyvar / nsky;
-    double err1   = area   * skyvar;
+    double err1   = area * skyvar;
     double err2   = intensity / gain;
-    double err3   = sigsq  * area * area;
+    double err3   = sigsq * area * area;
     double noise  = std::sqrt(err1 + err2 + err3);
-    if (noise <= 0) { if (snr) *snr = 9999.0; return 0.0; }
-    // SNR in dB (10 × log10) 
+
+    if (noise <= 0.0) {
+        if (snr) *snr = 9999.0;
+        return 0.0;
+    }
+
     if (snr) *snr = 10.0 * std::log10(intensity / noise);
-    // Magnitude error: 1.0857 = 2.5 / ln(10)
+
     return std::fmin(9.999, 1.0857 * noise / intensity);
 }
 
-PSFResult AperturePhotometry::fitPSF(const float* data, int width, int height, int channels,
-                                      int channel, int starX, int starY, int boxRadius) {
+// =============================================================================
+// PSF fitting
+//
+// Extracts a sub-image around the star position, estimates the local
+// background from border pixels, and fits a 2-D Gaussian via PsfFitter
+// (Levenberg-Marquardt trust-region solver). Falls back to intensity-
+// weighted moment analysis if the fit fails.
+// =============================================================================
+
+PSFResult AperturePhotometry::fitPSF(const float* data, int width, int height,
+                                     int channels, int channel,
+                                     int starX, int starY, int boxRadius)
+{
     PSFResult result;
 
-    // Clamp box to image boundaries
-    int bx0 = std::max(0, starX - boxRadius);
-    int by0 = std::max(0, starY - boxRadius);
-    int bx1 = std::min(width  - 1, starX + boxRadius);
-    int by1 = std::min(height - 1, starY + boxRadius);
+    // --- Clamp the extraction box to image boundaries ---
+
+    int bx0  = std::max(0, starX - boxRadius);
+    int by0  = std::max(0, starY - boxRadius);
+    int bx1  = std::min(width  - 1, starX + boxRadius);
+    int by1  = std::min(height - 1, starY + boxRadius);
     int boxw = bx1 - bx0 + 1;
     int boxh = by1 - by0 + 1;
+
     if (boxw < 3 || boxh < 3) return result;
 
-    // Extract box into a double buffer for PsfFitter
-    std::vector<double> box((size_t)boxw * boxh);
-    for (int jj = 0; jj < boxh; jj++) {
-        for (int ii = 0; ii < boxw; ii++) {
-            int ix = bx0 + ii, iy = by0 + jj;
-            box[(size_t)jj * boxw + ii] =
-                (double)data[(iy * width + ix) * channels + channel];
+    // --- Extract the sub-image into a contiguous double-precision buffer ---
+
+    std::vector<double> box(static_cast<size_t>(boxw) * boxh);
+    for (int jj = 0; jj < boxh; ++jj) {
+        for (int ii = 0; ii < boxw; ++ii) {
+            int ix = bx0 + ii;
+            int iy = by0 + jj;
+            box[static_cast<size_t>(jj) * boxw + ii] =
+                static_cast<double>(data[(iy * width + ix) * channels + channel]);
         }
     }
 
-    // Estimate background from box border pixels (robust median)
+    // --- Estimate background from the box border pixels (median) ---
+
     std::vector<double> bgPix;
     bgPix.reserve(2 * (boxw + boxh));
-    for (int ii = 0; ii < boxw; ii++) {
+
+    for (int ii = 0; ii < boxw; ++ii) {
         bgPix.push_back(box[ii]);
-        bgPix.push_back(box[(size_t)(boxh-1)*boxw+ii]);
+        bgPix.push_back(box[static_cast<size_t>(boxh - 1) * boxw + ii]);
     }
-    for (int jj = 1; jj < boxh - 1; jj++) {
-        bgPix.push_back(box[(size_t)jj*boxw]);
-        bgPix.push_back(box[(size_t)jj*boxw+boxw-1]);
+    for (int jj = 1; jj < boxh - 1; ++jj) {
+        bgPix.push_back(box[static_cast<size_t>(jj) * boxw]);
+        bgPix.push_back(box[static_cast<size_t>(jj) * boxw + boxw - 1]);
     }
+
     double bg = 0.0;
     if (!bgPix.empty()) {
         std::sort(bgPix.begin(), bgPix.end());
         bg = bgPix[bgPix.size() / 2];
     }
 
-    // PSF fit using Gaussian model (PsfFitter — Levenberg-Marquardt trust region)
+    // --- Attempt Gaussian PSF fit via Levenberg-Marquardt solver ---
+
     PsfError err = PsfError::OK;
-    PsfStar* psf = PsfFitter::fit(box.data(), (size_t)boxh, (size_t)boxw,
-                                  bg, 1.0,   // sat = 1.0 (no saturation masking)
+    PsfStar* psf = PsfFitter::fit(box.data(),
+                                  static_cast<size_t>(boxh),
+                                  static_cast<size_t>(boxw),
+                                  bg, 1.0,   // saturation = 1.0 (no masking)
                                   1,         // convergence factor
                                   false,     // not called from peaker
                                   PsfProfile::Gaussian, &err);
+
     if (!psf) {
-        // Fallback: moment-based centroid + FWHM estimate
-        double sumI = 0, sumIX = 0, sumIY = 0, maxVal = bg;
-        for (int jj = 0; jj < boxh; jj++) {
-            for (int ii = 0; ii < boxw; ii++) {
-                double v = box[(size_t)jj*boxw+ii];
+        // --- Fallback: intensity-weighted moment centroid and FWHM ---
+
+        double sumI = 0.0, sumIX = 0.0, sumIY = 0.0, maxVal = bg;
+
+        for (int jj = 0; jj < boxh; ++jj) {
+            for (int ii = 0; ii < boxw; ++ii) {
+                double v = box[static_cast<size_t>(jj) * boxw + ii];
                 double intensity = v - bg;
-                if (intensity > 0) { sumI += intensity; sumIX += intensity*(bx0+ii); sumIY += intensity*(by0+jj); }
+                if (intensity > 0.0) {
+                    sumI  += intensity;
+                    sumIX += intensity * (bx0 + ii);
+                    sumIY += intensity * (by0 + jj);
+                }
                 if (v > maxVal) maxVal = v;
             }
         }
-        if (sumI > 0) {
-            result.x0 = sumIX / sumI;
-            result.y0 = sumIY / sumI;
-            result.amplitude  = maxVal - bg;
+
+        if (sumI > 0.0) {
+            result.x0        = sumIX / sumI;
+            result.y0        = sumIY / sumI;
+            result.amplitude = maxVal - bg;
             result.background = bg;
-            // Second-moment FWHM estimate
-            double s2xx = 0, s2yy = 0;
-            for (int jj = 0; jj < boxh; jj++) {
-                for (int ii = 0; ii < boxw; ii++) {
-                    double v = box[(size_t)jj*boxw+ii] - bg;
-                    if (v > 0) {
-                        s2xx += v * ((bx0+ii) - result.x0) * ((bx0+ii) - result.x0);
-                        s2yy += v * ((by0+jj) - result.y0) * ((by0+jj) - result.y0);
+
+            // Second-moment FWHM estimate: FWHM = 2.355 * sigma
+            double s2xx = 0.0, s2yy = 0.0;
+            for (int jj = 0; jj < boxh; ++jj) {
+                for (int ii = 0; ii < boxw; ++ii) {
+                    double v = box[static_cast<size_t>(jj) * boxw + ii] - bg;
+                    if (v > 0.0) {
+                        double dx = (bx0 + ii) - result.x0;
+                        double dy = (by0 + jj) - result.y0;
+                        s2xx += v * dx * dx;
+                        s2yy += v * dy * dy;
                     }
                 }
             }
             result.fwhmx = 2.355 * std::sqrt(s2xx / sumI);
             result.fwhmy = 2.355 * std::sqrt(s2yy / sumI);
-            result.valid = (result.fwhmx > 0.5 && result.amplitude > 0);
+            result.valid = (result.fwhmx > 0.5 && result.amplitude > 0.0);
         }
+
         return result;
     }
 
-    // Populate result from PsfStar 
+    // --- Populate result from the successful PsfStar fit ---
+
     result.x0         = bx0 + psf->x0;
     result.y0         = by0 + psf->y0;
     result.fwhmx      = psf->fwhmx;
@@ -216,101 +314,126 @@ PSFResult AperturePhotometry::fitPSF(const float* data, int width, int height, i
                      && std::isfinite(psf->fwhmy) && psf->fwhmy > 0.0
                      && psf->A > 0.0;
     result.psf        = std::shared_ptr<PsfStar>(psf);
+
     return result;
 }
 
-PhotometryResult AperturePhotometry::measure(const float* data, int width, int height, int channels,
-                                              int channel, const PSFResult& psf) {
+// =============================================================================
+// Aperture photometry measurement
+//
+// Given a PSF centroid, sums pixel flux within a circular aperture and
+// estimates the sky background from a surrounding annulus using the
+// Hampel robust mean estimator. Sub-pixel weighting is applied at the
+// aperture boundary.
+// =============================================================================
+
+PhotometryResult AperturePhotometry::measure(const float* data, int width, int height,
+                                             int channels, int channel,
+                                             const PSFResult& psf)
+{
     PhotometryResult result;
-    
+
     if (!psf.valid) return result;
-    
+
     double xc = psf.x0;
     double yc = psf.y0;
-    
-    // Compute aperture radius (Standard uses auto from FWHM or fixed)
-    double appRadius = m_config.force_radius ? 
-        m_config.aperture : 
-        0.5 * std::max(psf.fwhmx, psf.fwhmy) * m_config.auto_aperture_factor;
-    
+
+    // --- Determine aperture radius ---
+    // Either fixed from config or automatically derived from the PSF FWHM.
+
+    double appRadius = m_config.force_radius
+        ? m_config.aperture
+        : 0.5 * std::max(psf.fwhmx, psf.fwhmy) * m_config.auto_aperture_factor;
+
     double r1 = m_config.inner;
     double r2 = m_config.outer;
-    
-    // Bounding box for outer radius
+
+    // --- Bounding box for the outer annulus radius ---
+
     int x1 = static_cast<int>(std::max(0.0, xc - r2));
-    int x2 = static_cast<int>(std::min(static_cast<double>(width - 1), xc + r2));
+    int x2 = static_cast<int>(std::min(static_cast<double>(width  - 1), xc + r2));
     int y1 = static_cast<int>(std::max(0.0, yc - r2));
     int y2 = static_cast<int>(std::min(static_cast<double>(height - 1), yc + r2));
-    
+
     if (x2 <= x1 || y2 <= y1) return result;
-    
-    // Square the radii for distance checks
-    double r1_sq = r1 * r1;
-    double r2_sq = r2 * r2;
+
+    // --- Precompute squared radii for distance comparisons ---
+
+    double r1_sq   = r1 * r1;
+    double r2_sq   = r2 * r2;
     double rmin_sq = (appRadius - 0.5) * (appRadius - 0.5);
-    
+
     std::vector<double> skyPixels;
     double apmag = 0.0;
-    double area = 0.0;
-    
-    // Aperture photometry loop (exact standard algorithm)
+    double area  = 0.0;
+
+    // --- Main aperture and sky annulus accumulation loop ---
+
     for (int y = y1; y <= y2; ++y) {
-        double dy = y - yc;
+        double dy    = y - yc;
         double dy_sq = dy * dy;
-        
+
         for (int x = x1; x <= x2; ++x) {
-            double dx = x - xc;
+            double dx   = x - xc;
             double r_sq = dy_sq + dx * dx;
-            
+
             double pixel = data[(y * width + x) * channels + channel];
-            
-            // Check pixel validity
-            if (pixel > m_config.minval && pixel < m_config.maxval) {
-                // Aperture contribution (with sub-pixel weighting at edge)
-                double r = std::sqrt(r_sq);
-                double f = (r_sq < rmin_sq) ? 1.0 : appRadius - r + 0.5;
-                
-                if (f > 0) {
-                    area += f;
-                    apmag += pixel * f;
-                }
-                
-                // Sky annulus
-                if (r_sq < r2_sq && r_sq > r1_sq) {
-                    skyPixels.push_back(pixel);
-                }
+
+            // Skip invalid pixels outside the configured dynamic range
+            if (pixel <= m_config.minval || pixel >= m_config.maxval)
+                continue;
+
+            // Aperture contribution with linear sub-pixel weighting at the edge
+            double r = std::sqrt(r_sq);
+            double f = (r_sq < rmin_sq) ? 1.0 : appRadius - r + 0.5;
+
+            if (f > 0.0) {
+                area  += f;
+                apmag += pixel * f;
+            }
+
+            // Sky annulus accumulation
+            if (r_sq > r1_sq && r_sq < r2_sq) {
+                skyPixels.push_back(pixel);
             }
         }
     }
-    
-    if (area < 1.0 || skyPixels.size() < MIN_SKY) return result;
-    
-    // Compute sky background using robust mean
-    double skyMean = 0, skyStdev = 0;
+
+    if (area < 1.0 || static_cast<int>(skyPixels.size()) < MIN_SKY_PIXELS)
+        return result;
+
+    // --- Sky background estimation via Hampel robust mean ---
+
+    double skyMean  = 0.0;
+    double skyStdev = 0.0;
     skyMean = robustMean(skyPixels, &skyStdev);
-    
-    // Signal intensity = aperture sum - background * area
+
+    // --- Net signal: aperture sum minus sky contribution ---
+
     double signalIntensity = apmag - (area * skyMean);
-    
-    if (signalIntensity <= 0) return result;
-    
-    // Compute magnitude and error
-    result.mag = getMagnitude(signalIntensity);
-    result.mag_error = getMagError(signalIntensity, area, static_cast<int>(skyPixels.size()),
-                                    skyStdev, m_config.gain, &result.snr);
-    
-    // Convert magnitude to linear flux (Standard uses: flux = 10^(-0.4 * mag))
-    result.flux = std::pow(10.0, -0.4 * result.mag);
-    result.valid = (result.mag_error < 9.999 && result.snr > 0);
-    
+
+    if (signalIntensity <= 0.0) return result;
+
+    // --- Magnitude, error, and linear flux ---
+
+    result.mag       = getMagnitude(signalIntensity);
+    result.mag_error = getMagError(signalIntensity, area,
+                                   static_cast<int>(skyPixels.size()),
+                                   skyStdev, m_config.gain, &result.snr);
+    result.flux      = std::pow(10.0, -0.4 * result.mag);
+    result.valid     = (result.mag_error < 9.999 && result.snr > 0.0);
+
     return result;
 }
 
-PhotometryResult AperturePhotometry::measureStar(const float* data, int width, int height, int channels,
-                                                  int channel, int starX, int starY) {
-    // First fit PSF to get centroid
+// =============================================================================
+// Combined PSF fit + aperture measurement convenience method
+// =============================================================================
+
+PhotometryResult AperturePhotometry::measureStar(const float* data, int width, int height,
+                                                  int channels, int channel,
+                                                  int starX, int starY)
+{
     PSFResult psf = fitPSF(data, width, height, channels, channel, starX, starY, 15);
-    
-    // Then do aperture photometry
     return measure(data, width, height, channels, channel, psf);
 }

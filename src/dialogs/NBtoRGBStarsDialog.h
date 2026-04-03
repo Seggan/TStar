@@ -8,6 +8,7 @@
 #include <QGraphicsView>
 #include <QGraphicsScene>
 #include <QGraphicsPixmapItem>
+
 #include "DialogBase.h"
 #include "../ImageBuffer.h"
 #include "../algos/ChannelOps.h"
@@ -15,11 +16,17 @@
 class ImageViewer;
 class MainWindowCallbacks;
 
-// ============================================================================
-// NB → RGB Stars Dialog
-// ============================================================================
-class NBtoRGBStarsDialog : public DialogBase {
+// =============================================================================
+// NBtoRGBStarsDialog
+//
+// Combines narrowband (Ha, OIII, optional SII) and/or OSC star layers into
+// a colour-corrected RGB star image. Provides controls for the Ha:OIII blend
+// ratio, star stretch factor, and saturation before pushing to a new view.
+// =============================================================================
+class NBtoRGBStarsDialog : public DialogBase
+{
     Q_OBJECT
+
 public:
     explicit NBtoRGBStarsDialog(QWidget* parent = nullptr);
     ~NBtoRGBStarsDialog();
@@ -36,60 +43,56 @@ private slots:
     void onSatChanged(int v);
 
 private:
-    void buildUI();
-    void loadFromViewer(const QString& which);
-    void loadFromFile(const QString& which);
-    void setStatusLabel(const QString& which, const QString& text);
-    QPixmap floatToPixmap(const std::vector<float>& img, int w, int h, int ch);
+    void    buildUI();
+    void    loadFromViewer(const QString& which);
+    void    loadFromFile  (const QString& which);
+    void    setStatusLabel(const QString& which, const QString& text);
+    QPixmap floatToPixmap (const std::vector<float>& img, int w, int h, int ch);
 
-    // Viewer
-    ImageViewer* m_viewer = nullptr;
+    // --- Viewer ---
+    ImageViewer*         m_viewer     = nullptr;
     MainWindowCallbacks* m_mainWindow = nullptr;
 
-    // Raw channels (mono float32 [0,1])
+    // --- Raw channels (mono float32 [0,1]) ---
     std::vector<float> m_ha, m_oiii, m_sii;
-    std::vector<float> m_osc;  // RGB interleaved if present
+    std::vector<float> m_osc;      // RGB interleaved when ch==3, mono otherwise
     int m_oscChannels = 0;
     int m_chW = 0, m_chH = 0;
 
-    // Result
-    std::vector<float> m_result; // RGB interleaved
-    ImageBuffer::Metadata m_srcMeta; // Store metadata
-    bool m_hasSrcMeta = false;
+    // --- Result (RGB interleaved, size = w*h*3) ---
+    std::vector<float>    m_result;
+    ImageBuffer::Metadata m_srcMeta;
+    bool                  m_hasSrcMeta = false;
 
-    // --- UI Widgets ---
-    // Load buttons + labels
-    QPushButton* m_btnHa = nullptr;
+    // --- Load buttons and status labels ---
+    QPushButton* m_btnHa   = nullptr;
     QPushButton* m_btnOIII = nullptr;
-    QPushButton* m_btnSII = nullptr;
-    QPushButton* m_btnOSC = nullptr;
+    QPushButton* m_btnSII  = nullptr;
+    QPushButton* m_btnOSC  = nullptr;
+    QLabel*      m_lblHa   = nullptr;
+    QLabel*      m_lblOIII = nullptr;
+    QLabel*      m_lblSII  = nullptr;
+    QLabel*      m_lblOSC  = nullptr;
 
-    QLabel* m_lblHa = nullptr;
-    QLabel* m_lblOIII = nullptr;
-    QLabel* m_lblSII = nullptr;
-    QLabel* m_lblOSC = nullptr;
-
-    // Controls
-    QLabel* m_lblRatio = nullptr;
-    QSlider* m_sldRatio = nullptr;
-
+    // --- Parameter controls ---
+    QLabel*    m_lblRatio       = nullptr;
+    QSlider*   m_sldRatio       = nullptr;
     QCheckBox* m_chkStarStretch = nullptr;
-    QLabel* m_lblStretch = nullptr;
-    QSlider* m_sldStretch = nullptr;
+    QLabel*    m_lblStretch     = nullptr;
+    QSlider*   m_sldStretch     = nullptr;
+    QLabel*    m_lblSat         = nullptr;
+    QSlider*   m_sldSat         = nullptr;
 
-    QLabel* m_lblSat = nullptr;
-    QSlider* m_sldSat = nullptr;
-
-    // Actions
+    // --- Action buttons ---
     QPushButton* m_btnPreview = nullptr;
-    QPushButton* m_btnPush = nullptr;
-    QPushButton* m_btnClear = nullptr;
+    QPushButton* m_btnPush    = nullptr;
+    QPushButton* m_btnClear   = nullptr;
 
-    // Preview
-    QGraphicsView* m_view = nullptr;
-    QGraphicsScene* m_scene = nullptr;
+    // --- Preview ---
+    QGraphicsView*       m_view    = nullptr;
+    QGraphicsScene*      m_scene   = nullptr;
     QGraphicsPixmapItem* m_pixBase = nullptr;
-    QLabel* m_status = nullptr;
+    QLabel*              m_status  = nullptr;
 };
 
 #endif // NBTORGB_STARS_DIALOG_H

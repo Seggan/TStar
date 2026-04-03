@@ -1,10 +1,14 @@
 /**
  * @file Statistics.h
- * @brief Statistical functions for stacking operations
- * 
- * This file provides fast, optimized statistical functions needed
- * for stacking, rejection algorithms, and normalization.
- * 
+ * @brief Optimised statistical functions for image stacking.
+ *
+ * Provides mean, standard deviation, median, MAD, noise estimation,
+ * percentile computation, histogram-based median, IKSS and biweight
+ * estimators, linear regression, weighted mean, and in-place
+ * quickselect / quicksort utilities.
+ *
+ * All functions operate on single-precision floating-point data.
+ *
  * Copyright (C) 2024-2026 TStar Team
  */
 
@@ -20,226 +24,278 @@
 namespace Stacking {
 
 /**
- * @brief Statistical utility functions
- * 
- * Provides optimized statistical computations needed for stacking.
- * All functions are designed to work with floating-point data.
+ * @brief Collection of static statistical utility functions.
+ *
+ * Designed for the numerical needs of stacking, rejection algorithms,
+ * and normalization.  Thread safety: all functions are re-entrant;
+ * some use OpenMP for large inputs.
  */
 class Statistics {
 public:
+
+    // ========================================================================
+    // Central tendency
+    // ========================================================================
+
     /**
-     * @brief Compute mean of data
-     * @param data Input data
-     * @param size Number of elements
-     * @return Mean value
+     * @brief Arithmetic mean of a float array.
+     * @param data Pointer to the first element.
+     * @param size Number of elements.
+     * @return Mean value, or 0 if @p size is zero.
      */
     static double mean(const float* data, size_t size);
+
+    /** @overload */
     static double mean(const std::vector<float>& data);
-    
+
+    // ========================================================================
+    // Dispersion
+    // ========================================================================
+
     /**
-     * @brief Compute mean and standard deviation together (more efficient)
-     * @param data Input data
-     * @param size Number of elements
-     * @param outMean Output mean
-     * @param outStdDev Output standard deviation
+     * @brief Compute mean and sample standard deviation in a single pass pair.
+     *
+     * Uses a numerically stable two-pass algorithm.
+     *
+     * @param data     Input array.
+     * @param size     Number of elements.
+     * @param outMean  [out] Computed mean.
+     * @param outStdDev [out] Computed sample standard deviation.
      */
     static void meanAndStdDev(const float* data, size_t size,
                               double& outMean, double& outStdDev);
-    
-    /**
-     * @brief Compute standard deviation
-     * @param data Input data
-     * @param size Number of elements
-     * @param mean Optional pre-computed mean (nullptr to compute)
-     * @return Standard deviation
-     */
-    static double stdDev(const float* data, size_t size, const double* mean = nullptr);
-    static double stdDev(const std::vector<float>& data, const double* mean = nullptr);
-    
-    /**
-     * @brief Compute median (modifies input array!)
-     * @param data Input data (will be partially sorted)
-     * @param size Number of elements
-     * @return Median value
-     */
-    static float quickMedian(float* data, size_t size);
-    static float quickMedian(std::vector<float>& data);
-    
-    /**
-     * @brief Compute median without modifying input
-     * @param data Input data
-     * @param size Number of elements
-     * @return Median value
-     */
-    static float median(const float* data, size_t size);
-    static float median(const std::vector<float>& data);
-    
-    /**
-     * @brief Compute Median Absolute Deviation (MAD)
-     * @param data Input data
-     * @param size Number of elements
-     * @param median Pre-computed median (or 0 to compute)
-     * @return MAD value
-     */
-    static double mad(const float* data, size_t size, float median = 0.0f);
-    static double mad(const std::vector<float>& data, float median = 0.0f);
 
     /**
-     * @brief Estimate noise in image (using MAD of differences or similar)
-     * 
-     * Uses efficient estimator suitable for large images.
-     * 
-     * @param data Image data
-     * @param width Image width
-     * @param height Image height
-     * @return Noise estimate (sigma)
+     * @brief Sample standard deviation.
+     * @param data            Input array.
+     * @param size            Number of elements.
+     * @param precomputedMean Optional pre-computed mean (nullptr to compute internally).
+     * @return Standard deviation, or 0 if @p size <= 1.
+     */
+    static double stdDev(const float* data, size_t size,
+                         const double* precomputedMean = nullptr);
+
+    /** @overload */
+    static double stdDev(const std::vector<float>& data,
+                         const double* precomputedMean = nullptr);
+
+    // ========================================================================
+    // Median
+    // ========================================================================
+
+    /**
+     * @brief In-place median via partial sorting (modifies the input array).
+     * @param data Pointer to data (will be partially re-ordered).
+     * @param size Number of elements.
+     * @return Median value.
+     */
+    static float quickMedian(float* data, size_t size);
+
+    /** @overload */
+    static float quickMedian(std::vector<float>& data);
+
+    /**
+     * @brief Non-destructive median (creates an internal copy).
+     * @param data Pointer to immutable data.
+     * @param size Number of elements.
+     * @return Median value.
+     */
+    static float median(const float* data, size_t size);
+
+    /** @overload */
+    static float median(const std::vector<float>& data);
+
+    // ========================================================================
+    // MAD (Median Absolute Deviation)
+    // ========================================================================
+
+    /**
+     * @brief Compute the MAD of an array.
+     * @param data   Input array.
+     * @param size   Number of elements.
+     * @param median Pre-computed median (pass 0 to compute internally).
+     * @return MAD value.
+     */
+    static double mad(const float* data, size_t size, float median = 0.0f);
+
+    /** @overload */
+    static double mad(const std::vector<float>& data, float median = 0.0f);
+
+    // ========================================================================
+    // Noise estimation
+    // ========================================================================
+
+    /**
+     * @brief Estimate the noise level of a 2-D image.
+     *
+     * Applies row-wise first-order differences with iterative sigma
+     * clipping, then takes the median of per-row noise estimates scaled
+     * by 1 / sqrt(2).
+     *
+     * @param data   Pointer to the luminance (or single-channel) image data.
+     * @param width  Image width in pixels.
+     * @param height Image height in pixels.
+     * @return Estimated noise sigma.
      */
     static double computeNoise(const float* data, int width, int height);
-    
+
+    // ========================================================================
+    // Percentile
+    // ========================================================================
+
     /**
-     * @brief Compute percentile value
-     * @param data Input data (will be partially sorted)
-     * @param size Number of elements
-     * @param percentile Percentile (0-100)
-     * @return Value at percentile
+     * @brief Compute a percentile value (partially sorts the input).
+     * @param data       Input array (modified).
+     * @param size       Number of elements.
+     * @param percentile Desired percentile in [0, 100].
+     * @return Interpolated value at the requested percentile.
      */
     static float percentile(float* data, size_t size, double percentile);
-    
-    /**
-     * @brief Compute minimum value
-     * @param data Input data
-     * @param size Number of elements
-     * @return Minimum value
-     */
+
+    // ========================================================================
+    // Min / Max
+    // ========================================================================
+
+    /** @brief Minimum value in the array. */
     static float minimum(const float* data, size_t size);
-    
-    /**
-     * @brief Compute maximum value
-     * @param data Input data
-     * @param size Number of elements
-     * @return Maximum value
-     */
+
+    /** @brief Maximum value in the array. */
     static float maximum(const float* data, size_t size);
-    
+
     /**
-     * @brief Compute min and max together (more efficient)
-     * @param data Input data
-     * @param size Number of elements
-     * @param outMin Output minimum
-     * @param outMax Output maximum
+     * @brief Simultaneous minimum and maximum (single pass).
+     * @param data   Input array.
+     * @param size   Number of elements.
+     * @param outMin [out] Minimum value.
+     * @param outMax [out] Maximum value.
      */
     static void minMax(const float* data, size_t size,
                        float& outMin, float& outMax);
-    
+
+    // ========================================================================
+    // Histogram-based median
+    // ========================================================================
+
     /**
-     * @brief Compute histogram-based median (faster for large arrays)
-     * @param data Input data
-     * @param size Number of elements
-     * @param numBins Number of histogram bins
-     * @return Approximate median
+     * @brief Approximate median via histogram binning.
+     *
+     * Faster than exact median for very large arrays at the cost of
+     * bin-width quantisation error.
+     *
+     * @param data    Input array.
+     * @param size    Number of elements.
+     * @param numBins Number of histogram bins (default 65536).
+     * @return Approximate median value.
      */
     static float histogramMedian(const float* data, size_t size, int numBins = 65536);
-    
+
+    // ========================================================================
+    // Robust estimators
+    // ========================================================================
+
     /**
-     * @brief IKSS-lite location/scale estimator
-     * 
-     *   1. Clip to ±6×MAD from median (one-shot)
-     *   2. Recompute median (location) of filtered data
-     *   3. Recompute MAD of filtered data
-     *   4. Scale = sqrt(biweightMidvariance) × 0.991
+     * @brief IKSS-lite location and scale estimator.
      *
-     * Used for stacking normalization — more robust than plain MAD.
+     * Algorithm:
+     *  1. Clip values outside +/- 6*MAD from the median.
+     *  2. Re-compute the median (location) of the filtered data.
+     *  3. Re-compute the MAD of the filtered data.
+     *  4. Scale = sqrt(biweight midvariance) * 0.991.
      *
-     * @param data Input data (will be partially reordered internally)
-     * @param size Number of elements
-     * @param median Pre-computed median
-     * @param mad Pre-computed MAD
-     * @param outLocation Output location estimate (new median after clip)
-     * @param outScale Output scale estimate (0.991 × sqrt(BWMV))
-     * @return false if computation fails (e.g. MAD==0 after filtering)
+     * More robust than plain MAD for stacking normalisation.
+     *
+     * @param data        Input array (partially re-ordered internally).
+     * @param size        Number of elements.
+     * @param median      Pre-computed median.
+     * @param mad         Pre-computed MAD.
+     * @param outLocation [out] Robust location estimate.
+     * @param outScale    [out] Robust scale estimate.
+     * @return false if the computation fails (e.g. MAD == 0 after filtering).
      */
     static bool ikssLite(const float* data, size_t size,
                          float median, float mad,
                          double& outLocation, double& outScale);
 
     /**
-     * @brief Biweight midvariance (BWMV)
+     * @brief Biweight midvariance (BWMV).
      *
-     *   bwmv = n × Σ(yi²(1−yi²)²) / (Σ(1−yi²)(1−5yi²))²
-     *   where yi = (xi − median) / (9×mad)  clamped to |yi| < 1
+     *   BWMV = n * sum[ (x_i - med)^2 * (1 - u_i^2)^4 ]
+     *             / ( sum[ (1 - u_i^2)(1 - 5*u_i^2) ] )^2
      *
-     * @param data Input data
-     * @param size Number of elements
-     * @param mad MAD of data about median
-     * @param median Median of data
-     * @return Biweight midvariance estimate
+     * where u_i = (x_i - median) / (9 * MAD), clamped so |u_i| < 1.
+     *
+     * @param data   Input array.
+     * @param size   Number of elements.
+     * @param mad    MAD of the data about @p median.
+     * @param median Median of the data.
+     * @return Biweight midvariance estimate.
      */
     static double biweightMidvariance(const float* data, size_t size,
                                       float mad, float median);
 
     /**
-     * @brief Legacy Huber-reweighted IKSS estimator (kept for compatibility)
+     * @brief Legacy Huber-reweighted IKSS estimator.
+     *
+     * Iteratively re-weights samples using Huber weights to converge
+     * on a robust location and scale.  Retained for backward compatibility;
+     * prefer ikssLite() for new code.
+     *
+     * @param data        Input array.
+     * @param size        Number of elements.
+     * @param median      Pre-computed median.
+     * @param mad         Pre-computed MAD.
+     * @param outLocation [out] Location estimate.
+     * @param outScale    [out] Scale estimate.
      */
     static void ikssEstimator(const float* data, size_t size,
                               float median, float mad,
                               double& outLocation, double& outScale);
-    
+
     /**
-     * @brief Simple linear regression
-     * @param x X values
-     * @param y Y values
-     * @param size Number of points
-     * @param outSlope Output slope (a)
-     * @param outIntercept Output intercept (b)
+     * @brief In-place sort (modifies the input array).
+     * @param data Pointer to data.
+     * @param size Number of elements.
+     */
+    static void quickSort(float* data, size_t size);
+
+    /** @overload */
+    static void quickSort(std::vector<float>& data) { quickSort(data.data(), data.size()); }
+
+    // ========================================================================
+    // Linear regression
+    // ========================================================================
+
+    /**
+     * @brief Ordinary least-squares linear fit:  y = slope * x + intercept.
+     * @param x            Independent variable array.
+     * @param y            Dependent variable array.
+     * @param size         Number of data points.
+     * @param outSlope     [out] Fitted slope.
+     * @param outIntercept [out] Fitted intercept.
      */
     static void linearFit(const float* x, const float* y, size_t size,
                           float& outSlope, float& outIntercept);
-    
+
+    // ========================================================================
+    // Weighted mean
+    // ========================================================================
+
     /**
-     * @brief Compute weighted mean
-     * @param data Input data
-     * @param weights Weights
-     * @param size Number of elements
-     * @return Weighted mean
+     * @brief Compute the weighted arithmetic mean.
+     * @param data    Values.
+     * @param weights Corresponding weights.
+     * @param size    Number of elements.
+     * @return Weighted mean, or 0 if the total weight is non-positive.
      */
     static double weightedMean(const float* data, const float* weights, size_t size);
-    
-    /**
-     * @brief Quick partial sort (nth element)
-     * 
-     * Places the nth smallest element at position n and partitions
-     * the array such that elements before n are smaller.
-     * 
-     * @param data Input data (modified)
-     * @param size Number of elements
-     * @param n Position to partition on
-     */
-    static void quickSelect(float* data, size_t size, size_t n);
-    
-    /**
-     * @brief Full quicksort
-     * @param data Input data (modified)
-     * @param size Number of elements
-     */
-    static void quickSort(float* data, size_t size);
-    
+
 private:
-    /**
-     * @brief Partition helper for quickselect/quicksort
-     */
-    static size_t partition(float* data, size_t left, size_t right, size_t pivotIndex);
-    
-    /**
-     * @brief QuickSelect implementation
-     */
+    static void quickSelect(float* data, size_t size, size_t n);
     static float quickSelectImpl(float* data, size_t left, size_t right, size_t k);
-    
-    /**
-     * @brief QuickSort implementation
-     */
+    static size_t partition(float* data, size_t left, size_t right, size_t pivotIndex);
     static void quickSortImpl(float* data, size_t left, size_t right);
-};
+};  // class Statistics
 
-} // namespace Stacking
+}  // namespace Stacking
 
-#endif // STACKING_STATISTICS_H
+#endif  // STACKING_STATISTICS_H 

@@ -1,6 +1,7 @@
 #include "RARRunner.h"
 #include "SimpleTiffWriter.h"
 #include "SimpleTiffReader.h"
+
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QCoreApplication>
@@ -11,87 +12,110 @@
 #include <QStandardPaths>
 #include <iostream>
 
-RARRunner::RARRunner(QObject* parent) : QObject(parent) {}
+// ----------------------------------------------------------------------------
+// Constructor
+// ----------------------------------------------------------------------------
+RARRunner::RARRunner(QObject* parent)
+    : QObject(parent)
+{}
 
-bool RARRunner::run(const ImageBuffer& input, ImageBuffer& output, const RARParams& params, QString* errorMsg) {
+// ----------------------------------------------------------------------------
+// run
+//
+// Full pipeline:
+//   1. Validate the model file path.
+//   2. Write the input buffer to a temporary float32 TIFF.
+//   3. Locate the bundled Python interpreter and worker script.
+//   4. Patch pyvenv.cfg so the virtual environment resolves correctly inside
+//      the application bundle (macOS only).
+//   5. Launch the Python worker and relay its stdout as processOutput signals.
+//   6. Poll for completion with a 50 ms interval, honouring cancellation.
+//   7. Read the raw float32 binary produced by the worker and populate output.
+// ----------------------------------------------------------------------------
+bool RARRunner::run(const ImageBuffer& input,
+                    ImageBuffer&       output,
+                    const RARParams&   params,
+                    QString*           errorMsg)
+{
+    // --- Validate model ---
     if (!QFileInfo::exists(params.modelPath)) {
-        if(errorMsg) *errorMsg = "Model file not found: " + params.modelPath;
+        if (errorMsg) *errorMsg = "Model file not found: " + params.modelPath;
         return false;
     }
+
     m_stop = false;
 
+    // --- Create temporary working directory ---
     QTemporaryDir tempDir;
     if (!tempDir.isValid()) {
-        if(errorMsg) *errorMsg = "Failed to create temp dir.";
+        if (errorMsg) *errorMsg = "Failed to create temporary directory.";
         return false;
     }
 
-    QString inputFile = tempDir.filePath("rar_input.tif");
-    // Use .raw for output to avoid TIFF parsing issues in C++ (float32 exchange)
-    QString outputFile = tempDir.filePath("rar_output.raw");
+    const QString inputFile  = tempDir.filePath("rar_input.tif");
+    // Raw float32 binary output avoids TIFF parsing overhead and precision issues.
+    const QString outputFile = tempDir.filePath("rar_output.raw");
+
+    // --- Locate the Python worker script ---
+    // Search in order: installed location, macOS bundle Resources, source tree.
     QString scriptPath = QCoreApplication::applicationDirPath() + "/scripts/rar_worker.py";
 
-    // Adjust script path if running from build dir or installed
-    if (!QFile::exists(scriptPath)) {
-        // Try Resources folder (macOS DMG bundle)
+    if (!QFile::exists(scriptPath))
         scriptPath = QCoreApplication::applicationDirPath() + "/../Resources/scripts/rar_worker.py";
-    }
-    if (!QFile::exists(scriptPath)) {
-        // Fallback for dev environment
-        scriptPath = QCoreApplication::applicationDirPath() + "/../src/scripts/rar_worker.py";
-    }
 
-    // Save Input (Float32 for precision)
-    emit processOutput("Saving temp input...");
-    if (!SimpleTiffWriter::write(inputFile, input.width(), input.height(), input.channels(), 
-                                 SimpleTiffWriter::Format_float32, input.data(), QByteArray(), errorMsg)) {
+    if (!QFile::exists(scriptPath))
+        scriptPath = QCoreApplication::applicationDirPath() + "/../src/scripts/rar_worker.py";
+
+    // --- Write float32 input TIFF ---
+    emit processOutput("Saving temporary input file...");
+    if (!SimpleTiffWriter::write(inputFile,
+                                 input.width(), input.height(), input.channels(),
+                                 SimpleTiffWriter::Format_float32,
+                                 input.data(), QByteArray(), errorMsg)) {
         return false;
     }
 
+    // --- Build argument list for the worker script ---
     QStringList args;
-    args << scriptPath 
-         << "--input" << inputFile 
-         << "--output" << outputFile 
-         << "--model" << params.modelPath
-         << "--patch" << QString::number(params.patchSize)
-         << "--overlap" << QString::number(params.overlap)
+    args << scriptPath
+         << "--input"    << inputFile
+         << "--output"   << outputFile
+         << "--model"    << params.modelPath
+         << "--patch"    << QString::number(params.patchSize)
+         << "--overlap"  << QString::number(params.overlap)
          << "--provider" << params.provider;
 
-    emit processOutput("Starting Aberration AI worker...");
+    emit processOutput("Starting Aberration Removal AI worker...");
+
     QProcess p;
     p.setProcessChannelMode(QProcess::MergedChannels);
-    
+
     QString fullLog;
-    
-    // Connect output
-    connect(&p, &QProcess::readyReadStandardOutput, [this, &p, &fullLog](){
-        QByteArray data = p.readAllStandardOutput();
-        QString txt = QString::fromUtf8(data).trimmed();
-        if(!txt.isEmpty()){
-            // Log logic
-            if(txt.contains("Progress:")) {
-                // Console output for CLI users (updates same line)
-                std::cout << "\r" << txt.toStdString() << "    " << std::flush;
-                emit processOutput(txt);
-            }
-            else if(txt.startsWith("RESULT")) {
-                std::cout << "\n[AI] " << txt.toStdString() << std::endl;
-                emit processOutput(txt);
-            }
-            else {
-                if(txt.contains("INFO") || txt.contains("DEBUG")) {
-                     std::cout << "\n[AI] " << txt.toStdString() << std::endl;
-                }
-                emit processOutput(txt);
-            }
-            fullLog.append(txt + "\n");
+
+    // Relay worker stdout to the UI and console, categorising by message type.
+    connect(&p, &QProcess::readyReadStandardOutput, [this, &p, &fullLog]() {
+        QByteArray raw = p.readAllStandardOutput();
+        QString    txt = QString::fromUtf8(raw).trimmed();
+        if (txt.isEmpty()) return;
+
+        if (txt.contains("Progress:")) {
+            // Overwrite the current console line for progress updates.
+            std::cout << "\r" << txt.toStdString() << "  " << std::flush;
+        } else if (txt.startsWith("RESULT")) {
+            std::cout << "\n[AI] " << txt.toStdString() << std::endl;
+        } else if (txt.contains("INFO") || txt.contains("DEBUG")) {
+            std::cout << "\n[AI] " << txt.toStdString() << std::endl;
         }
+
+        emit processOutput(txt);
+        fullLog.append(txt + "\n");
     });
 
-    // Locate bundled Python interpreter.
-    // No test-run: DYLD_FRAMEWORK_PATH (set below) lets dyld find Python.framework
-    // inside the bundle even when the baked-in Homebrew Cellar path is stale.
+    // --- Locate bundled Python interpreter ---
+    // DYLD_FRAMEWORK_PATH (set below) allows dyld to resolve Python.framework
+    // inside the bundle even when the binary's baked-in Homebrew path is stale.
     QString pythonExe;
+
 #if defined(Q_OS_MAC)
     pythonExe = QCoreApplication::applicationDirPath() + "/../Resources/python_venv/bin/python3";
     if (!QFile::exists(pythonExe))
@@ -103,35 +127,46 @@ bool RARRunner::run(const ImageBuffer& input, ImageBuffer& output, const RARPara
 #endif
 
     if (!QFile::exists(pythonExe)) {
-        if(errorMsg) *errorMsg = "Bundled Python interpreter not found.\nExpected path: " + pythonExe;
+        if (errorMsg)
+            *errorMsg = "Bundled Python interpreter not found.\nExpected path: " + pythonExe;
         return false;
     }
 
-    // Build process environment: PYTHONPATH + DYLD paths so the bundled Python
-    // framework and all extension modules (.so) resolve without Homebrew present.
+    // --- Configure process environment ---
     {
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
         env.insert("PYTHONUNBUFFERED", "1");
+
 #if defined(Q_OS_MAC)
-        // Robustly fix pyvenv.cfg with the actual absolute path of the bundled framework at runtime
-        QString pyvenvCfg = QCoreApplication::applicationDirPath() + "/../Resources/python_venv/pyvenv.cfg";
-        if (!QFile::exists(pyvenvCfg)) pyvenvCfg = QCoreApplication::applicationDirPath() + "/../../deps/python_venv/pyvenv.cfg";
+        // Patch pyvenv.cfg so the virtual environment resolves to the bundled
+        // Python.framework regardless of the path baked into the binary at build time.
+        QString pyvenvCfg = QCoreApplication::applicationDirPath()
+                            + "/../Resources/python_venv/pyvenv.cfg";
+        if (!QFile::exists(pyvenvCfg))
+            pyvenvCfg = QCoreApplication::applicationDirPath()
+                        + "/../../deps/python_venv/pyvenv.cfg";
+
         if (QFile::exists(pyvenvCfg)) {
-            QString pythonFwBin = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../Frameworks/Python.framework/Versions/Current/bin");
+            const QString pythonFwBin = QDir::cleanPath(
+                QCoreApplication::applicationDirPath()
+                + "/../Frameworks/Python.framework/Versions/Current/bin");
+
             QFile f(pyvenvCfg);
             if (f.open(QIODevice::ReadWrite | QIODevice::Text)) {
-                QString content = QString::fromUtf8(f.readAll());
-                bool changed = false;
-                QStringList lines = content.split('\n');
-                for (int i=0; i<lines.size(); ++i) {
+                QString     content = QString::fromUtf8(f.readAll());
+                bool        changed = false;
+                QStringList lines   = content.split('\n');
+
+                for (int i = 0; i < lines.size(); ++i) {
                     if (lines[i].trimmed().startsWith("home =")) {
-                        QString newLine = "home = " + pythonFwBin;
+                        const QString newLine = "home = " + pythonFwBin;
                         if (lines[i] != newLine) { lines[i] = newLine; changed = true; }
                     } else if (lines[i].trimmed().startsWith("executable =")) {
-                        QString newLine = "executable = " + pythonFwBin + "/python3";
+                        const QString newLine = "executable = " + pythonFwBin + "/python3";
                         if (lines[i] != newLine) { lines[i] = newLine; changed = true; }
                     }
                 }
+
                 if (changed) {
                     f.resize(0);
                     f.seek(0);
@@ -141,78 +176,93 @@ bool RARRunner::run(const ImageBuffer& input, ImageBuffer& output, const RARPara
             }
         }
 
-        // Make Python.framework findable regardless of the path baked into the binary.
+        // Prepend the bundle Frameworks directory to the dynamic library search paths
+        // so Python.framework and native extension modules (.so) resolve correctly.
         const QString frameworksDir = QCoreApplication::applicationDirPath() + "/../Frameworks";
         if (QDir(frameworksDir).exists()) {
-            const QString curFw = env.value("DYLD_FRAMEWORK_PATH");
-            env.insert("DYLD_FRAMEWORK_PATH", curFw.isEmpty() ? frameworksDir : frameworksDir + ":" + curFw);
+            const QString curFw  = env.value("DYLD_FRAMEWORK_PATH");
             const QString curLib = env.value("DYLD_LIBRARY_PATH");
-            env.insert("DYLD_LIBRARY_PATH", curLib.isEmpty() ? frameworksDir : frameworksDir + ":" + curLib);
+            env.insert("DYLD_FRAMEWORK_PATH",
+                       curFw.isEmpty()  ? frameworksDir : frameworksDir + ":" + curFw);
+            env.insert("DYLD_LIBRARY_PATH",
+                       curLib.isEmpty() ? frameworksDir : frameworksDir + ":" + curLib);
         }
 #endif
+
         p.setProcessEnvironment(env);
     }
 
+    // --- Launch worker process ---
     p.start(pythonExe, args);
-    
-    // Check if it started successfully
+
     if (!p.waitForStarted(3000)) {
-        if(errorMsg) *errorMsg = "Failed to start AI worker: " + p.errorString();
+        if (errorMsg) *errorMsg = "Failed to start AI worker: " + p.errorString();
         return false;
     }
-    
-    // Blocking loop with cancellation
-    while(p.state() != QProcess::NotRunning) {
+
+    // --- Wait loop with cancellation support (50 ms polling interval) ---
+    while (p.state() != QProcess::NotRunning) {
         if (m_stop) {
             p.kill();
             p.waitForFinished();
-            if(errorMsg) *errorMsg = "Aborted by user.";
+            if (errorMsg) *errorMsg = "Operation aborted by user.";
             return false;
         }
         QCoreApplication::processEvents();
         QThread::msleep(50);
     }
 
+    // --- Check exit status ---
     if (p.exitCode() != 0) {
-        QString tail = fullLog.trimmed().right(1000);
-        if(errorMsg) *errorMsg = QString("Worker process failed (Code %1): %2\n\nLog:\n%3")
-                                    .arg(p.exitCode())
-                                    .arg(p.errorString().isEmpty() ? "Unknown error" : p.errorString())
-                                    .arg(tail);
+        const QString tail = fullLog.trimmed().right(1000);
+        if (errorMsg) {
+            *errorMsg = QString("Worker process failed (exit code %1): %2\n\nLog:\n%3")
+                        .arg(p.exitCode())
+                        .arg(p.errorString().isEmpty() ? "Unknown error" : p.errorString())
+                        .arg(tail);
+        }
         return false;
     }
-    
+
     if (!QFile::exists(outputFile)) {
-         if(errorMsg) *errorMsg = "Output file not generated.";
-         return false;
+        if (errorMsg) *errorMsg = "Worker did not produce an output file.";
+        return false;
     }
 
+    // --- Read raw float32 result ---
     emit processOutput("Loading result...");
-    
+
     QFile resFile(outputFile);
     if (!resFile.open(QIODevice::ReadOnly)) {
-         if(errorMsg) *errorMsg = "Failed to open result file.";
-         return false;
-    }
-    
-    QByteArray blob = resFile.readAll();
-    resFile.close();
-    
-    // Size check
-    // Expected size: w * h * c * 4
-    size_t expectedBytes = (size_t)input.width() * input.height() * input.channels() * sizeof(float);
-    if ((size_t)blob.size() != expectedBytes) {
-        if(errorMsg) *errorMsg = QString("Result size mismatch. Expected %1 bytes, got %2").arg(expectedBytes).arg(blob.size());
+        if (errorMsg) *errorMsg = "Failed to open result file.";
         return false;
     }
-    
+
+    const QByteArray blob = resFile.readAll();
+    resFile.close();
+
+    // Validate byte count: expected w * h * channels * sizeof(float).
+    const size_t expectedBytes = static_cast<size_t>(input.width())
+                                 * input.height()
+                                 * input.channels()
+                                 * sizeof(float);
+
+    if (static_cast<size_t>(blob.size()) != expectedBytes) {
+        if (errorMsg) {
+            *errorMsg = QString("Result size mismatch. Expected %1 bytes, got %2.")
+                        .arg(expectedBytes)
+                        .arg(blob.size());
+        }
+        return false;
+    }
+
     std::vector<float> data(blob.size() / sizeof(float));
-    memcpy(data.data(), blob.constData(), blob.size());
-    
-    // Raw memory dump without bounds validation required
-    emit processOutput(QString("Loaded RAW: %1 bytes").arg(blob.size()));
+    std::memcpy(data.data(), blob.constData(), blob.size());
+
+    emit processOutput(QString("Loaded RAW result: %1 bytes.").arg(blob.size()));
 
     output.setData(input.width(), input.height(), input.channels(), data);
-    output.setMetadata(input.metadata()); // Preserve WCS and other metadata
+    output.setMetadata(input.metadata());  // Preserve WCS and all auxiliary metadata.
+
     return true;
 }

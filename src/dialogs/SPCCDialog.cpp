@@ -1,26 +1,28 @@
-/*
- * SPCCDialog.cpp  —  Spectrophotometric Color Calibration dialog
+/**
+ * @file SPCCDialog.cpp
+ * @brief Implementation of the Spectrophotometric Color Calibration dialog.
  *
  * Two-step user workflow:
- * Step 1 (onFetchStars)
- * - Reads the active ImageBuffer (must have WCS metadata).
- * - Uses the WCS to project SIMBAD stars into pixel space.
- * - For each SIMBAD star, runs picklesMatchForSimbad() against the SED
- * list from tstar_data.fits to assign a Pickles template.
- * - If gaiaFallback is enabled, infers the spectral letter from the Gaia
- * BP-RP colour for stars that could not be matched to a Pickles SED.
  *
- * Step 2 (onRun -> startCalibration -> SPCC::calibrateWithStarList)
- * - Builds per-channel system throughput: T_sys = T_filter * T_QE * T_LP.
- * - For each matched star: measures aperture flux (background-subtracted
- * annulus) and integrates the Pickles SED against T_sys to obtain
- * expected colour ratios.
- * - Fits a polynomial colour model (slope-only / affine / quadratic) that
- * maps measured ratios to expected ones; the model with the lowest RMS
- * fractional residual is chosen automatically.
- * - Applies the model per-pixel: R' = f_R(R/G)*G, B' = f_B(B/G)*G.
- * - Optionally removes a chromatic gradient via a poly2/poly3 differential-
- * magnitude surface fit, clamped to ±0.05 mag peak amplitude.
+ * Step 1 (onFetchStars):
+ *   - Reads the active ImageBuffer (must have WCS metadata).
+ *   - Uses WCS to project catalog stars into pixel space.
+ *   - For each catalog star, runs picklesMatchForSimbad() against the SED
+ *     list from tstar_data.fits to assign a Pickles template.
+ *   - If gaiaFallback is enabled, infers the spectral class from the Gaia
+ *     BP-RP colour for stars that could not be matched to a Pickles SED.
+ *
+ * Step 2 (onRun -> startCalibration -> SPCC::calibrateWithStarList):
+ *   - Builds per-channel system throughput: T_sys = T_filter * T_QE * T_LP.
+ *   - For each matched star: measures aperture flux (background-subtracted
+ *     annulus) and integrates the Pickles SED against T_sys to obtain
+ *     expected colour ratios.
+ *   - Fits a polynomial colour model (slope-only / affine / quadratic) that
+ *     maps measured ratios to expected ones; the model with the lowest RMS
+ *     fractional residual is chosen automatically.
+ *   - Applies the model per-pixel: R' = f_R(R/G)*G, B' = f_B(B/G)*G.
+ *   - Optionally removes a chromatic gradient via a poly2/poly3
+ *     differential-magnitude surface fit, clamped to +/-0.05 mag peak.
  */
 
 #include "SPCCDialog.h"
@@ -44,43 +46,47 @@
 #include <QListView>
 #include <QtConcurrent/QtConcurrentRun>
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Construction / destruction
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// Construction / Destruction
+// =============================================================================
+
 SPCCDialog::SPCCDialog(ImageViewer* viewer, MainWindow* mw, QWidget* parent)
-    : QDialog(parent), m_viewer(viewer), m_mainWindow(mw)
+    : QDialog(parent)
+    , m_viewer(viewer)
+    , m_mainWindow(mw)
 {
     setWindowTitle(tr("Spectrophotometric Color Calibration"));
     setWindowFlags(windowFlags() | Qt::Tool);
     setMinimumWidth(900);
 
-    // Snapshot the current buffer so Reset can restore it
+    // Snapshot the current buffer so Reset can restore it later
     if (m_viewer && m_viewer->getBuffer().isValid())
         m_originalBuffer = m_viewer->getBuffer();
 
-    // Resolve data path (directory containing tstar_data.fits)
+    // Resolve the data directory containing tstar_data.fits.
+    // Search order: <appdir>/data, <bundle>/Resources/data, <appdir>/../data
     m_dataPath = QDir::cleanPath(
         QCoreApplication::applicationDirPath() + "/data");
+
     if (!QFile::exists(m_dataPath + "/tstar_data.fits")) {
-        // Try macOS bundle Resources path
         m_dataPath = QDir::cleanPath(
             QCoreApplication::applicationDirPath() + "/../Resources/data");
     }
     if (!QFile::exists(m_dataPath + "/tstar_data.fits")) {
-        // Try one level up (common in build trees or some linux installs)
         m_dataPath = QDir::cleanPath(
             QCoreApplication::applicationDirPath() + "/../data");
     }
 
     // Load spectral database eagerly so combo boxes can be populated
     bool fitsLoaded = SPCC::loadTStarFits(m_dataPath, m_store);
-    bool dbLoaded   = SPCC::loadTStarDatabase(m_dataPath + "/TStar-spcc-database", m_store);
+    bool dbLoaded   = SPCC::loadTStarDatabase(
+        m_dataPath + "/TStar-spcc-database", m_store);
     m_storeLoaded = fitsLoaded || dbLoaded;
 
-    // Background workers
+    // Initialize background worker watchers and catalog client
     m_fetchWatcher = new QFutureWatcher<std::vector<StarRecord>>(this);
     m_calibWatcher = new QFutureWatcher<SPCCResult>(this);
-    m_catalog = new CatalogClient(this);
+    m_catalog      = new CatalogClient(this);
 
     buildUI();
     connectSignals();
@@ -88,46 +94,52 @@ SPCCDialog::SPCCDialog(ImageViewer* viewer, MainWindow* mw, QWidget* parent)
     restoreSettings();
 }
 
-SPCCDialog::~SPCCDialog() {
+SPCCDialog::~SPCCDialog()
+{
     cleanup();
 }
 
-void SPCCDialog::setViewer(ImageViewer* viewer) {
+void SPCCDialog::setViewer(ImageViewer* viewer)
+{
     m_viewer = viewer;
     if (m_viewer && m_viewer->getBuffer().isValid())
         m_originalBuffer = m_viewer->getBuffer();
 }
 
-void SPCCDialog::closeEvent(QCloseEvent* ev) {
+void SPCCDialog::closeEvent(QCloseEvent* ev)
+{
     cleanup();
     QDialog::closeEvent(ev);
 }
 
-void SPCCDialog::cleanup() {
-    if (m_fetchWatcher && m_fetchWatcher->isRunning()) m_fetchWatcher->cancel();
-    if (m_calibWatcher && m_calibWatcher->isRunning()) m_calibWatcher->cancel();
+void SPCCDialog::cleanup()
+{
+    if (m_fetchWatcher && m_fetchWatcher->isRunning())
+        m_fetchWatcher->cancel();
+    if (m_calibWatcher && m_calibWatcher->isRunning())
+        m_calibWatcher->cancel();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UI construction
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::buildUI() {
+// =============================================================================
+// UI Construction
+// =============================================================================
+
+void SPCCDialog::buildUI()
+{
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(10);
     mainLayout->setContentsMargins(12, 12, 12, 12);
 
-    // Two-column layout
+    // --- Two-column layout ---
     auto* columnsLayout = new QHBoxLayout;
-    auto* leftCol = new QVBoxLayout;
+    auto* leftCol  = new QVBoxLayout;
     auto* rightCol = new QVBoxLayout;
-
-    // Ensure columns are properly spaced
     leftCol->setSpacing(10);
     rightCol->setSpacing(10);
 
-    // ════════ LEFT COLUMN ════════
+    // ---- LEFT COLUMN ----
 
-    // ── Step 1 button ─────────────────────────────────────────────────────────
+    // Step 1 action bar
     auto* step1Layout = new QHBoxLayout;
     m_fetchStarsBtn = new QPushButton(tr("Step 1: Fetch Stars from Active Image"));
     {
@@ -141,7 +153,7 @@ void SPCCDialog::buildUI() {
     step1Layout->addWidget(m_saspViewerBtn);
     leftCol->addLayout(step1Layout);
 
-    // ── Equipment group ───────────────────────────────────────────────────────
+    // Equipment / Filters group
     auto* grpEquip  = new QGroupBox(tr("Equipment / Filters"), this);
     auto* formEquip = new QFormLayout(grpEquip);
 
@@ -153,54 +165,52 @@ void SPCCDialog::buildUI() {
     m_lpFilter1Combo = new QComboBox;
     m_lpFilter2Combo = new QComboBox;
 
-    m_whiteRefCombo->setMaxVisibleItems(10);
-    m_rFilterCombo->setMaxVisibleItems(10);
-    m_gFilterCombo->setMaxVisibleItems(10);
-    m_bFilterCombo->setMaxVisibleItems(10);
-    m_sensorCombo->setMaxVisibleItems(10);
-    m_lpFilter1Combo->setMaxVisibleItems(10);
-    m_lpFilter2Combo->setMaxVisibleItems(10);
+    // Configure all equipment combos with consistent appearance
+    const QString comboStyle =
+        "QComboBox { combobox-popup: 0; } "
+        "QAbstractItemView { max-height: 300px; }";
 
-    m_whiteRefCombo->setView(new QListView());
-    m_rFilterCombo->setView(new QListView());
-    m_gFilterCombo->setView(new QListView());
-    m_bFilterCombo->setView(new QListView());
-    m_sensorCombo->setView(new QListView());
-    m_lpFilter1Combo->setView(new QListView());
-    m_lpFilter2Combo->setView(new QListView());
-
-    const QString s = "QComboBox { combobox-popup: 0; } QAbstractItemView { max-height: 300px; }";
-    m_whiteRefCombo->setStyleSheet(s);
-    m_rFilterCombo->setStyleSheet(s);
-    m_gFilterCombo->setStyleSheet(s);
-    m_bFilterCombo->setStyleSheet(s);
-    m_sensorCombo->setStyleSheet(s);
-    m_lpFilter1Combo->setStyleSheet(s);
-    m_lpFilter2Combo->setStyleSheet(s);
+    QComboBox* equipCombos[] = {
+        m_whiteRefCombo, m_rFilterCombo, m_gFilterCombo, m_bFilterCombo,
+        m_sensorCombo, m_lpFilter1Combo, m_lpFilter2Combo
+    };
+    for (QComboBox* cb : equipCombos) {
+        cb->setMaxVisibleItems(10);
+        cb->setView(new QListView());
+        cb->setStyleSheet(comboStyle);
+    }
 
     formEquip->addRow(tr("White Reference (SED):"), m_whiteRefCombo);
-    m_whiteRefCombo->setToolTip(tr("Stellar Spectral Energy Distribution used as the white point reference (e.g., G2V for Sun-like stars)."));
-    
-    formEquip->addRow(tr("R Filter:"),              m_rFilterCombo);
-    m_rFilterCombo->setToolTip(tr("Transmission curve for the Red channel filter. Use '(None)' for flat response."));
-    
-    formEquip->addRow(tr("G Filter:"),              m_gFilterCombo);
-    m_gFilterCombo->setToolTip(tr("Transmission curve for the Green channel filter."));
-    
-    formEquip->addRow(tr("B Filter:"),              m_bFilterCombo);
-    m_bFilterCombo->setToolTip(tr("Transmission curve for the Blue channel filter."));
-    
-    formEquip->addRow(tr("Sensor (QE curve):"),     m_sensorCombo);
-    m_sensorCombo->setToolTip(tr("Quantum Efficiency curve of the camera sensor. Applies to all channels."));
-    
-    formEquip->addRow(tr("LP / Cut Filter 1:"),     m_lpFilter1Combo);
-    m_lpFilter1Combo->setToolTip(tr("Optional Light Pollution or IR/UV cut filter curve."));
-    
-    formEquip->addRow(tr("LP / Cut Filter 2:"),     m_lpFilter2Combo);
-    m_lpFilter2Combo->setToolTip(tr("A second optional filter curve (e.g., combining L-Pro with an IR-cut)."));
+    m_whiteRefCombo->setToolTip(
+        tr("Stellar SED used as the white point reference (e.g., G2V for Sun-like)."));
+
+    formEquip->addRow(tr("R Filter:"), m_rFilterCombo);
+    m_rFilterCombo->setToolTip(
+        tr("Transmission curve for the Red channel filter. Use '(None)' for flat response."));
+
+    formEquip->addRow(tr("G Filter:"), m_gFilterCombo);
+    m_gFilterCombo->setToolTip(
+        tr("Transmission curve for the Green channel filter."));
+
+    formEquip->addRow(tr("B Filter:"), m_bFilterCombo);
+    m_bFilterCombo->setToolTip(
+        tr("Transmission curve for the Blue channel filter."));
+
+    formEquip->addRow(tr("Sensor (QE curve):"), m_sensorCombo);
+    m_sensorCombo->setToolTip(
+        tr("Quantum Efficiency curve of the camera sensor. Applies to all channels."));
+
+    formEquip->addRow(tr("LP / Cut Filter 1:"), m_lpFilter1Combo);
+    m_lpFilter1Combo->setToolTip(
+        tr("Optional Light Pollution or IR/UV cut filter curve."));
+
+    formEquip->addRow(tr("LP / Cut Filter 2:"), m_lpFilter2Combo);
+    m_lpFilter2Combo->setToolTip(
+        tr("A second optional filter curve (e.g., combining L-Pro with an IR-cut)."));
+
     leftCol->addWidget(grpEquip);
 
-    // ── Options group ─────────────────────────────────────────────────────────
+    // Options group
     auto* grpOpt = new QGroupBox(tr("Options"), this);
     auto* optL   = new QVBoxLayout(grpOpt);
     auto* formOpt = new QFormLayout;
@@ -208,18 +218,21 @@ void SPCCDialog::buildUI() {
     m_sepThreshSpin = new QDoubleSpinBox;
     m_sepThreshSpin->setRange(1.0, 50.0);
     m_sepThreshSpin->setValue(5.0);
-    m_sepThreshSpin->setToolTip(tr("SEP source extraction threshold in units of background sigma."));
+    m_sepThreshSpin->setToolTip(
+        tr("SEP source extraction threshold in units of background sigma."));
     formOpt->addRow(tr("Star Detect Threshold (sigma):"), m_sepThreshSpin);
 
     m_bgMethodCombo = new QComboBox;
     m_bgMethodCombo->addItems({"None", "Simple", "Poly2", "Poly3", "RBF"});
-    m_bgMethodCombo->setToolTip(tr("Method used to model and subtract the sky background from the image."));
+    m_bgMethodCombo->setToolTip(
+        tr("Method used to model and subtract the sky background."));
     formOpt->addRow(tr("Background Method:"), m_bgMethodCombo);
 
     m_gradMethodCombo = new QComboBox;
     m_gradMethodCombo->addItems({"poly2", "poly3"});
     m_gradMethodCombo->setCurrentText("poly3");
-    m_gradMethodCombo->setToolTip(tr("Polynomial degree for fitting chromatic gradients across the field."));
+    m_gradMethodCombo->setToolTip(
+        tr("Polynomial degree for fitting chromatic gradients across the field."));
     formOpt->addRow(tr("Gradient Surface Method:"), m_gradMethodCombo);
 
     optL->addLayout(formOpt);
@@ -232,7 +245,9 @@ void SPCCDialog::buildUI() {
     m_linearModeCheck = new QCheckBox(
         tr("Standard Linear Application (Recommended)"));
     m_linearModeCheck->setChecked(true);
-    m_linearModeCheck->setToolTip(tr("Applies a single global multiplier per channel. If unchecked, applies a non-linear polynomial warping based on the fitted model."));
+    m_linearModeCheck->setToolTip(
+        tr("Applies a single global multiplier per channel. "
+           "If unchecked, applies a non-linear polynomial warping."));
     optL->addWidget(m_linearModeCheck);
 
     m_runGradientCheck = new QCheckBox(
@@ -241,11 +256,11 @@ void SPCCDialog::buildUI() {
     optL->addWidget(m_runGradientCheck);
 
     leftCol->addWidget(grpOpt);
-    leftCol->addStretch(); // Push content up
+    leftCol->addStretch();
 
-    // ════════ RIGHT COLUMN ════════
+    // ---- RIGHT COLUMN ----
 
-    // ── Results group ─────────────────────────────────────────────────────────
+    // Results group
     auto* grpRes = new QGroupBox(tr("Results"), this);
     auto* resL   = new QVBoxLayout(grpRes);
 
@@ -265,31 +280,30 @@ void SPCCDialog::buildUI() {
     m_matrixTable->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_matrixTable->setFixedHeight(120);
     resL->addWidget(m_matrixTable);
-    
-    rightCol->addWidget(grpRes);
-    rightCol->addStretch(); // Push results up
 
-    // Add columns to the horizontal layout
+    rightCol->addWidget(grpRes);
+    rightCol->addStretch();
+
+    // Assemble the two-column layout
     columnsLayout->addLayout(leftCol, 1);
     columnsLayout->addLayout(rightCol, 1);
-
-    // Add the columns area to the main layout
     mainLayout->addLayout(columnsLayout);
 
-    // ════════ BOTTOM AREA (Full Width) ════════
+    // ---- BOTTOM AREA (full width) ----
 
-    // ── Step 2 + action buttons ───────────────────────────────────────────────
+    // Step 2 and action buttons
     auto* btnLayout = new QHBoxLayout;
-    m_runBtn   = new QPushButton(tr("Step 2: Run Calibration"));
+    m_runBtn = new QPushButton(tr("Step 2: Run Calibration"));
     {
         QFont f = m_runBtn->font();
         f.setBold(true);
         m_runBtn->setFont(f);
     }
-    m_resetBtn = new QPushButton(tr("Reset"));
+    m_resetBtn  = new QPushButton(tr("Reset"));
     m_cancelBtn = new QPushButton(tr("Cancel"));
     m_cancelBtn->setEnabled(false);
-    m_closeBtn = new QPushButton(tr("Close"));
+    m_closeBtn  = new QPushButton(tr("Close"));
+
     btnLayout->addWidget(m_closeBtn);
     btnLayout->addStretch();
     btnLayout->addWidget(m_resetBtn);
@@ -297,7 +311,7 @@ void SPCCDialog::buildUI() {
     btnLayout->addWidget(m_runBtn);
     mainLayout->addLayout(btnLayout);
 
-    // ── Status / progress ─────────────────────────────────────────────────────
+    // Status and progress indicators
     m_statusLabel = new QLabel;
     m_progressBar = new QProgressBar;
     m_progressBar->setRange(0, 100);
@@ -306,19 +320,27 @@ void SPCCDialog::buildUI() {
     mainLayout->addWidget(m_progressBar);
 
     if (!m_storeLoaded) {
-        m_statusLabel->setText(tr("Warning: tstar_data.fits not found — combo boxes will be empty."));
+        m_statusLabel->setText(
+            tr("Warning: tstar_data.fits not found --- combo boxes will be empty."));
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// populateCombosFromFits
-// Fills the equipment combo boxes from the in-memory SPCCDataStore.
-// Mirrors Python _reload_hdu_lists() + _build_ui() combo population.
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::populateCombosFromFits() {
+// =============================================================================
+// Combo Box Population
+// =============================================================================
+
+/**
+ * @brief Populate equipment combo boxes from the in-memory SPCCDataStore.
+ *
+ * Populates white reference (SEDs), R/G/B filter curves, sensor QE curves,
+ * and light pollution filter curves. Duplicate names are suppressed.
+ * Filter combos are pre-filtered by channel name when applicable.
+ */
+void SPCCDialog::populateCombosFromFits()
+{
     const QString none = tr("(None)");
 
-    // 1. White reference: SED names only
+    // --- White reference: unique SED names ---
     m_whiteRefCombo->clear();
     QStringList addedSeds;
     for (const SPCCObject& o : m_store.sed_list) {
@@ -329,34 +351,37 @@ void SPCCDialog::populateCombosFromFits() {
                 break;
             }
         }
-        if (!alreadyAdded) addedSeds << o.name;
+        if (!alreadyAdded)
+            addedSeds << o.name;
     }
     addedSeds.sort(Qt::CaseInsensitive);
     m_whiteRefCombo->addItems(addedSeds);
 
-    // Try to pre-select G2V or A0V as a sensible default
+    // Pre-select a sensible default (G2V preferred, then A0V)
     {
         int idx = m_whiteRefCombo->findText("G2V");
         if (idx < 0) idx = m_whiteRefCombo->findText("A0V");
         if (idx >= 0) m_whiteRefCombo->setCurrentIndex(idx);
     }
 
-    // 2. Filters (with leading "(None)" entry)
+    // --- Filter combos (with leading "(None)" entry) ---
+    // The lambda optionally restricts entries to those matching a channel name.
     auto populateFilter = [&](QComboBox* cb, const QString& channel = QString()) {
         cb->clear();
         cb->addItem(none);
         QStringList uniqueNames;
-        
+
         QRegularExpression channelRe;
         if (!channel.isEmpty()) {
-             QString initial = channel.left(1); 
-             QString pattern = QString("(%1|\\b%2\\b|\\s%2|[_-]%2)")
-                               .arg(channel, initial);
-             channelRe.setPattern(pattern);
-             channelRe.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+            QString initial = channel.left(1);
+            QString pattern = QString("(%1|\\b%2\\b|\\s%2|[_-]%2)")
+                                  .arg(channel, initial);
+            channelRe.setPattern(pattern);
+            channelRe.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
         }
 
         for (const SPCCObject& o : m_store.filter_list) {
+            // Skip duplicates
             bool alreadyAdded = false;
             for (const QString& s : uniqueNames) {
                 if (s.compare(o.name, Qt::CaseInsensitive) == 0) {
@@ -366,6 +391,7 @@ void SPCCDialog::populateCombosFromFits() {
             }
             if (alreadyAdded) continue;
 
+            // Skip entries that do not match the channel filter
             if (channelRe.isValid() && !o.name.contains(channelRe)) continue;
 
             uniqueNames << o.name;
@@ -374,20 +400,23 @@ void SPCCDialog::populateCombosFromFits() {
         cb->addItems(uniqueNames);
     };
 
-    populateFilter(m_rFilterCombo, "Red");
-    populateFilter(m_gFilterCombo, "Green");
-    populateFilter(m_bFilterCombo, "Blue");
+    populateFilter(m_rFilterCombo,   "Red");
+    populateFilter(m_gFilterCombo,   "Green");
+    populateFilter(m_bFilterCombo,   "Blue");
     populateFilter(m_lpFilter1Combo);
     populateFilter(m_lpFilter2Combo);
 
-    // 3. Sensors
+    // --- Sensor QE curves ---
     m_sensorCombo->clear();
     m_sensorCombo->addItem(none);
     QStringList uniqueSensors;
     for (const SPCCObject& o : m_store.sensor_list) {
+        // Strip per-channel suffixes to group sensor variants under one name
         QString displayName = o.name;
-        displayName.remove(QRegularExpression("\\s+(Red|Green|Blue|R|G|B)$", QRegularExpression::CaseInsensitiveOption));
-        
+        displayName.remove(QRegularExpression(
+            "\\s+(Red|Green|Blue|R|G|B)$",
+            QRegularExpression::CaseInsensitiveOption));
+
         bool alreadyAdded = false;
         for (const QString& s : uniqueSensors) {
             if (s.compare(displayName, Qt::CaseInsensitive) == 0) {
@@ -395,16 +424,20 @@ void SPCCDialog::populateCombosFromFits() {
                 break;
             }
         }
-        if (!alreadyAdded) uniqueSensors << displayName;
+        if (!alreadyAdded)
+            uniqueSensors << displayName;
     }
     uniqueSensors.sort(Qt::CaseInsensitive);
     m_sensorCombo->addItems(uniqueSensors);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// connectSignals
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::connectSignals() {
+// =============================================================================
+// Signal/Slot Connections
+// =============================================================================
+
+void SPCCDialog::connectSignals()
+{
+    // Action buttons
     connect(m_closeBtn,      &QPushButton::clicked, this, &SPCCDialog::reject);
     connect(m_runBtn,        &QPushButton::clicked, this, &SPCCDialog::onRun);
     connect(m_resetBtn,      &QPushButton::clicked, this, &SPCCDialog::onReset);
@@ -412,35 +445,42 @@ void SPCCDialog::connectSignals() {
     connect(m_fetchStarsBtn, &QPushButton::clicked, this, &SPCCDialog::onFetchStars);
     connect(m_saspViewerBtn, &QPushButton::clicked, this, &SPCCDialog::onOpenSaspViewer);
 
-    // Worker watchers
-    connect(m_fetchWatcher, &QFutureWatcher<std::vector<StarRecord>>::finished,
+    // Background worker watchers
+    connect(m_fetchWatcher,
+            &QFutureWatcher<std::vector<StarRecord>>::finished,
             this, &SPCCDialog::onFetchStarsFinished);
-    connect(m_calibWatcher, &QFutureWatcher<SPCCResult>::finished,
+    connect(m_calibWatcher,
+            &QFutureWatcher<SPCCResult>::finished,
             this, &SPCCDialog::onCalibrationFinished);
-    connect(m_catalog, &CatalogClient::catalogReady, this, &SPCCDialog::onCatalogReady);
-    connect(m_catalog, &CatalogClient::errorOccurred, this, &SPCCDialog::onCatalogError);
-    connect(m_catalog, &CatalogClient::mirrorStatus, this, [this](const QString& msg){
-        m_statusLabel->setText(msg);
-    });
 
-    // Settings persistence
-    connect(m_whiteRefCombo,  qOverload<int>(&QComboBox::currentIndexChanged),
+    // Catalog client signals
+    connect(m_catalog, &CatalogClient::catalogReady,
+            this, &SPCCDialog::onCatalogReady);
+    connect(m_catalog, &CatalogClient::errorOccurred,
+            this, &SPCCDialog::onCatalogError);
+    connect(m_catalog, &CatalogClient::mirrorStatus,
+            this, [this](const QString& msg) {
+                m_statusLabel->setText(msg);
+            });
+
+    // Persist equipment selections when changed
+    connect(m_whiteRefCombo,   qOverload<int>(&QComboBox::currentIndexChanged),
             this, &SPCCDialog::saveWhiteRefSetting);
-    connect(m_rFilterCombo,   qOverload<int>(&QComboBox::currentIndexChanged),
+    connect(m_rFilterCombo,    qOverload<int>(&QComboBox::currentIndexChanged),
             this, &SPCCDialog::saveRFilterSetting);
-    connect(m_gFilterCombo,   qOverload<int>(&QComboBox::currentIndexChanged),
+    connect(m_gFilterCombo,    qOverload<int>(&QComboBox::currentIndexChanged),
             this, &SPCCDialog::saveGFilterSetting);
-    connect(m_bFilterCombo,   qOverload<int>(&QComboBox::currentIndexChanged),
+    connect(m_bFilterCombo,    qOverload<int>(&QComboBox::currentIndexChanged),
             this, &SPCCDialog::saveBFilterSetting);
-    connect(m_sensorCombo,    qOverload<int>(&QComboBox::currentIndexChanged),
+    connect(m_sensorCombo,     qOverload<int>(&QComboBox::currentIndexChanged),
             this, &SPCCDialog::saveSensorSetting);
-    connect(m_lpFilter1Combo, qOverload<int>(&QComboBox::currentIndexChanged),
+    connect(m_lpFilter1Combo,  qOverload<int>(&QComboBox::currentIndexChanged),
             this, &SPCCDialog::saveLpFilter1Setting);
-    connect(m_lpFilter2Combo, qOverload<int>(&QComboBox::currentIndexChanged),
+    connect(m_lpFilter2Combo,  qOverload<int>(&QComboBox::currentIndexChanged),
             this, &SPCCDialog::saveLpFilter2Setting);
     connect(m_gradMethodCombo, &QComboBox::currentTextChanged,
             this, &SPCCDialog::saveGradMethodSetting);
-    connect(m_sepThreshSpin, qOverload<double>(&QDoubleSpinBox::valueChanged),
+    connect(m_sepThreshSpin,   qOverload<double>(&QDoubleSpinBox::valueChanged),
             this, &SPCCDialog::saveSepThreshSetting);
     connect(m_fullMatrixCheck, &QCheckBox::toggled,
             this, &SPCCDialog::saveFullMatrixSetting);
@@ -448,11 +488,12 @@ void SPCCDialog::connectSignals() {
             this, &SPCCDialog::saveLinearModeSetting);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// restoreSettings
-// Mirrors Python load_settings().
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::restoreSettings() {
+// =============================================================================
+// Settings Persistence
+// =============================================================================
+
+void SPCCDialog::restoreSettings()
+{
     QSettings s;
     s.beginGroup(kSettingsGroup);
 
@@ -464,14 +505,14 @@ void SPCCDialog::restoreSettings() {
         }
     };
 
-    restoreCombo(m_whiteRefCombo,  "WhiteRef");
-    restoreCombo(m_rFilterCombo,   "RFilter");
-    restoreCombo(m_gFilterCombo,   "GFilter");
-    restoreCombo(m_bFilterCombo,   "BFilter");
-    restoreCombo(m_sensorCombo,    "Sensor");
-    restoreCombo(m_lpFilter1Combo, "LPFilter1");
-    restoreCombo(m_lpFilter2Combo, "LPFilter2");
-    restoreCombo(m_gradMethodCombo,"GradMethod");
+    restoreCombo(m_whiteRefCombo,   "WhiteRef");
+    restoreCombo(m_rFilterCombo,    "RFilter");
+    restoreCombo(m_gFilterCombo,    "GFilter");
+    restoreCombo(m_bFilterCombo,    "BFilter");
+    restoreCombo(m_sensorCombo,     "Sensor");
+    restoreCombo(m_lpFilter1Combo,  "LPFilter1");
+    restoreCombo(m_lpFilter2Combo,  "LPFilter2");
+    restoreCombo(m_gradMethodCombo, "GradMethod");
 
     m_sepThreshSpin->setValue(s.value("SEPThreshold", 5.0).toDouble());
     m_fullMatrixCheck->setChecked(s.value("FullMatrix", true).toBool());
@@ -480,35 +521,100 @@ void SPCCDialog::restoreSettings() {
     s.endGroup();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Settings save slots
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::saveWhiteRefSetting(int)  { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("WhiteRef",   m_whiteRefCombo->currentText());  s.endGroup(); }
-void SPCCDialog::saveRFilterSetting(int)   { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("RFilter",    m_rFilterCombo->currentText());   s.endGroup(); }
-void SPCCDialog::saveGFilterSetting(int)   { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("GFilter",    m_gFilterCombo->currentText());   s.endGroup(); }
-void SPCCDialog::saveBFilterSetting(int)   { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("BFilter",    m_bFilterCombo->currentText());   s.endGroup(); }
-void SPCCDialog::saveSensorSetting(int)    { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("Sensor",     m_sensorCombo->currentText());    s.endGroup(); }
-void SPCCDialog::saveLpFilter1Setting(int) { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("LPFilter1",  m_lpFilter1Combo->currentText()); s.endGroup(); }
-void SPCCDialog::saveLpFilter2Setting(int) { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("LPFilter2",  m_lpFilter2Combo->currentText()); s.endGroup(); }
-void SPCCDialog::saveGradMethodSetting(const QString& v) { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("GradMethod", v); s.endGroup(); }
-void SPCCDialog::saveSepThreshSetting(double v)  { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("SEPThreshold", v); s.endGroup(); }
-void SPCCDialog::saveFullMatrixSetting(bool v)   { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("FullMatrix",   v); s.endGroup(); }
-void SPCCDialog::saveLinearModeSetting(bool v)   { QSettings s; s.beginGroup(kSettingsGroup); s.setValue("linearMode",   v); s.endGroup(); }
+/* Individual setting save slots - each persists a single combo/control value */
 
-// ─────────────────────────────────────────────────────────────────────────────
-// onFetchStars  (Step 1)
-// Queries the WCS-annotated image for SIMBAD stars and builds m_starList.
-// The actual network call runs on a QtConcurrent background thread; the result
-// is picked up in onFetchStarsFinished().
-//
-// This is a placeholder skeleton: the application-level SIMBAD query
-// (astroquery equivalent) and SEP star detection are expected to be provided
-// by the surrounding infrastructure (CatalogClient, StarDetector etc.).
-// Here we wire together the pieces that are internal to SPCC:
-//   - picklesMatchForSimbad() for spectral type matching
-//   - inferLetterFromBpRp()   for Gaia colour fallback
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::onFetchStars() {
+void SPCCDialog::saveWhiteRefSetting(int)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("WhiteRef", m_whiteRefCombo->currentText());
+    s.endGroup();
+}
+
+void SPCCDialog::saveRFilterSetting(int)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("RFilter", m_rFilterCombo->currentText());
+    s.endGroup();
+}
+
+void SPCCDialog::saveGFilterSetting(int)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("GFilter", m_gFilterCombo->currentText());
+    s.endGroup();
+}
+
+void SPCCDialog::saveBFilterSetting(int)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("BFilter", m_bFilterCombo->currentText());
+    s.endGroup();
+}
+
+void SPCCDialog::saveSensorSetting(int)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("Sensor", m_sensorCombo->currentText());
+    s.endGroup();
+}
+
+void SPCCDialog::saveLpFilter1Setting(int)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("LPFilter1", m_lpFilter1Combo->currentText());
+    s.endGroup();
+}
+
+void SPCCDialog::saveLpFilter2Setting(int)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("LPFilter2", m_lpFilter2Combo->currentText());
+    s.endGroup();
+}
+
+void SPCCDialog::saveGradMethodSetting(const QString& v)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("GradMethod", v);
+    s.endGroup();
+}
+
+void SPCCDialog::saveSepThreshSetting(double v)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("SEPThreshold", v);
+    s.endGroup();
+}
+
+void SPCCDialog::saveFullMatrixSetting(bool v)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("FullMatrix", v);
+    s.endGroup();
+}
+
+void SPCCDialog::saveLinearModeSetting(bool v)
+{
+    QSettings s; s.beginGroup(kSettingsGroup);
+    s.setValue("linearMode", v);
+    s.endGroup();
+}
+
+// =============================================================================
+// Step 1: Star Fetching
+// =============================================================================
+
+/**
+ * @brief Initiate the star fetching workflow (Step 1).
+ *
+ * Validates that the active image has a valid WCS solution, then queries
+ * the Gaia DR3 catalog via CatalogClient. Upon receiving the catalog
+ * response (onCatalogReady), a background thread cross-matches detected
+ * sources with catalog stars and assigns Pickles SED templates.
+ */
+void SPCCDialog::onFetchStars()
+{
+    // Validate prerequisites
     if (!m_viewer || !m_viewer->getBuffer().isValid()) {
         QMessageBox::warning(this, tr("No Image"),
             tr("Please open and plate-solve an image before fetching stars."));
@@ -531,154 +637,167 @@ void SPCCDialog::onFetchStars() {
     setControlsEnabled(false);
     m_statusLabel->setText(tr("Querying star catalog (Gaia DR3)..."));
     m_progressBar->setValue(0);
-
-    // Ensure we start a fresh list
     m_starList.clear();
 
-    // The CatalogClient needs the center RA/Dec.
+    // Determine field center for the catalog query
     double center_ra, center_dec;
-    if (!WCSUtils::getFieldCenter(meta, m_viewer->getBuffer().width(), m_viewer->getBuffer().height(), center_ra, center_dec)) {
-        // Fallback to CRVAL
-        center_ra = meta.ra;
+    if (!WCSUtils::getFieldCenter(meta,
+                                  m_viewer->getBuffer().width(),
+                                  m_viewer->getBuffer().height(),
+                                  center_ra, center_dec)) {
+        center_ra  = meta.ra;
         center_dec = meta.dec;
     }
 
-    // Use fixed 1.0 deg radius for Gaia DR3 (consistent with PCC).
-    // This balances catalog completeness with VizieR server reliability.
+    // Fixed 1.0 degree search radius balances completeness with server load
     const double searchRadius = 1.0;
-
-    // Call the catalog client.
-    m_statusLabel->setText(tr("Querying star catalog (Gaia DR3)..."));
     m_catalog->queryGaiaDR3(center_ra, center_dec, searchRadius);
 }
 
-void SPCCDialog::onCatalogReady(const std::vector<CatalogStar>& catalogStars) {
+/**
+ * @brief Handle successful catalog query response.
+ *
+ * Launches a background thread to cross-match detected image sources with
+ * catalog entries and assign Pickles SED templates based on BP-RP colour
+ * or spectral type.
+ */
+void SPCCDialog::onCatalogReady(const std::vector<CatalogStar>& catalogStars)
+{
     if (!m_viewer || !m_viewer->getBuffer().isValid()) return;
 
     if (catalogStars.empty()) {
         m_statusLabel->setText(tr("No catalog stars returned."));
         setControlsEnabled(true);
-        QMessageBox::warning(this, tr("No Stars"), tr("No reference stars found in the catalog."));
+        QMessageBox::warning(this, tr("No Stars"),
+            tr("No reference stars found in the catalog."));
         return;
     }
 
-    m_statusLabel->setText(tr("Matching %1 catalog stars to image...").arg(catalogStars.size()));
+    m_statusLabel->setText(
+        tr("Matching %1 catalog stars to image...").arg(catalogStars.size()));
     m_progressBar->setValue(20);
 
-    const ImageBuffer bufCopy = m_viewer->getBuffer();
-    const SPCCDataStore& storeRef = m_store;
-    const QStringList allSEDs = SPCC::availableSEDs(storeRef);
-    const double sepThreshold = m_sepThreshSpin->value();
+    // Capture copies for the background thread
+    const ImageBuffer bufCopy        = m_viewer->getBuffer();
+    const SPCCDataStore& storeRef    = m_store;
+    const QStringList allSEDs        = SPCC::availableSEDs(storeRef);
+    const double sepThreshold        = m_sepThreshSpin->value();
 
     QFuture<std::vector<StarRecord>> future = QtConcurrent::run(
-        [bufCopy, catalogStars, allSEDs, sepThreshold]() -> std::vector<StarRecord>
+        [bufCopy, catalogStars, allSEDs, sepThreshold]()
+        -> std::vector<StarRecord>
     {
         std::vector<StarRecord> matchedStars;
 
-        // 1. Detect stars using the Green channel (or Mono) as a proxy for the centroid
+        // Detect sources using the Green channel (or Mono) for centroids
         StarDetector detector;
-        detector.setMaxStars(2000); // Plentiful detections
+        detector.setMaxStars(2000);
         detector.setThresholdSigma(sepThreshold);
-        
+
         int ch = (bufCopy.channels() >= 3) ? 1 : 0;
         std::vector<DetectedStar> detected = detector.detect(bufCopy, ch);
 
         const ImageBuffer::Metadata& meta = bufCopy.metadata();
-        // Tolerance around 15 arcseconds for cross-matching (WCS distortion tolerance).
+
+        // Cross-match tolerance: 15 arcseconds (accommodates WCS distortion)
         const double matchRadiusDeg = 15.0 / 3600.0;
 
-        // 2. Cross-match physical stars to catalog
         for (const DetectedStar& det : detected) {
             if (det.saturated) continue;
 
             double ra, dec;
-            if (!WCSUtils::pixelToWorld(meta, det.x, det.y, ra, dec)) continue;
+            if (!WCSUtils::pixelToWorld(meta, det.x, det.y, ra, dec))
+                continue;
 
+            // Find the nearest catalog star within the match radius
             const CatalogStar* bestMatch = nullptr;
             double bestDist = matchRadiusDeg;
 
             for (const CatalogStar& cat : catalogStars) {
                 if (std::abs(cat.dec - dec) > matchRadiusDeg) continue;
-                
+
                 double dRA = std::abs(cat.ra - ra);
                 if (dRA > 180.0) dRA = 360.0 - dRA;
-                
+
                 double dRA_sky = dRA * std::cos(dec * M_PI / 180.0);
                 if (dRA_sky > matchRadiusDeg) continue;
 
-                double dist = std::sqrt(dRA_sky * dRA_sky + (cat.dec - dec) * (cat.dec - dec));
+                double dist = std::sqrt(dRA_sky * dRA_sky +
+                                        (cat.dec - dec) * (cat.dec - dec));
                 if (dist < bestDist) {
-                    bestDist = dist;
+                    bestDist  = dist;
                     bestMatch = &cat;
                 }
             }
 
-            if (bestMatch) {
-                StarRecord sr;
-                sr.x_img = det.x;
-                sr.y_img = det.y;
-                sr.ra = bestMatch->ra;
-                sr.dec = bestMatch->dec;
-                sr.semi_a = (det.fwhm > 0) ? (det.fwhm * 1.5) : 3.0;
-                sr.gaia_bp_rp = bestMatch->bp_rp;
-                sr.gaia_gmag = bestMatch->magV > 0 ? bestMatch->magV : bestMatch->magB;
+            if (!bestMatch) continue;
 
-                // 3. Obtain a Pickles match for this star.
-                // We prefer continuous Gaia BP-RP for the interpolation model.
-                QString spClass;
-                if (std::isfinite(sr.gaia_bp_rp)) {
-                    // We already have the best color for interpolation. 
-                    // We still find a string for logging/diagnostics.
-                    spClass = SPCC::inferTypeFromBpRp(sr.gaia_bp_rp);
-                } else if (!sr.sp_type.isEmpty()) {
-                    spClass = sr.sp_type; 
-                    // Map granular SIMBAD type back to bp_rp so interpolation works!
-                    sr.gaia_bp_rp = SPCC::bpRpFromType(spClass);
-                } else if (bestMatch->teff > 0) {
-                    // Map Teff to bp_rp for interpolation
-                    if (bestMatch->teff > 30000)      sr.gaia_bp_rp = -0.4;
-                    else if (bestMatch->teff > 15000) sr.gaia_bp_rp = -0.15;
-                    else if (bestMatch->teff > 9000)  sr.gaia_bp_rp = 0.0;
-                    else if (bestMatch->teff > 7000)  sr.gaia_bp_rp = 0.3;
-                    else if (bestMatch->teff > 6000)  sr.gaia_bp_rp = 0.58;
-                    else if (bestMatch->teff > 5500)  sr.gaia_bp_rp = 0.65;
-                    else if (bestMatch->teff > 5000)  sr.gaia_bp_rp = 0.9;
-                    else if (bestMatch->teff > 4000)  sr.gaia_bp_rp = 1.3;
-                    else                             sr.gaia_bp_rp = 2.0;
+            // Build the StarRecord from the cross-match
+            StarRecord sr;
+            sr.x_img      = det.x;
+            sr.y_img      = det.y;
+            sr.ra         = bestMatch->ra;
+            sr.dec        = bestMatch->dec;
+            sr.semi_a     = (det.fwhm > 0) ? (det.fwhm * 1.5) : 3.0;
+            sr.gaia_bp_rp = bestMatch->bp_rp;
+            sr.gaia_gmag  = bestMatch->magV > 0 ? bestMatch->magV
+                                                 : bestMatch->magB;
 
-                    spClass = SPCC::inferTypeFromBpRp(sr.gaia_bp_rp);
-                }
-
-                if (!spClass.isEmpty()) {
-                    QStringList cands = SPCC::picklesMatchForSimbad(spClass, allSEDs);
-                    if (!cands.isEmpty()) {
-                        sr.pickles_match = cands.first();
-                    }
-                }
-                
-                matchedStars.push_back(sr);
+            // Determine the spectral class for Pickles SED assignment.
+            // Priority: Gaia BP-RP > existing sp_type > Teff estimate.
+            QString spClass;
+            if (std::isfinite(sr.gaia_bp_rp)) {
+                spClass = SPCC::inferTypeFromBpRp(sr.gaia_bp_rp);
+            } else if (!sr.sp_type.isEmpty()) {
+                spClass = sr.sp_type;
+                sr.gaia_bp_rp = SPCC::bpRpFromType(spClass);
+            } else if (bestMatch->teff > 0) {
+                // Approximate BP-RP from effective temperature
+                if      (bestMatch->teff > 30000) sr.gaia_bp_rp = -0.4;
+                else if (bestMatch->teff > 15000) sr.gaia_bp_rp = -0.15;
+                else if (bestMatch->teff >  9000) sr.gaia_bp_rp =  0.0;
+                else if (bestMatch->teff >  7000) sr.gaia_bp_rp =  0.3;
+                else if (bestMatch->teff >  6000) sr.gaia_bp_rp =  0.58;
+                else if (bestMatch->teff >  5500) sr.gaia_bp_rp =  0.65;
+                else if (bestMatch->teff >  5000) sr.gaia_bp_rp =  0.9;
+                else if (bestMatch->teff >  4000) sr.gaia_bp_rp =  1.3;
+                else                              sr.gaia_bp_rp =  2.0;
+                spClass = SPCC::inferTypeFromBpRp(sr.gaia_bp_rp);
             }
+
+            if (!spClass.isEmpty()) {
+                QStringList cands = SPCC::picklesMatchForSimbad(spClass, allSEDs);
+                if (!cands.isEmpty()) {
+                    sr.pickles_match = cands.first();
+                }
+            }
+
+            matchedStars.push_back(sr);
         }
+
         return matchedStars;
     });
 
     m_fetchWatcher->setFuture(future);
 }
 
-void SPCCDialog::onCatalogError(const QString& err) {
+void SPCCDialog::onCatalogError(const QString& err)
+{
     m_statusLabel->setText(tr("Catalog Error: %1").arg(err));
     setControlsEnabled(true);
     QMessageBox::warning(this, tr("Catalog Error"), err);
 }
 
-void SPCCDialog::onFetchStarsFinished() {
+void SPCCDialog::onFetchStarsFinished()
+{
     m_starList = m_fetchWatcher->result();
     setControlsEnabled(true);
 
-    const int n = (int)m_starList.size();
+    const int n = static_cast<int>(m_starList.size());
     int nMatched = 0;
-    for (const StarRecord& sr : m_starList)
+    for (const StarRecord& sr : m_starList) {
         if (!sr.pickles_match.isEmpty()) ++nMatched;
+    }
 
     m_statusLabel->setText(
         tr("Fetched %1 stars; %2 have Pickles SED matches.").arg(n).arg(nMatched));
@@ -686,18 +805,23 @@ void SPCCDialog::onFetchStarsFinished() {
 
     if (n == 0) {
         QMessageBox::warning(this, tr("No Stars Found"),
-            tr("No SIMBAD stars were found in the field.\n"
+            tr("No catalog stars were found in the field.\n"
                "Ensure the image has a valid plate solution."));
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// onRun  (Step 2)
-// Validates inputs and launches the background calibration.
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::onRun() {
+// =============================================================================
+// Step 2: Calibration
+// =============================================================================
+
+/**
+ * @brief Validate inputs and launch the calibration workflow (Step 2).
+ */
+void SPCCDialog::onRun()
+{
     if (!m_viewer || !m_viewer->getBuffer().isValid()) {
-        QMessageBox::warning(this, tr("No Image"), tr("No active image to calibrate."));
+        QMessageBox::warning(this, tr("No Image"),
+            tr("No active image to calibrate."));
         return;
     }
     if (!m_storeLoaded) {
@@ -710,12 +834,12 @@ void SPCCDialog::onRun() {
             tr("Select a white reference SED (e.g. G2V or A0V)."));
         return;
     }
-    if (m_rFilterCombo->currentText() == tr("(None)") &&
-        m_gFilterCombo->currentText() == tr("(None)") &&
-        m_bFilterCombo->currentText() == tr("(None)") &&
-        m_sensorCombo->currentText() == tr("(None)")) {
+    if (m_rFilterCombo->currentText()  == tr("(None)") &&
+        m_gFilterCombo->currentText()  == tr("(None)") &&
+        m_bFilterCombo->currentText()  == tr("(None)") &&
+        m_sensorCombo->currentText()   == tr("(None)")) {
         QMessageBox::warning(this, tr("Missing Input"),
-            tr("Select at least one of the R, G or B filter curves, or a Sensor curve with internal Bayer filters."));
+            tr("Select at least one R, G, or B filter curve, or a Sensor curve."));
         return;
     }
     if (m_starList.empty()) {
@@ -723,7 +847,6 @@ void SPCCDialog::onRun() {
             tr("Fetch stars (Step 1) before running calibration."));
         return;
     }
-
     if (m_viewer && m_viewer->getBuffer().isValid()) {
         const ImageBuffer::Metadata& currentMeta = m_viewer->getBuffer().metadata();
         if (!WCSUtils::hasValidWCS(currentMeta)) {
@@ -733,8 +856,9 @@ void SPCCDialog::onRun() {
         }
     }
 
-    // Take a fresh snapshot for Reset
+    // Snapshot for Reset before applying calibration
     m_originalBuffer = m_viewer->getBuffer();
+
     setControlsEnabled(false);
     m_statusLabel->setText(tr("Starting calibration..."));
     m_progressBar->setValue(0);
@@ -742,15 +866,15 @@ void SPCCDialog::onRun() {
     startCalibration();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// startCalibration
-// Gathers parameters and dispatches to SPCC::calibrateWithStarList() on a
-// background thread.
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::startCalibration() {
+/**
+ * @brief Dispatch calibration to SPCC::calibrateWithStarList() on a background thread.
+ */
+void SPCCDialog::startCalibration()
+{
     m_cancelFlag.store(false);
-    const ImageBuffer bufCopy = m_viewer->getBuffer();
-    const SPCCParams  p       = collectParams();
+
+    const ImageBuffer bufCopy              = m_viewer->getBuffer();
+    const SPCCParams p                     = collectParams();
     const std::vector<StarRecord> starsCopy = m_starList;
 
     QFuture<SPCCResult> future = QtConcurrent::run(
@@ -759,45 +883,44 @@ void SPCCDialog::startCalibration() {
                 return SPCC::calibrateWithStarList(bufCopy, p, starsCopy);
             } catch (const std::exception& e) {
                 SPCCResult r;
-                r.success = false;
+                r.success   = false;
                 r.error_msg = QString("SPCC exception: %1").arg(e.what());
                 return r;
             } catch (...) {
                 SPCCResult r;
-                r.success = false;
+                r.success   = false;
                 r.error_msg = "SPCC: unknown exception during calibration.";
                 return r;
             }
         });
+
     m_calibWatcher->setFuture(future);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// collectParams
-// Assembles an SPCCParams struct from the current dialog state.
-// ─────────────────────────────────────────────────────────────────────────────
-SPCCParams SPCCDialog::collectParams() const {
+/**
+ * @brief Assemble an SPCCParams struct from the current dialog state.
+ */
+SPCCParams SPCCDialog::collectParams() const
+{
     SPCCParams p;
-    p.dataPath     = m_dataPath;
-    p.whiteRef     = m_whiteRefCombo->currentText();
-    p.rFilter      = m_rFilterCombo->currentText();
-    p.gFilter      = m_gFilterCombo->currentText();
-    p.bFilter      = m_bFilterCombo->currentText();
-    p.sensor       = m_sensorCombo->currentText();
-    p.lpFilter1    = m_lpFilter1Combo->currentText();
-    p.lpFilter2    = m_lpFilter2Combo->currentText();
-    p.bgMethod     = m_bgMethodCombo->currentText();
-    p.sepThreshold = m_sepThreshSpin->value();
-    p.gaiaFallback = true;
-    p.useFullMatrix = m_fullMatrixCheck->isChecked();
-    p.linearMode   = m_linearModeCheck->isChecked();
-    p.runGradient  = m_runGradientCheck->isChecked();
+    p.dataPath       = m_dataPath;
+    p.whiteRef       = m_whiteRefCombo->currentText();
+    p.rFilter        = m_rFilterCombo->currentText();
+    p.gFilter        = m_gFilterCombo->currentText();
+    p.bFilter        = m_bFilterCombo->currentText();
+    p.sensor         = m_sensorCombo->currentText();
+    p.lpFilter1      = m_lpFilter1Combo->currentText();
+    p.lpFilter2      = m_lpFilter2Combo->currentText();
+    p.bgMethod       = m_bgMethodCombo->currentText();
+    p.sepThreshold   = m_sepThreshSpin->value();
+    p.gaiaFallback   = true;
+    p.useFullMatrix  = m_fullMatrixCheck->isChecked();
+    p.linearMode     = m_linearModeCheck->isChecked();
+    p.runGradient    = m_runGradientCheck->isChecked();
     p.gradientMethod = m_gradMethodCombo->currentText();
-    p.cancelFlag = const_cast<std::atomic<bool>*>(&m_cancelFlag);
+    p.cancelFlag     = const_cast<std::atomic<bool>*>(&m_cancelFlag);
 
-    // Progress callback: marshal updates to the UI thread via QMetaObject.
-    // The lambda captures 'this' by pointer; SPCCDialog outlives the worker
-    // because we cancel the watcher in cleanup().
+    // Marshal progress updates to the UI thread via QMetaObject
     SPCCDialog* self = const_cast<SPCCDialog*>(this);
     p.progressCallback = [self](int pct, const QString& msg) {
         QMetaObject::invokeMethod(self, [self, pct, msg]() {
@@ -805,13 +928,16 @@ SPCCParams SPCCDialog::collectParams() const {
             if (self->m_statusLabel) self->m_statusLabel->setText(msg);
         }, Qt::QueuedConnection);
     };
+
     return p;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// onCalibrationFinished
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::onCalibrationFinished() {
+// =============================================================================
+// Calibration Completion
+// =============================================================================
+
+void SPCCDialog::onCalibrationFinished()
+{
     setControlsEnabled(true);
     const SPCCResult r = m_calibWatcher->result();
 
@@ -822,14 +948,14 @@ void SPCCDialog::onCalibrationFinished() {
     }
 
     if (r.modifiedBuffer && m_viewer) {
-        // Prepare PCCResult for visualization tool
+        // Build a PCCResult structure for downstream visualization
         PCCResult pccRes;
-        pccRes.valid = true;
+        pccRes.valid    = true;
         pccRes.R_factor = r.scaleR;
         pccRes.G_factor = r.scaleG;
         pccRes.B_factor = r.scaleB;
-        
-        // Extract diagnostic data for scatter plots
+
+        // Extract diagnostic scatter plot data (inliers only)
         for (const auto& ds : r.diagnostics) {
             if (ds.is_inlier) {
                 pccRes.CatRG.push_back(ds.exp_RG);
@@ -838,30 +964,31 @@ void SPCCDialog::onCalibrationFinished() {
                 pccRes.ImgBG.push_back(ds.meas_BG);
             }
         }
-        
-        // Map SPCC linear coefficients to PCC slope/intercept for plotting
-        // SPCC model: a*x^2 + b*x + c  => slope=b, icept=c (ignoring quadratic for simple plot)
+
+        // Map SPCC polynomial coefficients to PCC slope/intercept fields.
+        // Model form: a*x^2 + b*x + c => slope=b, intercept=c
         pccRes.slopeRG = r.model.coeff_R[1];
         pccRes.iceptRG = r.model.coeff_R[2];
         pccRes.slopeBG = r.model.coeff_B[1];
         pccRes.iceptBG = r.model.coeff_B[2];
 
-        // New polynomial fields
         for (int i = 0; i < 3; ++i) {
             pccRes.polyRG[i] = r.model.coeff_R[i];
             pccRes.polyBG[i] = r.model.coeff_B[i];
         }
         pccRes.isQuadratic = (r.model.kind == MODEL_QUADRATIC);
 
-        // Store in metadata
+        // Attach calibration result to image metadata
         ImageBuffer::Metadata meta = r.modifiedBuffer->metadata();
         meta.pccResult = pccRes;
         r.modifiedBuffer->setMetadata(meta);
 
         m_viewer->pushUndo(tr("SPCC"));
         m_viewer->setBuffer(*r.modifiedBuffer, QString(), true);
+
         if (m_mainWindow) {
-            m_mainWindow->log(tr("SPCC applied."), MainWindow::Log_Success, true);
+            m_mainWindow->log(tr("SPCC applied."),
+                              MainWindow::Log_Success, true);
         }
     }
 
@@ -869,27 +996,30 @@ void SPCCDialog::onCalibrationFinished() {
     m_statusLabel->setText(tr("Calibration complete."));
     m_progressBar->setValue(100);
 
-    // Summary popup (mirrors Python QMessageBox.information at end of run_spcc)
+    // Display summary popup
     const QString modelName =
         (r.model.kind == MODEL_SLOPE_ONLY) ? "slope-only" :
         (r.model.kind == MODEL_AFFINE)     ? "affine"     : "quadratic";
+
     QMessageBox::information(this, tr("SPCC Complete"),
         tr("Calibration applied using %1 stars.\n"
            "Model: %2\n"
            "R scale @ x=1: %3\n"
            "B scale @ x=1: %4\n"
            "RMS residual: %5")
-        .arg(r.stars_used)
-        .arg(modelName)
-        .arg(r.scaleR, 0, 'f', 4)
-        .arg(r.scaleB, 0, 'f', 4)
-        .arg(r.residual, 0, 'f', 4));
+            .arg(r.stars_used)
+            .arg(modelName)
+            .arg(r.scaleR, 0, 'f', 4)
+            .arg(r.scaleB, 0, 'f', 4)
+            .arg(r.residual, 0, 'f', 4));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// onReset
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::onReset() {
+// =============================================================================
+// Reset / Cancel / Spectral Viewer
+// =============================================================================
+
+void SPCCDialog::onReset()
+{
     if (m_viewer && m_originalBuffer.isValid())
         m_viewer->setBuffer(m_originalBuffer, QString(), false);
 
@@ -902,10 +1032,8 @@ void SPCCDialog::onReset() {
     m_progressBar->setValue(0);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// onCancel
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::onCancel() {
+void SPCCDialog::onCancel()
+{
     m_cancelFlag.store(true);
     m_statusLabel->setText(tr("Cancelling..."));
     if (m_fetchWatcher && m_fetchWatcher->isRunning()) {
@@ -913,42 +1041,43 @@ void SPCCDialog::onCancel() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// onOpenSaspViewer
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::onOpenSaspViewer() {
-    // Placeholder: the SaspViewer window is an independent dialog that plots
-    // the SED * T_sys responses for the currently selected equipment.
-    // It is expected to be implemented elsewhere in the application and invoked
-    // from here.  For now, show the database path to the user.
+void SPCCDialog::onOpenSaspViewer()
+{
+    // Placeholder: SaspViewer is implemented elsewhere in the application.
+    // Display database summary for diagnostic purposes.
     QMessageBox::information(this, tr("Spectral Viewer"),
         tr("Spectral database path:\n%1\n\n"
-           "SEDs: %2   Filters: %3   Sensors: %4")
-        .arg(m_dataPath)
-        .arg(m_store.sed_list.size())
-        .arg(m_store.filter_list.size())
-        .arg(m_store.sensor_list.size()));
+           "SEDs: %2    Filters: %3    Sensors: %4")
+            .arg(m_dataPath)
+            .arg(m_store.sed_list.size())
+            .arg(m_store.filter_list.size())
+            .arg(m_store.sensor_list.size()));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// showResults
-// Populates the Results group from a completed SPCCResult.
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::showResults(const SPCCResult& r) {
+// =============================================================================
+// Results Display
+// =============================================================================
+
+void SPCCDialog::showResults(const SPCCResult& r)
+{
     m_starsLabel->setText(
-        tr("Matched stars: %1 (from %2 detected)").arg(r.stars_used).arg(r.stars_found));
+        tr("Matched stars: %1 (from %2 detected)")
+            .arg(r.stars_used).arg(r.stars_found));
     m_residualLabel->setText(
         tr("RMS residual: %1").arg(r.residual, 0, 'f', 4));
     m_scalesLabel->setText(
         tr("Scale factors (R, G, B): %1, %2, %3")
-        .arg(r.scaleR, 0, 'f', 4).arg(r.scaleG, 0, 'f', 4).arg(r.scaleB, 0, 'f', 4));
+            .arg(r.scaleR, 0, 'f', 4)
+            .arg(r.scaleG, 0, 'f', 4)
+            .arg(r.scaleB, 0, 'f', 4));
 
     const QString modelName =
         (r.model.kind == MODEL_SLOPE_ONLY) ? tr("slope-only") :
-        (r.model.kind == MODEL_AFFINE)     ? tr("affine")     : tr("quadratic");
+        (r.model.kind == MODEL_AFFINE)     ? tr("affine")     :
+                                             tr("quadratic");
     m_modelLabel->setText(tr("Model: %1").arg(modelName));
 
-    // Fill the 3x3 matrix table
+    // Fill the 3x3 correction matrix table
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
             auto* item = new QTableWidgetItem(
@@ -959,24 +1088,28 @@ void SPCCDialog::showResults(const SPCCResult& r) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// setControlsEnabled
-// ─────────────────────────────────────────────────────────────────────────────
-void SPCCDialog::setControlsEnabled(bool en) {
-    m_fetchStarsBtn ->setEnabled(en);
-    m_runBtn        ->setEnabled(en);
-    m_resetBtn      ->setEnabled(en);
-    m_whiteRefCombo ->setEnabled(en);
-    m_rFilterCombo  ->setEnabled(en);
-    m_gFilterCombo  ->setEnabled(en);
-    m_bFilterCombo  ->setEnabled(en);
-    m_sensorCombo   ->setEnabled(en);
+// =============================================================================
+// Control State Management
+// =============================================================================
+
+void SPCCDialog::setControlsEnabled(bool en)
+{
+    m_fetchStarsBtn->setEnabled(en);
+    m_runBtn->setEnabled(en);
+    m_resetBtn->setEnabled(en);
+    m_whiteRefCombo->setEnabled(en);
+    m_rFilterCombo->setEnabled(en);
+    m_gFilterCombo->setEnabled(en);
+    m_bFilterCombo->setEnabled(en);
+    m_sensorCombo->setEnabled(en);
     m_lpFilter1Combo->setEnabled(en);
     m_lpFilter2Combo->setEnabled(en);
-    m_sepThreshSpin ->setEnabled(en);
-    m_bgMethodCombo ->setEnabled(en);
+    m_sepThreshSpin->setEnabled(en);
+    m_bgMethodCombo->setEnabled(en);
     m_gradMethodCombo->setEnabled(en);
     m_fullMatrixCheck->setEnabled(en);
     m_runGradientCheck->setEnabled(en);
-    if (m_cancelBtn) m_cancelBtn->setEnabled(!en);
+
+    if (m_cancelBtn)
+        m_cancelBtn->setEnabled(!en);
 }

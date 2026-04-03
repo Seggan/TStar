@@ -1,280 +1,450 @@
 # Building TStar from Source
 
-This guide provides detailed instructions for building TStar on Windows using MinGW.
+This document provides complete instructions for building TStar on all supported platforms.
+Read the section that applies to your operating system.
 
-## Prerequisites
+---
 
-### Required Software
+## Table of Contents
 
-| Software | Version | Download |
-|----------|---------|----------|
-| Qt6 | 6.5 or later | [qt.io](https://www.qt.io/download-qt-installer) |
-| CMake | 3.16 or later | [cmake.org](https://cmake.org/download/) |
-| MinGW-w64 | GCC 11+ | Included with Qt installation |
+- [Windows (MinGW)](#building-on-windows)
+  - [Prerequisites](#prerequisites-windows)
+  - [Qt Installation](#qt-installation)
+  - [Dependency Setup](#dependency-setup-windows)
+  - [Python Environment](#python-environment-windows)
+  - [Build Steps](#build-steps-windows)
+  - [Deployment and Distribution](#deployment--distribution-windows)
+  - [Troubleshooting](#troubleshooting-windows)
+- [macOS](#building-on-macos)
+  - [Prerequisites](#prerequisites-macos)
+  - [Dependency Setup](#dependency-setup-macos)
+  - [Python Environment](#python-environment-macos)
+  - [Build Steps](#build-steps-macos)
+  - [Output](#output-macos)
+  - [Troubleshooting](#troubleshooting-macos)
+- [CMake Options](#cmake-options)
+- [Verified Configurations](#verified-configurations)
+
+---
+
+## Building on Windows
+
+### Prerequisites (Windows)
+
+The following tools are required to build TStar on Windows. All version constraints have been
+verified against the configurations listed in the [Verified Configurations](#verified-configurations)
+table at the end of this document.
+
+| Software | Minimum Version | Notes |
+|---|---|---|
+| Qt6 | 6.5 | Download via [Qt Online Installer](https://www.qt.io/download-qt-installer). Select the MinGW 64-bit component. |
+| CMake | 3.16 | Bundled with Qt installation, or download from [cmake.org](https://cmake.org/download/). |
+| MinGW-w64 | GCC 11 | Bundled with Qt installation. Select MinGW 13.x.x 64-bit from Developer Tools. |
 | Git | Any recent | [git-scm.com](https://git-scm.com/download/win) |
+| Ninja | Any recent | Recommended generator. Bundled with Qt installation. |
 
 ### Qt Installation
 
-1. Download the Qt Online Installer
-2. Select **Qt 6.x.x** → **MinGW 64-bit**
+1. Download and run the [Qt Online Installer](https://www.qt.io/download-qt-installer).
+2. Under the Qt version selector, expand **Qt 6.x.x** and select **MinGW 64-bit**.
 3. Under **Developer and Designer Tools**, select:
-   - CMake (if not already installed)
-   - MinGW 13.x.x 64-bit (or latest available)
-4. Note your installation path (e.g., `C:\Qt\6.7.0\mingw_64`)
+   - CMake (if not already installed system-wide)
+   - MinGW 13.x.x 64-bit (or the latest available version)
+4. Make note of the installation path (for example, `C:\Qt\6.7.0\mingw_64`). This path is
+   passed to CMake as `CMAKE_PREFIX_PATH`.
 
-## Dependencies Setup
+---
 
-TStar requires the following libraries. Place them in a `deps/` folder in the project root:
+### Dependency Setup (Windows)
+
+TStar requires several external libraries. Place them in a `deps/` directory at the project root.
+The CMake build system resolves all paths from that location automatically.
+
+**Required directory layout:**
 
 ```
 TStar/
-├── deps/
-│   ├── cfitsio/
-│   │   ├── include/
-│   │   │   └── fitsio.h
-│   │   └── lib/
-│   │       └── libcfitsio.a
-│   ├── opencv/
-│   │   ├── include/
-│   │   └── lib/
-│   ├── gsl/
-│   │   ├── include/
-│   │   └── lib/
-│   ├── libraw/ (Optional - for RAW image support)
-│   │   ├── libraw/
-│   │   │   └── libraw.h
-│   │   ├── lib/
-│   │   └── bin/
-│   ├── lz4/ (Optional - for XISF LZ4 compression)
-│   │   ├── include/
-│   │   └── lib/
-│   └── zstd/ (Optional - for XISF Zstd compression)
-│       ├── include/
-│       └── lib/
-├── src/
-├── CMakeLists.txt
-└── ...
+|-- deps/
+|   |-- cfitsio/
+|   |   |-- include/
+|   |   |   `-- fitsio.h
+|   |   `-- lib/
+|   |       `-- libcfitsio.a
+|   |-- opencv/
+|   |   |-- include/
+|   |   `-- lib/
+|   |-- gsl/
+|   |   |-- include/
+|   |   `-- lib/
+|   |-- lcms2/              (vendored, already in the repository)
+|   |   |-- include/
+|   |   `-- src/
+|   |-- libraw/             (optional - RAW image support)
+|   |   |-- libraw/
+|   |   |   `-- libraw.h
+|   |   |-- lib/
+|   |   `-- bin/
+|   |-- lz4/               (optional - XISF LZ4 compression)
+|   |   |-- include/
+|   |   `-- static/
+|   `-- zstd/              (optional - XISF Zstd compression)
+|       |-- include/
+|       `-- static/
+|-- src/
+|-- CMakeLists.txt
+`-- ...
 ```
 
-### CFITSIO
+#### CFITSIO
 
-**Option 1: Pre-built (Recommended)**
-- Download pre-built MinGW binaries from [CFITSIO releases](https://heasarc.gsfc.nasa.gov/fitsio/)
-- Extract to `deps/cfitsio/`
+**Option A: Pre-built binaries (recommended)**
 
-**Option 2: Build from Source**
+Download pre-built MinGW binaries from the [CFITSIO releases page](https://heasarc.gsfc.nasa.gov/fitsio/)
+and extract the archive contents into `deps/cfitsio/`.
+
+**Option B: Build from source**
+
+Open an MSYS2/MinGW terminal and run:
+
 ```bash
-# In MSYS2/MinGW terminal
 wget https://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio-4.3.0.tar.gz
 tar -xzf cfitsio-4.3.0.tar.gz
 cd cfitsio-4.3.0
-./configure --prefix=/path/to/deps/cfitsio
+./configure --prefix=/path/to/TStar/deps/cfitsio
 make && make install
 ```
 
-### OpenCV
+#### OpenCV
 
-- Download OpenCV for Windows from [opencv.org](https://opencv.org/releases/)
-- Extract and copy `include/` and MinGW-compatible `lib/` to `deps/opencv/`
+1. Download the Windows package from [opencv.org/releases](https://opencv.org/releases/).
+2. Extract the archive and copy the `include/` directory and the MinGW-compatible libraries from `lib/`
+   into `deps/opencv/`.
 
-### GSL (GNU Scientific Library)
+#### GSL (GNU Scientific Library)
 
-- Pre-built MinGW binaries available from [MSYS2](https://www.msys2.org/)
-- Or build from source following [GSL documentation](https://www.gnu.org/software/gsl/)
+The simplest approach on Windows is to install GSL via MSYS2:
 
-### LibRaw (Optional - RAW Image Support)
-
-**Recommended for full camera RAW support (CR2, NEF, ARW, etc.)**
-
-- Download pre-built Windows binaries from [LibRaw website](https://www.libraw.org/download)
-- Extract and place in `deps/libraw/`
-- Requires `libraw.dll` in `deps/libraw/bin/`
-- CMake will automatically detect and enable LibRaw support with `HAVE_LIBRAW` flag
-
-### LZ4 and Zstd (Optional - XISF Compression)
-
-**Optional dependencies for compressed XISF format support**
-
-- **LZ4**: Fast compression for XISF files
-  - Download from [LZ4 releases](https://github.com/lz4/lz4/releases)
-  - Extract to `deps/lz4/`
-  
-- **Zstd**: High-ratio compression for XISF files
-  - Download from [Zstd releases](https://github.com/facebook/zstd/releases)
-  - Extract to `deps/zstd/`
-
-CMake will automatically detect these libraries and enable compression features.
-
-### Python Environment Discovery
-
-TStar uses an intelligent fallback chain to locate Python for AI tools and bridge scripts:
-
-**macOS & Linux:**
-1. Bundled Python in app bundle: `$APP_DIR/../Resources/python_venv/bin/python3`
-2. Development Python: `$APP_DIR/../../deps/python_venv/bin/python3`
-3. System Python in PATH: `python3` (found via `QStandardPaths::findExecutable()`)
-4. Fallback: `python3` (direct invocation)
-
-**Windows:**
-1. Bundled embeddable Python: `$APP_DIR/python/python.exe`
-2. Development Python: `$APP_DIR/../deps/python/python.exe`
-3. System Python in PATH: `python3` (found via `QStandardPaths::findExecutable()`)
-4. Fallback: `python3` (direct invocation)
-
-This approach ensures compatibility across development, distribution, and heterogeneous system configurations.
-
-## Building
-
-### Command Line (Recommended)
-
-1. Open a terminal with Qt environment (e.g., Qt 6.x.x MinGW 64-bit).
-2. Use the "All-in-One" build script:
 ```bash
-src/build_all.bat
-```
-Alternatively, follow the manual steps (Ninja generator recommended):
-```bash
-mkdir build && cd build
-cmake -G "Ninja" -DCMAKE_PREFIX_PATH="C:/Qt/6.10.1/mingw_64" -DCMAKE_BUILD_TYPE=Release ..
-cmake --build . --config Release -j4
+pacman -S mingw-w64-x86_64-gsl
 ```
 
-## Deployment & Distribution
+Then copy the `include/` and `lib/` directories from your MSYS2 installation into `deps/gsl/`.
 
-To create a standalone, portable folder for distribution:
+Alternatively, follow the [GSL build documentation](https://www.gnu.org/software/gsl/).
+
+#### LibRaw (Optional -- RAW Image Support)
+
+LibRaw enables native loading of camera RAW files (CR2, NEF, ARW, DNG, and many others).
+
+1. Download pre-built Windows binaries from the [LibRaw download page](https://www.libraw.org/download).
+2. Extract and place the contents into `deps/libraw/`.
+3. Ensure `libraw.dll` is present in `deps/libraw/bin/`.
+
+When found, CMake automatically defines the `HAVE_LIBRAW` preprocessor flag.
+
+#### LZ4 (Optional -- XISF Compression)
+
+Enables fast LZ4 compression when reading and writing XISF files.
+
+1. Download a release from [github.com/lz4/lz4/releases](https://github.com/lz4/lz4/releases).
+2. Extract into `deps/lz4/`. The static library must be at `deps/lz4/static/liblz4_static.lib`.
+
+When found, CMake automatically defines the `HAVE_LZ4` preprocessor flag.
+
+#### Zstd (Optional -- XISF Compression)
+
+Enables high-ratio Zstandard compression when reading and writing XISF files.
+
+1. Download a release from [github.com/facebook/zstd/releases](https://github.com/facebook/zstd/releases).
+2. Extract into `deps/zstd/`. The static library must be at `deps/zstd/static/libzstd_static.lib`.
+
+When found, CMake automatically defines the `HAVE_ZSTD` preprocessor flag.
+
+---
+
+### Python Environment (Windows)
+
+TStar bundles a Python embeddable distribution for its AI tools and bridge scripts. The setup script
+downloads, extracts, and configures the environment automatically.
+
+Run the following from the project root in a PowerShell terminal:
+
+```powershell
+.\setup_python_dist.ps1
+```
+
+This script performs the following steps:
+1. Downloads the Python 3.11 embeddable zip package.
+2. Extracts it into `deps/python/`.
+3. Patches the `._pth` file to enable `site-packages`.
+4. Installs `pip` using the official `get-pip.py` bootstrap.
+5. Installs all required runtime packages:
+   - `numpy`, `scipy`, `tifffile`, `imagecodecs`, `astropy`, `onnxruntime-directml`
+
+> **Note on GPU support:** `onnxruntime-directml` is used instead of plain `onnxruntime` so that
+> AMD, Intel, and NVIDIA GPUs are all supported on Windows via the DirectML backend.
+
+#### Python Discovery at Runtime
+
+The C++ application searches for the Python executable in the following order at startup:
+
+| Priority | Path | Context |
+|---|---|---|
+| 1 | `./python/python.exe` | Distribution / production build |
+| 2 | `../deps/python/python.exe` | Development build environment |
+| 3 | System `python3` (via PATH) | Fallback |
+| 4 | Literal `python3` | Last resort invocation |
+
+---
+
+### Build Steps (Windows)
+
+1. Open a terminal with the Qt environment active. If you installed Qt via the installer, use the
+   **Qt 6.x.x MinGW 64-bit** shortcut from the Start Menu.
+
+2. Clone the repository (if you have not already):
+
+   ```bash
+   git clone <repository-url>
+   cd TStar
+   ```
+
+3. Set up the Python environment (required for AI tools):
+
+   ```powershell
+   .\setup_python_dist.ps1
+   ```
+
+4. **Option A: All-in-one build script (recommended)**
+
+   ```bash
+   src/build_all.bat
+   ```
+
+5. **Option B: Manual CMake build (Ninja generator recommended)**
+
+   ```bash
+   mkdir build && cd build
+   cmake -G "Ninja" ^
+       -DCMAKE_PREFIX_PATH="C:/Qt/6.7.0/mingw_64" ^
+       -DCMAKE_BUILD_TYPE=Release ^
+       ..
+   cmake --build . --config Release -j4
+   ```
+
+   Replace `C:/Qt/6.7.0/mingw_64` with the actual path to your Qt installation.
+
+---
+
+### Deployment & Distribution (Windows)
+
+To produce a standalone, portable distribution folder:
 
 ```bash
 src/package_dist.bat
 ```
 
-**This script automates several critical tasks:**
-1. Verifies the `TStar.exe` build.
-2. Checks for (and runs) `setup_python_dist.ps1` to ensure the Python environment is ready.
-3. Copies all Qt DLLs and plugins.
+This script automates the following steps:
+
+1. Verifies that `TStar.exe` has been built successfully.
+2. Runs `setup_python_dist.ps1` if the Python environment is not already present.
+3. Copies all Qt DLLs and plugins using `windeployqt`.
 4. Copies MinGW, GSL, and OpenCV runtime libraries.
-5. **Copies optional dependency libraries** (LibRaw, LZ4, Zstd) if they exist.
-6. **Bundles the Python environment** into the `dist/TStar/python` subfolder.
-7. **Centralizes scripts** from `src/scripts` into `dist/TStar/scripts`.
-8. Generates a `README.txt` for the end user.
+5. Copies optional dependency libraries (LibRaw DLL, LZ4, Zstd) if they are present.
+6. Bundles the Python environment into `dist/TStar/python/`.
+7. Copies all scripts from `src/scripts/` into `dist/TStar/scripts/`.
+8. Generates an end-user `README.txt` in the distribution root.
 
-The resulting folder in `dist/TStar` is completely standalone and can be moved to any machine without pre-installed dependencies.
+The resulting `dist/TStar/` directory is completely self-contained and can be archived or moved
+to any Windows x64 machine without requiring any pre-installed dependencies.
 
-## Troubleshooting
+> **Note:** The legacy `deploy.bat` script is preserved for backward compatibility but is no longer
+> the recommended method. Use `package_dist.bat` instead.
 
-### Python-related issues
-- If the AI tools fail, ensure `deps/python/python.exe` (Windows) or `deps/python_venv` (macOS) exists.
-- If you need to re-install the environment, simply delete the python folder and run `src/package_dist.bat` (Windows) or `setup_python_macos.sh` (macOS) again.
-- C++ code looks for Python in:
-  1. `./python/python.exe` (Distribution/Production)
-  2. `../deps/python/python.exe` (Development/Build environment)
-  3. System `python` (Fallback)
+---
 
-### Missing DLLs at runtime
-If you built manually with CMake, you MUST run `src/package_dist.bat` (Windows) or `src/package_macos.sh` (macOS) to collect the dependencies. The old `deploy.bat` is preserved for legacy use but `package_dist.bat` is now the preferred method as it handles Python bundling.
+### Troubleshooting (Windows)
 
-From your MinGW `bin/` directory to the executable folder.
+**AI tools fail to start or report Python errors:**
+- Verify that `deps/python/python.exe` exists. If not, run `setup_python_dist.ps1` again.
+- To reset the environment, delete the `deps/python/` directory and re-run the setup script.
 
-## Build Options
+**Missing DLLs at runtime:**
+- If you built manually with CMake without using `package_dist.bat`, the runtime DLLs will not be
+  present next to the executable. Always run `src/package_dist.bat` before distributing or testing
+  outside the Qt terminal environment.
 
-| CMake Option | Default | Description |
-|--------------|---------|-------------|
-| `CMAKE_BUILD_TYPE` | Debug | Set to `Release` for optimized builds |
-| `CMAKE_PREFIX_PATH` | — | Path to Qt installation |
-| `ENABLE_LTO` | OFF | Enable Link-Time Optimization (Release only) |
+**CMake cannot find Qt:**
+- Ensure `CMAKE_PREFIX_PATH` points to the correct Qt MinGW installation directory, for example
+  `C:/Qt/6.7.0/mingw_64`.
 
-## Verified Configurations
-
-| OS | Compiler | Qt Version | Status |
-|----|----------|------------|--------|
-| Windows 11 | MinGW 13.1 | Qt 6.7.x / 6.8.x / 6.10.x | ✅ Tested |
-| Windows 10 | MinGW 11.2 | Qt 6.5.0 | ✅ Tested |
-| macOS 11+ (Big Sur) - Apple Silicon | Apple Clang | Qt 6.5 - 6.10 | ✅ Tested |
-| macOS 11+ (Big Sur) - Intel | Apple Clang | Qt 6.5 - 6.10 | ✅ Tested |
+**AutoMoc failures on Windows/MinGW:**
+- The build system disables `CMAKE_AUTOMOC_COMPILER_PREDEFS` for Windows to work around a known
+  MinGW pre-processing issue. This is handled automatically; no manual intervention is required.
 
 ---
 
 ## Building on macOS
 
-### Prerequisites
+### Prerequisites (macOS)
 
 | Software | Installation |
-|----------|-------------|
+|---|---|
 | Xcode Command Line Tools | `xcode-select --install` |
 | Homebrew | See [brew.sh](https://brew.sh) |
 | Qt6 | `brew install qt@6` |
 | CMake | `brew install cmake` |
-| Ninja (optional) | `brew install ninja` |
+| Ninja (recommended) | `brew install ninja` |
 
-### Install Dependencies
+**Architecture notes:**
+- **Apple Silicon (M1/M2/M3/M4):** Homebrew installs to `/opt/homebrew`. The build system detects
+  this automatically.
+- **Intel Macs:** Homebrew installs to `/usr/local`. The build system detects this automatically.
+- Universal binaries are not currently produced; the build targets the native architecture of the
+  build machine.
+
+---
+
+### Dependency Setup (macOS)
+
+All required and optional dependencies are available through Homebrew:
 
 ```bash
 # Required dependencies
 brew install qt@6 cmake ninja pkg-config
 brew install opencv gsl cfitsio libomp md4c
 
-# Optional - for XISF compression (Recommended)
+# Optional: XISF compression support (recommended)
 brew install lz4 zstd
 
-# Optional - for RAW image support (CR2, NEF, ARW, etc.)
+# Optional: Camera RAW support (CR2, NEF, ARW, DNG, etc.)
 brew install libraw
 
 # Python for AI tools
 brew install python@3.11
 ```
 
-**Note on Architecture:**
-- **Apple Silicon (M1/M2/M3/M4)**: Homebrew installs to `/opt/homebrew` (arm64)
-- **Intel Macs**: Homebrew installs to `/usr/local` (x86_64)
-- The build scripts automatically detect your architecture and use the correct paths
+CMake automatically detects all Homebrew-installed libraries by querying `brew --prefix <package>`
+at configure time. No manual path configuration is required.
 
-### Build Steps
+---
+
+### Python Environment (macOS)
+
+Run the setup script once before building to create the Python virtual environment:
 
 ```bash
-# 1. Setup Python environment
+chmod +x setup_python_macos.sh
+./setup_python_macos.sh
+```
+
+This script:
+1. Searches for a compatible Python interpreter (3.11 or 3.12) in PATH, Homebrew, and standard locations.
+2. Creates a virtual environment at `deps/python_venv/` using `--copies` so it is portable when
+   embedded in the app bundle (symlinked executables break when copied).
+3. Upgrades pip, setuptools, and wheel.
+4. Installs all required packages: `numpy`, `scipy`, `tifffile`, `imagecodecs`, `astropy`, `onnxruntime`.
+5. Verifies each package is importable.
+
+> **Why Python 3.11/3.12?** Python 3.13 and later are avoided because binary wheel availability
+> for `numpy < 2.0` and `onnxruntime < 1.18` is limited on the newest interpreter versions,
+> which would require building from source.
+
+#### Python Discovery at Runtime (macOS)
+
+| Priority | Path | Context |
+|---|---|---|
+| 1 | `$APP_DIR/../Resources/python_venv/bin/python3` | Distribution app bundle |
+| 2 | `$APP_DIR/../../deps/python_venv/bin/python3` | Development build |
+| 3 | System `python3` (via `QStandardPaths::findExecutable()`) | Fallback |
+| 4 | Literal `python3` | Last resort invocation |
+
+---
+
+### Build Steps (macOS)
+
+```bash
+# Step 1: Set up the Python environment (one-time setup)
 chmod +x setup_python_macos.sh
 ./setup_python_macos.sh
 
-# 2. Build the application
+# Step 2: Build the application
 chmod +x src/build_macos.sh
 ./src/build_macos.sh
 
-# Note: STEP 6 of build_macos.sh creates a symlink from src/scripts to the app bundle
-# This allows development changes to scripts without rebuilding
-
-# 3. Create distribution package
+# Step 3: Create a distribution-ready app bundle
 chmod +x src/package_macos.sh
 ./src/package_macos.sh
 
-# 4. Create DMG installer (optional)
-# TIP: brew install create-dmg for styled DMGs
+# Step 4 (optional): Create a DMG installer
+# Install create-dmg for styled installers: brew install create-dmg
 chmod +x src/build_installer_macos.sh
 ./src/build_installer_macos.sh
 ```
 
-### Output
+> **Development note:** Step 6 of `build_macos.sh` creates a symlink from `src/scripts/` into the
+> app bundle's `Resources/scripts/` directory. This allows you to edit and test scripts without
+> rebuilding the application.
 
-- **App Bundle**: `build/TStar.app`
-- **Distribution**: `dist/TStar.app`
-- **DMG Installer**: `installer_output/TStar_Setup_X.X.X.dmg`
+---
 
-### Notes
+### Output (macOS)
 
-- **Apple Silicon (M1/M2/M3/M4)**: Fully supported with automatic architecture detection
-- **Intel Macs**: Fully supported with automatic architecture detection
-- **Universal Binaries**: The build system automatically creates architecture-specific builds
-- **Homebrew Paths**: Build scripts automatically detect and use the correct Homebrew prefix:
-  - Apple Silicon: `/opt/homebrew`
-  - Intel: `/usr/local`
-- **Gatekeeper**: On first run, right-click the app and select "Open" to bypass unsigned app warning
-- **Notarization**: For distribution, consider notarizing with `xcrun notarytool`
+| Artifact | Location |
+|---|---|
+| App Bundle (development) | `build/TStar.app` |
+| App Bundle (distribution) | `dist/TStar.app` |
+| DMG Installer | `installer_output/TStar_Setup_X.X.X.dmg` |
 
-### Optional Features
+---
 
-The macOS build supports several optional features that are automatically enabled when dependencies are found:
+### Troubleshooting (macOS)
 
-- **LibRaw**: RAW camera image support (CR2, NEF, ARW, DNG, etc.) - `brew install libraw`
-- **LZ4**: Fast XISF compression - `brew install lz4`
-- **Zstd**: High-ratio XISF compression - `brew install zstd`
+**Gatekeeper blocks the application on first launch:**
+- Right-click the app and select **Open** to bypass the unsigned app warning.
+- For public distribution, consider notarizing with `xcrun notarytool`.
 
-These libraries are automatically detected by CMake and bundled into the app during packaging.
+**AI tools fail to start or report Python errors:**
+- Verify that `deps/python_venv/bin/python3` exists.
+- To reset, delete `deps/python_venv/` and re-run `setup_python_macos.sh`.
 
+**Missing dylib errors at launch:**
+- Ensure you ran `src/package_macos.sh` after building. This script copies all Homebrew dylibs
+  into `TStar.app/Contents/Frameworks/` and fixes the RPATH entries.
+
+**Checking the build architecture:**
+```bash
+lipo -info build/TStar.app/Contents/MacOS/TStar
+# or
+file build/TStar.app/Contents/MacOS/TStar
+```
+
+**libomp not found:**
+```bash
+brew install libomp
+```
+
+**OpenCV configure error (dnn/OpenVINO):**
+- This is expected. The CMake configuration explicitly excludes the `dnn` module to avoid the
+  OpenVINO dependency. No action is required.
+
+---
+
+## CMake Options
+
+| Option | Default | Description |
+|---|---|---|
+| `CMAKE_BUILD_TYPE` | `Debug` | Set to `Release` for an optimized build. |
+| `CMAKE_PREFIX_PATH` | _(empty)_ | Path to the Qt installation root (required on Windows). |
+| `ENABLE_LTO` | `OFF` | Enable Link-Time Optimization. Applies to Release builds only. Increases link time significantly but reduces binary size and may improve runtime performance. |
+
+---
+
+## Verified Configurations
+
+| Operating System | Compiler | Qt Version | Status |
+|---|---|---|---|
+| Windows 11 | MinGW 13.1 (GCC) | 6.7.x, 6.8.x, 6.10.x | Tested |
+| Windows 10 | MinGW 11.2 (GCC) | 6.5.0 | Tested |
+| macOS 11+ (Apple Silicon) | Apple Clang | 6.5 through 6.10 | Tested |
+| macOS 11+ (Intel) | Apple Clang | 6.5 through 6.10 | Tested |

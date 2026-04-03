@@ -1,100 +1,119 @@
-/*
- * StarDetector
- *
- * Pipeline
- *   1. Gaussian blur (σ = KERNEL_SIZE = 2.0)
- *   2. Sigma-clipped background stats → threshold = bg + σ * 5 * bgnoise
- *   3. Local max search in (2r+1)² box with tie-breaking
- *   4. Neighbourhood density check (mono: ≥3, colour: ≥8)
- *   5. Sub-pixel centre from 1st-derivative zero crossing
- *   6. 2nd-derivative analysis → width estimates Sr, Sc
- *   7. Box radius  R = clamp(ceil(s_factor * max(Sr,Sc)), r, MAX_BOX_RADIUS)
- *   8. Duplicate removal within matchradius = max(1, R * MAX_RADIUS_RATIO_DUP)
- *   9. Per-candidate PSF fit (Gaussian or Moffat) via PsfFitter
- *  10. Rejection criteria (FWHM, roundness, RMSE, Moffat β)
- *  11. Sort by magnitude
- */
 #ifndef STARDETECTOR_H
 #define STARDETECTOR_H
 
+// =============================================================================
+// StarDetector.h
+//
+// Multi-stage star detection pipeline:
+//
+//   1.  Gaussian blur (sigma = KERNEL_SIZE = 2.0)
+//   2.  Sigma-clipped background statistics -> threshold = bg + sigma * 5 * bgnoise
+//   3.  Local maximum search in (2r+1)^2 box with tie-breaking
+//   4.  Neighbourhood density check (mono: >= 3, colour: >= 8)
+//   5.  Sub-pixel centroid from 1st-derivative zero crossing
+//   6.  2nd-derivative width estimates (Sr, Sc) for box sizing
+//   7.  Box radius R = clamp(ceil(s_factor * max(Sr, Sc)), r, MAX_BOX_RADIUS)
+//   8.  Duplicate removal within match_radius = max(1, R * 0.2)
+//   9.  Per-candidate PSF fit (Gaussian or Moffat) via PsfFitter
+//  10.  Rejection criteria (FWHM, roundness, RMSE, Moffat beta)
+//  11.  Sort by flux (descending)
+// =============================================================================
+
 #include "../ImageBuffer.h"
 #include "PsfFitter.h"
+
 #include <vector>
 #include <memory>
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DetectedStar — result of StarDetector::detect()
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// DetectedStar - Output record for a single detected star
+// =============================================================================
+
 struct DetectedStar {
-    double x;           // sub-pixel centroid X (image coords, 0-based)
-    double y;           // sub-pixel centroid Y
-    double flux;        // integrated flux above background
-    double peak;        // peak value (smoothed)
-    double background;  // local background level
-    float  fwhm;        // FWHM major axis (pixels), 0 if PSF fit not performed
-    float  fwhmx;       // PSF FWHM along X (pixels)
-    float  fwhmy;       // PSF FWHM along Y (pixels)
-    float  angle;       // PSF rotation angle (degrees)
-    float  rmse;        // PSF fit RMSE
-    float  beta;        // Moffat β (-1 for Gaussian)
-    bool   saturated;   // true if star has saturated pixels
-    int    R;           // box half-size used for PSF fit
-    std::shared_ptr<PsfStar> psf; // PSF fit result (may be null)
+    double x;           // Sub-pixel centroid X (image coordinates, 0-based)
+    double y;           // Sub-pixel centroid Y
+    double flux;        // Integrated flux above background (linear)
+    double peak;        // Peak pixel value (from smoothed image)
+    double background;  // Local background level
+
+    float fwhm;         // FWHM of the major axis (pixels)
+    float fwhmx;        // PSF FWHM along X (pixels)
+    float fwhmy;        // PSF FWHM along Y (pixels)
+    float angle;        // PSF rotation angle (degrees)
+    float rmse;         // PSF fit RMS residual
+    float beta;         // Moffat beta parameter (-1 for Gaussian)
+
+    bool  saturated;    // True if the star contains saturated pixels
+    int   R;            // Box half-radius used for PSF fitting
+
+    std::shared_ptr<PsfStar> psf; // Full PSF fit result (may be null)
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StarFinderParams — algorithm tuning knobs
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// StarFinderParams - Algorithm tuning parameters
+// =============================================================================
+
 struct StarFinderParams {
-    double      sigma          = 1.0;            // detection threshold multiplier
-    double      roundness      = 0.5;            // minimum fwhmy/fwhmx
-    double      maxRoundness   = 1.5;            // maximum fwhmy/fwhmx
-    double      minBeta        = 1.5;            // minimum Moffat β
-    int         radius         = 3;              // local max search half-size
-    bool        relaxChecks    = false;          // allow RMSE_TOO_LARGE stars
-    PsfProfile  profile        = PsfProfile::Gaussian;
-    int         convergence    = 1;              // passed to PsfFitter::fit()
-    double      minAmplitude   = 0.0;            // 0 = disabled
-    double      maxAmplitude   = 0.0;            // 0 = disabled
+    double     sigma         = 1.0;   // Detection threshold multiplier
+    double     roundness     = 0.5;   // Minimum acceptable fwhmy / fwhmx ratio
+    double     maxRoundness  = 1.5;   // Maximum acceptable fwhmy / fwhmx ratio
+    double     minBeta       = 1.5;   // Minimum Moffat beta (Moffat profile only)
+    int        radius        = 3;     // Local maximum search half-size (pixels)
+    bool       relaxChecks   = false; // If true, allow stars that fail RMSE criterion
+    PsfProfile profile       = PsfProfile::Gaussian;
+    int        convergence   = 1;     // PSF solver iteration scaling factor
+    double     minAmplitude  = 0.0;   // Minimum PSF amplitude (0 = disabled)
+    double     maxAmplitude  = 0.0;   // Maximum PSF amplitude (0 = disabled)
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StarDetector
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// StarDetector - Multi-stage star detection and PSF fitting engine
+// =============================================================================
+
 class StarDetector {
 public:
     StarDetector();
     ~StarDetector();
 
-    // ── Configuration helpers (keep old API) ──
-    void setThresholdSigma(float sigma)  { m_params.sigma = sigma; }
-    void setMinFWHM(float fwhm)          { m_minFWHM = fwhm; }
-    void setMaxStars(int max)            { m_maxStars = max; }
-    void setParams(const StarFinderParams& p) { m_params = p; }
-    const StarFinderParams& params() const    { return m_params; }
+    // --- Configuration ---
 
-    // ── Main entry point ──
+    void setThresholdSigma(float sigma)         { m_params.sigma = sigma; }
+    void setMinFWHM(float fwhm)                 { m_minFWHM = fwhm; }
+    void setMaxStars(int max)                   { m_maxStars = max; }
+    void setParams(const StarFinderParams& p)   { m_params = p; }
+    const StarFinderParams& params() const      { return m_params; }
+
+    // --- Detection entry points ---
+
+    // Detect stars in a single channel of an ImageBuffer.
     std::vector<DetectedStar> detect(const ImageBuffer& image, int channel = 0);
-    std::vector<DetectedStar> detectRaw(const float* raw, int w, int h, int ch, int channel = 0);
 
-    // Separable Gaussian blur (σ = KERNEL_SIZE = 2.0)
+    // Detect stars from a raw float pixel buffer (row-major, interleaved channels).
+    std::vector<DetectedStar> detectRaw(const float* raw, int w, int h,
+                                        int ch, int channel = 0);
+
+    // Separable 2-D Gaussian blur (applied to a single channel).
     static void gaussianBlur(const float* src, float* dst,
                              int w, int h, int ch, int channel, float sigma);
 
 private:
     StarFinderParams m_params;
-    float  m_minFWHM  = 0.5f;
-    int    m_maxStars = 2000;
+    float m_minFWHM  = 0.5f;
+    int   m_maxStars = 2000;
 
-    // Background statistics (sigma-clipped)
+    // --- Background statistics (sigma-clipped) ---
+
     struct BgStats {
         double median  = 0.0;
-        double bgnoise = 0.0;  // robust noise estimate (1.4826 * MAD of residuals)
+        double bgnoise = 0.0; // Robust noise estimate (row-difference method or MAD)
         double max     = 0.0;
     };
-    BgStats computeBackground(const float* data, int w, int h, int ch, int channel) const;
 
-    // Rejection criteria
+    BgStats computeBackground(const float* data, int w, int h,
+                              int ch, int channel) const;
+
+    // --- Star rejection criteria ---
+
     enum class RejectReason {
         OK = 0,
         FwhmTooLarge,

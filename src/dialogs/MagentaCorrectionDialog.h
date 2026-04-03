@@ -1,35 +1,48 @@
 #ifndef MAGENTACORRECTIONDIALOG_H
 #define MAGENTACORRECTIONDIALOG_H
 
+// =============================================================================
+// MagentaCorrectionDialog.h
+// Dialog for adjusting magenta color correction parameters (blue channel
+// modulation amount, luminance threshold, and optional star-mask restriction).
+// =============================================================================
+
 #include "DialogBase.h"
+
 #include <QCheckBox>
 #include <QSlider>
 #include <QDoubleSpinBox>
 #include <QPointer>
 
+class ImageViewer;
+
 class MagentaCorrectionDialog : public DialogBase {
     Q_OBJECT
+
 public:
     explicit MagentaCorrectionDialog(QWidget* parent = nullptr);
     ~MagentaCorrectionDialog();
 
-    float getAmount() const;
-    float getThreshold() const;
-    bool isWithStarMask() const;
+    // Retrieve the current parameter values.
+    float getAmount()       const;
+    float getThreshold()    const;
+    bool  isWithStarMask()  const;
 
-    void setViewer(class ImageViewer* v);
+    // Associate with a viewer for potential preview integration.
+    void setViewer(ImageViewer* v);
 
 signals:
+    // Emitted when the user clicks Apply.
     void apply();
 
 private:
-    QPointer<class ImageViewer> m_viewer;
+    QPointer<ImageViewer> m_viewer;
 
-    QSlider* m_amountSlider;
-    QDoubleSpinBox* m_amountSpin;
-    QSlider* m_threshSlider;
-    QDoubleSpinBox* m_threshSpin;
-    QCheckBox* m_starMaskCheck;
+    QSlider*        m_amountSlider  = nullptr;
+    QDoubleSpinBox* m_amountSpin    = nullptr;
+    QSlider*        m_threshSlider  = nullptr;
+    QDoubleSpinBox* m_threshSpin    = nullptr;
+    QCheckBox*      m_starMaskCheck = nullptr;
 };
 
 #endif // MAGENTACORRECTIONDIALOG_H

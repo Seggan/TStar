@@ -1,23 +1,43 @@
 @echo off
 setlocal enabledelayedexpansion
+REM =============================================================================
+REM build_installer.bat
+REM
+REM End-to-end installer builder for TStar on Windows.
+REM Performs the following steps:
+REM   0.  Verify prerequisites (Inno Setup, changelog, LICENSE)
+REM   0.5 Convert icon and wizard images if conversion scripts exist
+REM   1.  Clean previous installer output
+REM   2.  Build the application via build_all.bat
+REM   3.  Create the distribution package via package_dist.bat
+REM   4.  Verify distribution contents
+REM   5.  Compile the installer with Inno Setup
+REM   6.  Verify the output installer file
+REM =============================================================================
 
 echo ===========================================
 echo  TStar Installer Builder
 echo ===========================================
 echo.
 
-REM Move to project root (parent directory of this script)
+REM Resolve project root (parent directory of this script)
 pushd "%~dp0.."
 
-REM --- Read version from changelog.txt ---
+REM ---------------------------------------------------------------------------
+REM Read version from changelog.txt
+REM ---------------------------------------------------------------------------
+
 call src\windows_utils.bat :GetVersion
 echo [INFO] Building version: %VERSION%
 echo.
 
-REM --- STEP 0: Verify Prerequisites ---
+REM ---------------------------------------------------------------------------
+REM STEP 0: Verify prerequisites
+REM ---------------------------------------------------------------------------
+
 echo [STEP 0] Verifying prerequisites...
 
-REM Check if Inno Setup is installed
+REM Locate Inno Setup compiler
 call :FindInnoSetup
 if "!ISCC!"=="" (
     echo [ERROR] Inno Setup 6 not found!
@@ -30,7 +50,7 @@ if "!ISCC!"=="" (
     echo   - Inno Setup 6: OK at !ISCC!
 )
 
-REM Check changelog.txt exists
+REM Verify changelog.txt
 call :VerifyFile "changelog.txt" "changelog.txt"
 if errorlevel 1 (
     pause
@@ -38,7 +58,7 @@ if errorlevel 1 (
 )
 echo   - Inno Setup: OK
 
-REM Check if installer.iss exists (in src)
+REM Verify installer script
 if not exist "src\installer.iss" (
     echo [ERROR] src\installer.iss not found!
     pause
@@ -46,7 +66,7 @@ if not exist "src\installer.iss" (
 )
 echo   - installer.iss: OK
 
-REM Check if LICENSE exists
+REM Verify license file
 if not exist "LICENSE" (
     echo [ERROR] LICENSE file not found!
     pause
@@ -55,13 +75,16 @@ if not exist "LICENSE" (
 echo   - LICENSE: OK
 echo.
 
-REM --- STEP 0.5: Prepare Assets ---
+REM ---------------------------------------------------------------------------
+REM STEP 0.5: Prepare visual assets (icon + wizard images)
+REM ---------------------------------------------------------------------------
+
 echo [STEP 0.5] Preparing assets...
 if exist "tools\convert_icon.py" (
     python tools\convert_icon.py
     call :VerifyFile "src\images\Logo.ico" "Icon conversion"
     if errorlevel 0 echo   - Icon converted: OK
-    
+
     if exist "tools\convert_wizard_images.py" (
         python tools\convert_wizard_images.py
         echo   - Wizard images converted to BMP
@@ -69,14 +92,20 @@ if exist "tools\convert_icon.py" (
 )
 echo.
 
-REM --- STEP 1: Clean Previous Installer Output ---
+REM ---------------------------------------------------------------------------
+REM STEP 1: Clean previous installer output
+REM ---------------------------------------------------------------------------
+
 echo [STEP 1] Cleaning previous installer output...
 call :SafeRmDir "installer_output"
 call :EnsureDir "installer_output"
 echo   - Created fresh installer_output folder
 echo.
 
-REM --- STEP 2: Build the Application ---
+REM ---------------------------------------------------------------------------
+REM STEP 2: Build the application
+REM ---------------------------------------------------------------------------
+
 echo [STEP 2] Building the application...
 call src\build_all.bat --silent
 if %errorlevel% neq 0 (
@@ -87,7 +116,10 @@ if %errorlevel% neq 0 (
 echo   - Build: OK
 echo.
 
-REM --- STEP 3: Create Distribution Package ---
+REM ---------------------------------------------------------------------------
+REM STEP 3: Create distribution package
+REM ---------------------------------------------------------------------------
+
 echo [STEP 3] Creating distribution package...
 call src\package_dist.bat --silent
 if %errorlevel% neq 0 (
@@ -96,7 +128,6 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM Verify distribution was created correctly
 call :VerifyFile "dist\TStar\TStar.exe" "Distribution TStar.exe"
 if errorlevel 1 (
     echo [ERROR] Distribution incomplete!
@@ -106,7 +137,10 @@ if errorlevel 1 (
 echo   - Distribution package: OK
 echo.
 
-REM --- STEP 4: Verify Distribution Contents ---
+REM ---------------------------------------------------------------------------
+REM STEP 4: Verify distribution contents
+REM ---------------------------------------------------------------------------
+
 echo [STEP 4] Verifying distribution contents...
 set "DIST_DIR=dist\TStar"
 set "REQUIRED_FILES=TStar.exe Qt6Core.dll Qt6Gui.dll Qt6Widgets.dll python\python.exe scripts\graxpert_bridge.py"
@@ -119,9 +153,9 @@ for %%f in (%REQUIRED_FILES%) do (
     )
 )
 
-if not "!MISS_COUNT!"=="0" goto VerificationFailed
+if not "!MISS_COUNT!"=="0" goto :VerificationFailed
 echo   - Verification: OK
-goto Step5
+goto :Step5
 
 :VerificationFailed
 echo [ERROR] Distribution incomplete.
@@ -129,18 +163,21 @@ if "%SILENT_MODE%"=="0" pause
 exit /b 1
 
 :Step5
-REM Count total files in distribution
+REM Count total files in the distribution directory
 set "FILE_COUNT=0"
 for /r "%DIST_DIR%" %%f in (*) do set /a FILE_COUNT+=1
 echo   - Distribution contains %FILE_COUNT% files
 echo   - Required files: OK
 echo.
 
-REM --- STEP 5: Create Installer ---
+REM ---------------------------------------------------------------------------
+REM STEP 5: Create installer with Inno Setup
+REM ---------------------------------------------------------------------------
+
 echo [STEP 5] Creating installer with Inno Setup...
 echo   - Compiler: !ISCC!
-echo   - Script: src\installer.iss
-echo   - Version: %VERSION%
+echo   - Script:   src\installer.iss
+echo   - Version:  %VERSION%
 echo.
 
 "!ISCC!" /DMyAppVersion="%VERSION%" src\installer.iss
@@ -153,7 +190,10 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-REM --- STEP 6: Verify Installer Created ---
+REM ---------------------------------------------------------------------------
+REM STEP 6: Verify installer output
+REM ---------------------------------------------------------------------------
+
 echo [STEP 6] Verifying installer...
 set "INSTALLER_NAME=TStar_Setup_%VERSION%.exe"
 set "INSTALLER_PATH=installer_output\%INSTALLER_NAME%"
@@ -165,12 +205,17 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Get installer size
+REM Compute approximate size in megabytes
 for %%A in ("%INSTALLER_PATH%") do set "INSTALLER_SIZE=%%~zA"
 set /a INSTALLER_SIZE_MB=%INSTALLER_SIZE% / 1048576
+
 echo   - Installer created: %INSTALLER_NAME%
 echo   - Size: ~%INSTALLER_SIZE_MB% MB
 echo.
+
+REM ---------------------------------------------------------------------------
+REM Summary
+REM ---------------------------------------------------------------------------
 
 echo ===========================================
 echo  SUCCESS! Installer Build Complete
@@ -180,7 +225,7 @@ echo  Output File:
 echo    %INSTALLER_PATH%
 echo.
 echo  Version: %VERSION%
-echo  Size: ~%INSTALLER_SIZE_MB% MB
+echo  Size:    ~%INSTALLER_SIZE_MB% MB
 echo.
 echo  Next steps:
 echo    1. Test the installer on a clean machine
@@ -189,6 +234,10 @@ echo.
 echo ===========================================
 pause
 exit /b 0
+
+REM ---------------------------------------------------------------------------
+REM Local wrapper functions (delegate to shared utilities)
+REM ---------------------------------------------------------------------------
 
 :GetVersion
     call src\windows_utils.bat :GetVersion

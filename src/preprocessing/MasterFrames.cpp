@@ -1,28 +1,52 @@
 /**
  * @file MasterFrames.cpp
- * @brief Implementation of master calibration frame management
- * 
+ * @brief Implementation of master calibration frame management.
+ *
+ * Covers loading / unloading of master frames, computation of per-frame
+ * statistics, creation of master bias / dark / flat via integrated
+ * stacking, and dimensional / channel compatibility validation.
+ *
  * Copyright (C) 2024-2026 TStar Team
  */
 
 #include "MasterFrames.h"
 #include "Preprocessing.h"
 #include "../io/FitsWrapper.h"
+#include "../io/FitsLoader.h"
 #include "../stacking/StackingEngine.h"
 #include "../stacking/StackingSequence.h"
 #include "../stacking/Statistics.h"
-#include "../io/FitsLoader.h"
+
 #include <QDateTime>
 #include <QDir>
 
+#include <cstring>
+
+// ============================================================================
+//  Anonymous-Namespace Helper
+// ============================================================================
+
 namespace {
 
+/**
+ * @brief Pre-calibrate a set of source files (e.g. subtract bias from darks)
+ *        and write the calibrated versions to a working directory.
+ *
+ * @param sourceFiles       List of raw sub-frame paths.
+ * @param params            Preprocessing parameters to apply.
+ * @param workingDirectory  Temporary directory for calibrated outputs.
+ * @param calibratedFiles   [out] Populated with the paths of calibrated files.
+ * @param progress          Optional progress callback.
+ * @param stageLabel        Human-readable label for progress messages.
+ * @return true if all files were calibrated successfully.
+ */
 bool calibrateFramesForMaster(const QStringList& sourceFiles,
                               const Preprocessing::PreprocessParams& params,
                               const QString& workingDirectory,
                               QStringList& calibratedFiles,
                               Preprocessing::ProgressCallback progress,
-                              const QString& stageLabel) {
+                              const QString& stageLabel)
+{
     QDir dir(workingDirectory);
     if (!dir.exists() && !dir.mkpath(".")) {
         return false;
@@ -32,14 +56,18 @@ bool calibrateFramesForMaster(const QStringList& sourceFiles,
     engine.setParams(params);
 
     calibratedFiles.clear();
+
     for (int i = 0; i < sourceFiles.size(); ++i) {
         if (progress) {
-            progress(QObject::tr("%1 %2/%3...").arg(stageLabel).arg(i + 1).arg(sourceFiles.size()),
+            progress(QObject::tr("%1 %2/%3...")
+                         .arg(stageLabel)
+                         .arg(i + 1)
+                         .arg(sourceFiles.size()),
                      static_cast<double>(i) / std::max(1LL, static_cast<long long>(sourceFiles.size())));
         }
 
-        const QFileInfo fileInfo(sourceFiles[i]);
         const QString outPath = dir.filePath(QString("cal_%1.fit").arg(i, 4, 10, QChar('0')));
+
         if (!engine.preprocessFile(sourceFiles[i], outPath)) {
             calibratedFiles.clear();
             return false;
@@ -55,287 +83,295 @@ bool calibrateFramesForMaster(const QStringList& sourceFiles,
     return !calibratedFiles.isEmpty();
 }
 
-} // namespace
+} // anonymous namespace
+
+// ============================================================================
+//  Preprocessing::MasterFrames Implementation
+// ============================================================================
 
 namespace Preprocessing {
 
-//=============================================================================
-// LOADING
-//=============================================================================
+// ----------------------------------------------------------------------------
+//  Loading and Access
+// ----------------------------------------------------------------------------
 
-bool MasterFrames::load(MasterType type, const QString& path) {
+bool MasterFrames::load(MasterType type, const QString& path)
+{
     if (path.isEmpty()) {
         return false;
     }
-    
-    int idx = typeIndex(type);
-    
-    // Create new master data
+
+    const int idx = typeIndex(type);
+
     MasterData data;
     data.buffer = std::make_unique<ImageBuffer>();
-    data.path = path;
-    
-    // Load the file
+    data.path   = path;
+
     if (!Stacking::FitsIO::read(path, *data.buffer)) {
         return false;
     }
-    
-    // Store and compute stats
+
     m_masters[idx] = std::move(data);
     computeStats(type);
-    
+
     return true;
 }
 
-bool MasterFrames::isLoaded(MasterType type) const {
-    int idx = typeIndex(type);
+bool MasterFrames::isLoaded(MasterType type) const
+{
+    const int idx = typeIndex(type);
     auto it = m_masters.find(idx);
-    return it != m_masters.end() && it->second.buffer && it->second.buffer->isValid();
+    return (it != m_masters.end()) && it->second.buffer && it->second.buffer->isValid();
 }
 
-const ImageBuffer* MasterFrames::get(MasterType type) const {
-    int idx = typeIndex(type);
+const ImageBuffer* MasterFrames::get(MasterType type) const
+{
+    const int idx = typeIndex(type);
     auto it = m_masters.find(idx);
-    if (it != m_masters.end()) {
-        return it->second.buffer.get();
-    }
-    return nullptr;
+    return (it != m_masters.end()) ? it->second.buffer.get() : nullptr;
 }
 
-ImageBuffer* MasterFrames::get(MasterType type) {
-    int idx = typeIndex(type);
+ImageBuffer* MasterFrames::get(MasterType type)
+{
+    const int idx = typeIndex(type);
     auto it = m_masters.find(idx);
-    if (it != m_masters.end()) {
-        return it->second.buffer.get();
-    }
-    return nullptr;
+    return (it != m_masters.end()) ? it->second.buffer.get() : nullptr;
 }
 
-const MasterStats& MasterFrames::stats(MasterType type) const {
+const MasterStats& MasterFrames::stats(MasterType type) const
+{
     static MasterStats empty;
-    int idx = typeIndex(type);
+    const int idx = typeIndex(type);
     auto it = m_masters.find(idx);
-    if (it != m_masters.end()) {
-        return it->second.stats;
-    }
-    return empty;
+    return (it != m_masters.end()) ? it->second.stats : empty;
 }
 
-void MasterFrames::unload(MasterType type) {
-    int idx = typeIndex(type);
-    m_masters.erase(idx);
+void MasterFrames::unload(MasterType type)
+{
+    m_masters.erase(typeIndex(type));
 }
 
-void MasterFrames::clear() {
+void MasterFrames::clear()
+{
     m_masters.clear();
 }
 
-//=============================================================================
-// STATISTICS
-//=============================================================================
+// ----------------------------------------------------------------------------
+//  Statistics
+// ----------------------------------------------------------------------------
 
-void MasterFrames::computeStats(MasterType type) {
-    int idx = typeIndex(type);
+void MasterFrames::computeStats(MasterType type)
+{
+    const int idx = typeIndex(type);
     auto it = m_masters.find(idx);
     if (it == m_masters.end() || !it->second.buffer) {
         return;
     }
-    
-    ImageBuffer* buf = it->second.buffer.get();
+
+    ImageBuffer* buf   = it->second.buffer.get();
     MasterStats& stats = it->second.stats;
-    
-    stats.width = buf->width();
-    stats.height = buf->height();
+
+    stats.width    = buf->width();
+    stats.height   = buf->height();
     stats.channels = buf->channels();
-    
-    size_t size = buf->data().size();
-    
-    // Compute statistics on first channel
-    // Use statistics from stacking module
+
+    const size_t size = buf->data().size();
+
+    // Min / max.
     float minVal, maxVal;
     Stacking::Statistics::minMax(buf->data().data(), size, minVal, maxVal);
     std::memcpy(&stats.min, &minVal, sizeof(float));
     std::memcpy(&stats.max, &maxVal, sizeof(float));
-    
+
+    // Median (destructive -- operates on a copy).
     std::vector<float> copy(buf->data().begin(), buf->data().begin() + size);
     stats.median = Stacking::Statistics::quickMedian(copy);
-    stats.mean = Stacking::Statistics::mean(buf->data().data(), size);
+
+    // Mean and standard deviation.
+    stats.mean  = Stacking::Statistics::mean(buf->data().data(), size);
     stats.sigma = Stacking::Statistics::stdDev(buf->data().data(), size, &stats.mean);
-    
-    // Get metadata from buffer
-    const auto& meta = buf->metadata();
-    stats.exposure = meta.exposure;
-    stats.temperature = meta.ccdTemp;
+
+    // Exposure and temperature from file metadata.
+    const auto& meta   = buf->metadata();
+    stats.exposure     = meta.exposure;
+    stats.temperature  = meta.ccdTemp;
 }
 
-//=============================================================================
-// CREATION
-//=============================================================================
+// ----------------------------------------------------------------------------
+//  Master Frame Creation -- Common Stacking Configuration
+// ----------------------------------------------------------------------------
 
-bool MasterFrames::createMasterBias(
-    const QStringList& files,
-    const QString& output,
-    Stacking::Method method,
-    Stacking::Rejection rejection,
-    float sigmaLow,
-    float sigmaHigh,
-    ProgressCallback progress)
+/**
+ * @brief Populate a StackingArgs with settings common to all master-frame
+ *        creation workflows (bias, dark, flat).
+ */
+static void configureStackingArgs(Stacking::StackingArgs& args,
+                                  Stacking::ImageSequence* sequence,
+                                  const QString& output,
+                                  Stacking::Method method,
+                                  Stacking::Rejection rejection,
+                                  float sigmaLow,
+                                  float sigmaHigh,
+                                  Stacking::NormalizationMethod norm,
+                                  ProgressCallback progress)
+{
+    args.sequence          = sequence;
+    args.progressCallback  = progress;
+    args.params.outputFilename    = output;
+    args.params.force32Bit        = true;
+
+    args.params.method     = method;
+    args.params.rejection  = rejection;
+    args.params.sigmaLow   = sigmaLow;
+    args.params.sigmaHigh  = sigmaHigh;
+
+    // Calibration frames must never be normalised (except flats),
+    // weighted, reframed, upscaled, or drizzled.
+    args.params.normalization      = norm;
+    args.params.weighting          = Stacking::WeightingType::None;
+    args.params.maximizeFraming    = false;
+    args.params.upscaleAtStacking  = false;
+    args.params.drizzle            = false;
+}
+
+// ----------------------------------------------------------------------------
+//  Master Bias Creation
+// ----------------------------------------------------------------------------
+
+bool MasterFrames::createMasterBias(const QStringList& files,
+                                    const QString& output,
+                                    Stacking::Method method,
+                                    Stacking::Rejection rejection,
+                                    float sigmaLow,
+                                    float sigmaHigh,
+                                    ProgressCallback progress)
 {
     if (files.isEmpty()) {
         return false;
     }
-    
-    // Create stacking sequence
+
     Stacking::ImageSequence sequence;
     if (!sequence.loadFromFiles(files, progress)) {
         return false;
     }
-    
-    // Configure stacking
+
     Stacking::StackingArgs args;
-    args.sequence = &sequence;
-    args.progressCallback = progress;
-    args.params.outputFilename = output;
-    args.params.force32Bit = true;
-    
-    // Pass User Parameters
-    args.params.method = method;
-    args.params.rejection = rejection;
-    args.params.sigmaLow = sigmaLow;
-    args.params.sigmaHigh = sigmaHigh;
-    
-    // Enforce calibration-specific rules
-    args.params.normalization = Stacking::NormalizationMethod::None;
-    args.params.weighting = Stacking::WeightingType::None;
-    args.params.maximizeFraming = false;
-    args.params.upscaleAtStacking = false;
-    args.params.drizzle = false;
-    
+    configureStackingArgs(args, &sequence, output, method, rejection,
+                          sigmaLow, sigmaHigh,
+                          Stacking::NormalizationMethod::None, progress);
+
     Stacking::StackingEngine engine;
-    auto result = engine.execute(args);
-    
-    if (result != Stacking::StackResult::OK) {
+    if (engine.execute(args) != Stacking::StackResult::OK) {
         return false;
     }
-    
-    // Save result
+
     return Stacking::FitsIO::write(output, args.result, 32);
 }
 
-bool MasterFrames::createMasterDark(
-    const QStringList& files,
-    const QString& output,
-    const QString& masterBias,
-    Stacking::Method method,
-    Stacking::Rejection rejection,
-    float sigmaLow,
-    float sigmaHigh,
-    ProgressCallback progress)
+// ----------------------------------------------------------------------------
+//  Master Dark Creation
+// ----------------------------------------------------------------------------
+
+bool MasterFrames::createMasterDark(const QStringList& files,
+                                    const QString& output,
+                                    const QString& masterBias,
+                                    Stacking::Method method,
+                                    Stacking::Rejection rejection,
+                                    float sigmaLow,
+                                    float sigmaHigh,
+                                    ProgressCallback progress)
 {
     if (files.isEmpty()) {
         return false;
     }
 
+    // Optionally pre-calibrate dark sub-frames with a master bias.
     QStringList stackInputFiles = files;
-    QString tempDirPath;
+    QString     tempDirPath;
+
     if (!masterBias.isEmpty()) {
         tempDirPath = QDir::temp().filePath(
             QString("tstar_masterdark_%1").arg(QDateTime::currentMSecsSinceEpoch()));
 
         PreprocessParams params;
         params.masterBias = masterBias;
-        params.useBias = true;
-        params.useDark = false;
-        params.useFlat = false;
+        params.useBias    = true;
+        params.useDark    = false;
+        params.useFlat    = false;
         params.outputFloat = true;
 
-        if (!calibrateFramesForMaster(files, params, tempDirPath, stackInputFiles, progress,
-                                      QObject::tr("Calibrating dark frame"))) {
+        if (!calibrateFramesForMaster(files, params, tempDirPath,
+                                      stackInputFiles, progress,
+                                      QObject::tr("Calibrating dark frame")))
+        {
             QDir(tempDirPath).removeRecursively();
             return false;
         }
     }
 
-    // Get stats for the first file to preserve exposure time
+    // Preserve single-frame metadata (exposure, temperature) before stacking,
+    // because the stacking engine sums exposure times.
     double firstExposure = 0.0;
-    double firstTemp = 0.0;
+    double firstTemp     = 0.0;
     {
         ImageBuffer firstBuf;
         if (FitsLoader::loadMetadata(files.first(), firstBuf)) {
             firstExposure = firstBuf.metadata().exposure;
-            firstTemp = firstBuf.metadata().ccdTemp;
+            firstTemp     = firstBuf.metadata().ccdTemp;
         }
     }
-    
-    // Create stacking sequence
+
+    // Stack the (optionally calibrated) dark sub-frames.
     Stacking::ImageSequence sequence;
     if (!sequence.loadFromFiles(stackInputFiles, progress)) {
-        if (!tempDirPath.isEmpty()) {
-            QDir(tempDirPath).removeRecursively();
-        }
+        if (!tempDirPath.isEmpty()) QDir(tempDirPath).removeRecursively();
         return false;
     }
-    
-    // Configure stacking
+
     Stacking::StackingArgs args;
-    args.sequence = &sequence;
-    args.progressCallback = progress;
-    args.params.outputFilename = output;
-    args.params.force32Bit = true;
-    
-    // Pass User Parameters
-    args.params.method = method;
-    args.params.rejection = rejection;
-    args.params.sigmaLow = sigmaLow;
-    args.params.sigmaHigh = sigmaHigh;
-    
-    // Enforce calibration-specific rules
-    args.params.normalization = Stacking::NormalizationMethod::None;
-    args.params.weighting = Stacking::WeightingType::None;
-    args.params.maximizeFraming = false;
-    args.params.upscaleAtStacking = false;
-    args.params.drizzle = false;
-    
+    configureStackingArgs(args, &sequence, output, method, rejection,
+                          sigmaLow, sigmaHigh,
+                          Stacking::NormalizationMethod::None, progress);
+
     Stacking::StackingEngine engine;
-    auto result = engine.execute(args);
-    
-    if (result != Stacking::StackResult::OK) {
-        if (!tempDirPath.isEmpty()) {
-            QDir(tempDirPath).removeRecursively();
-        }
+    if (engine.execute(args) != Stacking::StackResult::OK) {
+        if (!tempDirPath.isEmpty()) QDir(tempDirPath).removeRecursively();
         return false;
     }
 
     if (!tempDirPath.isEmpty()) {
         QDir(tempDirPath).removeRecursively();
     }
-    
-    // StackingEngine sums exposure time, but for a Master Dark we want the 
-    // exposure of a single frame.
+
+    // Restore single-frame exposure and temperature metadata.
     args.result.metadata().exposure = firstExposure;
-    args.result.metadata().ccdTemp = firstTemp;
-    
-    // Save result
+    args.result.metadata().ccdTemp  = firstTemp;
+
     return Stacking::FitsIO::write(output, args.result, 32);
 }
 
-bool MasterFrames::createMasterFlat(
-    const QStringList& files,
-    const QString& output,
-    const QString& masterBias,
-    const QString& masterDark,
-    Stacking::Method method,
-    Stacking::Rejection rejection,
-    float sigmaLow,
-    float sigmaHigh,
-    ProgressCallback progress)
+// ----------------------------------------------------------------------------
+//  Master Flat Creation
+// ----------------------------------------------------------------------------
+
+bool MasterFrames::createMasterFlat(const QStringList& files,
+                                    const QString& output,
+                                    const QString& masterBias,
+                                    const QString& masterDark,
+                                    Stacking::Method method,
+                                    Stacking::Rejection rejection,
+                                    float sigmaLow,
+                                    float sigmaHigh,
+                                    ProgressCallback progress)
 {
     if (files.isEmpty()) {
         return false;
     }
 
+    // Optionally pre-calibrate flat sub-frames with bias and/or dark.
     QStringList stackInputFiles = files;
-    QString tempDirPath;
+    QString     tempDirPath;
+
     if (!masterBias.isEmpty() || !masterDark.isEmpty()) {
         tempDirPath = QDir::temp().filePath(
             QString("tstar_masterflat_%1").arg(QDateTime::currentMSecsSinceEpoch()));
@@ -343,66 +379,46 @@ bool MasterFrames::createMasterFlat(
         PreprocessParams params;
         params.masterBias = masterBias;
         params.masterDark = masterDark;
-        params.useBias = !masterBias.isEmpty();
-        params.useDark = !masterDark.isEmpty();
-        params.useFlat = false;
+        params.useBias    = !masterBias.isEmpty();
+        params.useDark    = !masterDark.isEmpty();
+        params.useFlat    = false;
         params.outputFloat = true;
 
-        if (!calibrateFramesForMaster(files, params, tempDirPath, stackInputFiles, progress,
-                                      QObject::tr("Calibrating flat frame"))) {
+        if (!calibrateFramesForMaster(files, params, tempDirPath,
+                                      stackInputFiles, progress,
+                                      QObject::tr("Calibrating flat frame")))
+        {
             QDir(tempDirPath).removeRecursively();
             return false;
         }
     }
-    
-    // Get stats for the first file to preserve metadata
+
+    // Preserve single-frame metadata.
     double firstExposure = 0.0;
-    double firstTemp = 0.0;
+    double firstTemp     = 0.0;
     {
         ImageBuffer firstBuf;
         if (FitsLoader::loadMetadata(files.first(), firstBuf)) {
             firstExposure = firstBuf.metadata().exposure;
-            firstTemp = firstBuf.metadata().ccdTemp;
+            firstTemp     = firstBuf.metadata().ccdTemp;
         }
     }
-    
-    // Create stacking sequence
+
+    // Stack with multiplicative normalisation (standard for flats).
     Stacking::ImageSequence sequence;
     if (!sequence.loadFromFiles(stackInputFiles, progress)) {
-        if (!tempDirPath.isEmpty()) {
-            QDir(tempDirPath).removeRecursively();
-        }
+        if (!tempDirPath.isEmpty()) QDir(tempDirPath).removeRecursively();
         return false;
     }
-    
-    // Configure stacking
+
     Stacking::StackingArgs args;
-    args.sequence = &sequence;
-    args.progressCallback = progress;
-    args.params.outputFilename = output;
-    args.params.force32Bit = true;
-    
-    // Pass User Parameters
-    args.params.method = method;
-    args.params.rejection = rejection;
-    args.params.sigmaLow = sigmaLow;
-    args.params.sigmaHigh = sigmaHigh;
-    
-    // Enforce calibration-specific rules
-    args.params.normalization = Stacking::NormalizationMethod::Multiplicative;
-    args.params.weighting = Stacking::WeightingType::None;
-    args.params.maximizeFraming = false;
-    args.params.upscaleAtStacking = false;
-    args.params.drizzle = false;
-    
-    // Stack
+    configureStackingArgs(args, &sequence, output, method, rejection,
+                          sigmaLow, sigmaHigh,
+                          Stacking::NormalizationMethod::Multiplicative, progress);
+
     Stacking::StackingEngine engine;
-    auto result = engine.execute(args);
-    
-    if (result != Stacking::StackResult::OK) {
-        if (!tempDirPath.isEmpty()) {
-            QDir(tempDirPath).removeRecursively();
-        }
+    if (engine.execute(args) != Stacking::StackResult::OK) {
+        if (!tempDirPath.isEmpty()) QDir(tempDirPath).removeRecursively();
         return false;
     }
 
@@ -410,95 +426,97 @@ bool MasterFrames::createMasterFlat(
         QDir(tempDirPath).removeRecursively();
     }
 
-    // Preserve metadata
     args.result.metadata().exposure = firstExposure;
-    args.result.metadata().ccdTemp = firstTemp;
+    args.result.metadata().ccdTemp  = firstTemp;
 
-    float* flatData = args.result.data().data();
-    
-    // Normalize flat so median = 1.0
-    // Per channel if color
-    int channels = args.result.channels();
-    int layerSize = args.result.width() * args.result.height();
-    
+    // Normalise each channel so its median equals 1.0.
+    float*    flatData  = args.result.data().data();
+    const int channels  = args.result.channels();
+    const int layerSize = args.result.width() * args.result.height();
+
     for (int c = 0; c < channels; ++c) {
         float* layerData = flatData + c * layerSize;
-        
-        // Compute median
+
         std::vector<float> copy(layerData, layerData + layerSize);
-        float median = Stacking::Statistics::quickMedian(copy);
-        
+        const float median = Stacking::Statistics::quickMedian(copy);
+
         if (median > 0.0f) {
-            float invMedian = 1.0f / median;
+            const float invMedian = 1.0f / median;
             for (int i = 0; i < layerSize; ++i) {
                 layerData[i] *= invMedian;
             }
         }
     }
-    
-    // Save result
+
     return Stacking::FitsIO::write(output, args.result, 32);
 }
 
-//=============================================================================
-// VALIDATION
-//=============================================================================
+// ----------------------------------------------------------------------------
+//  Validation
+// ----------------------------------------------------------------------------
 
-QString MasterFrames::validateCompatibility(const ImageBuffer& target) const {
-    int targetWidth = target.width();
-    int targetHeight = target.height();
-    
-    // Check each loaded master
+QString MasterFrames::validateCompatibility(const ImageBuffer& target) const
+{
+    const int targetWidth    = target.width();
+    const int targetHeight   = target.height();
+    const int targetChannels = target.channels();
+
     for (const auto& [idx, data] : m_masters) {
         if (!data.buffer) continue;
-        
-        MasterType type = static_cast<MasterType>(idx);
+
+        // Derive a readable name for diagnostic messages.
+        const MasterType type = static_cast<MasterType>(idx);
         QString typeName;
         switch (type) {
-            case MasterType::Bias: typeName = "Bias"; break;
-            case MasterType::Dark: typeName = "Dark"; break;
-            case MasterType::Flat: typeName = "Flat"; break;
+            case MasterType::Bias:     typeName = "Bias";      break;
+            case MasterType::Dark:     typeName = "Dark";      break;
+            case MasterType::Flat:     typeName = "Flat";      break;
             case MasterType::DarkFlat: typeName = "Dark Flat"; break;
         }
-        
+
+        // Dimension check.
         if (data.stats.width != targetWidth || data.stats.height != targetHeight) {
             return QObject::tr("Master %1 dimensions (%2x%3) don't match target (%4x%5)")
-                   .arg(typeName)
-                   .arg(data.stats.width).arg(data.stats.height)
-                   .arg(targetWidth).arg(targetHeight);
+                .arg(typeName)
+                .arg(data.stats.width).arg(data.stats.height)
+                .arg(targetWidth).arg(targetHeight);
         }
-        
-        // Also validate channel count — a 3-channel master applied to
-        // 1-channel CFA data (or vice versa) would produce garbage.
-        int masterChannels = data.buffer->channels();
-        int targetChannels = target.channels();
+
+        // Channel count check (e.g. mono CFA master vs. debayered light).
+        const int masterChannels = data.buffer->channels();
         if (masterChannels != targetChannels) {
             return QObject::tr("Master %1 channels (%2) don't match target (%3). "
                                "Ensure masters and lights have the same format.")
-                   .arg(typeName)
-                   .arg(masterChannels).arg(targetChannels);
+                .arg(typeName)
+                .arg(masterChannels).arg(targetChannels);
         }
     }
-    
-    return QString();  // Compatible
+
+    return QString(); // All compatible.
 }
 
-bool MasterFrames::checkDarkTemperature(double targetTemp, double tolerance) const {
+bool MasterFrames::checkDarkTemperature(double targetTemp, double tolerance) const
+{
     const auto& darkStats = stats(MasterType::Dark);
+
+    // If temperature metadata is absent, assume compatibility.
     if (darkStats.temperature == 0.0) {
-        return true;  // No temperature info, assume compatible
+        return true;
     }
-    
+
     return std::abs(darkStats.temperature - targetTemp) <= tolerance;
 }
 
-bool MasterFrames::checkDarkExposure(double targetExposure, double tolerance) const {
+bool MasterFrames::checkDarkExposure(double targetExposure, double tolerance) const
+{
     const auto& darkStats = stats(MasterType::Dark);
+
+    // If either exposure value is unavailable, assume compatibility.
     if (darkStats.exposure <= 0.0 || targetExposure <= 0.0) {
-        return true;  // No exposure info, assume compatible
+        return true;
     }
-    
-    double ratio = targetExposure / darkStats.exposure;
+
+    const double ratio = targetExposure / darkStats.exposure;
     return std::abs(ratio - 1.0) <= tolerance;
 }
 

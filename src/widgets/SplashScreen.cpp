@@ -1,5 +1,6 @@
 #include "SplashScreen.h"
 #include "core/Version.h"
+
 #include <QPainter>
 #include <QGuiApplication>
 #include <QScreen>
@@ -8,197 +9,233 @@
 #include <QLinearGradient>
 #include <cmath>
 
+
+// ============================================================================
+// Constructor
+// ============================================================================
+
 SplashScreen::SplashScreen(const QString& logoPath, QWidget* parent)
     : QWidget(parent)
 {
-    // Window setup
     setWindowFlags(
-        Qt::SplashScreen |
+        Qt::SplashScreen       |
         Qt::FramelessWindowHint |
         Qt::WindowStaysOnTopHint
     );
     setAttribute(Qt::WA_TranslucentBackground, false);
-    setAttribute(Qt::WA_DeleteOnClose, true);
-    
+    setAttribute(Qt::WA_DeleteOnClose,         true);
+
     setFixedSize(m_splashWidth, m_splashHeight);
-    
-    // Center on screen
+
+    // Centre the splash screen on the primary display
     if (QScreen* screen = QGuiApplication::primaryScreen()) {
         QRect geo = screen->availableGeometry();
-        int x = (geo.width() - m_splashWidth) / 2 + geo.x();
-        int y = (geo.height() - m_splashHeight) / 2 + geo.y();
-        move(x, y);
+        move((geo.width()  - m_splashWidth)  / 2 + geo.x(),
+             (geo.height() - m_splashHeight) / 2 + geo.y());
     }
-    
-    // Load logo
+
+    // Load and scale the application logo
     if (!logoPath.isEmpty()) {
         m_logoPixmap.load(logoPath);
         if (!m_logoPixmap.isNull()) {
             m_logoPixmap = m_logoPixmap.scaled(
                 120, 120,
                 Qt::KeepAspectRatio,
-                Qt::SmoothTransformation
-            );
+                Qt::SmoothTransformation);
         }
-        
-        // Try to load background from same directory
+
+        // Attempt to load a background image from the same directory as the logo
         QString bgPath = logoPath;
         bgPath.replace("Logo.png", "background.jpg");
         m_bgPixmap.load(bgPath);
+
         if (!m_bgPixmap.isNull()) {
             m_bgPixmap = m_bgPixmap.scaled(
                 m_splashWidth, m_splashHeight,
                 Qt::KeepAspectRatioByExpanding,
-                Qt::SmoothTransformation
-            );
-            // Crop to exact size if needed
-            if (m_bgPixmap.width() > m_splashWidth || m_bgPixmap.height() > m_splashHeight) {
-                int x = (m_bgPixmap.width() - m_splashWidth) / 2;
+                Qt::SmoothTransformation);
+
+            // Crop to the exact splash dimensions if the scaled image is larger
+            if (m_bgPixmap.width()  > m_splashWidth ||
+                m_bgPixmap.height() > m_splashHeight)
+            {
+                int x = (m_bgPixmap.width()  - m_splashWidth)  / 2;
                 int y = (m_bgPixmap.height() - m_splashHeight) / 2;
                 m_bgPixmap = m_bgPixmap.copy(x, y, m_splashWidth, m_splashHeight);
             }
         }
     }
-    
+
     m_currentMessage = tr("Starting...");
-    
-    // Setup smooth progress timer (60 FPS)
+
+    // Smooth progress timer running at approximately 60 FPS
     m_progressTimer = new QTimer(this);
-    connect(m_progressTimer, &QTimer::timeout, this, &SplashScreen::updateSmoothProgress);
+    connect(m_progressTimer, &QTimer::timeout,
+            this, &SplashScreen::updateSmoothProgress);
     m_progressTimer->start(16);
 }
 
-void SplashScreen::setMessage(const QString& message) {
+
+// ============================================================================
+// Public interface
+// ============================================================================
+
+void SplashScreen::setMessage(const QString& message)
+{
     m_currentMessage = message;
-    update(); // Schedule repaint, don't force it immediately to keep main thread fluid
+    // Schedule a repaint without blocking; keep the main thread responsive
+    update();
     QGuiApplication::processEvents();
 }
 
-void SplashScreen::setProgress(int value) {
+void SplashScreen::setProgress(int value)
+{
     m_targetProgress = static_cast<float>(qBound(0, value, 100));
-    // Don't force repaint here, let timer handle it
     QGuiApplication::processEvents();
 }
 
-void SplashScreen::updateSmoothProgress() {
+
+// ============================================================================
+// Smooth progress animation
+// ============================================================================
+
+void SplashScreen::updateSmoothProgress()
+{
     if (std::abs(m_displayedProgress - m_targetProgress) < 0.1f) {
         m_displayedProgress = m_targetProgress;
     } else {
-        // Smooth interpolation
+        // Exponential smoothing towards the target value
         m_displayedProgress += (m_targetProgress - m_displayedProgress) * 0.2f;
     }
     update();
 }
 
-void SplashScreen::paintEvent(QPaintEvent*) {
+
+// ============================================================================
+// Painting
+// ============================================================================
+
+void SplashScreen::paintEvent(QPaintEvent*)
+{
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     p.setRenderHint(QPainter::TextAntialiasing);
-    
-    int w = m_splashWidth;
-    int h = m_splashHeight;
-    
-    // Background gradient (deep space theme) - base layer
+
+    const int w = m_splashWidth;
+    const int h = m_splashHeight;
+
+    // Base background gradient (deep-space dark blue theme)
     QLinearGradient baseGradient(0, 0, 0, h);
     baseGradient.setColorAt(0.0, QColor(15, 15, 25));
     baseGradient.setColorAt(0.5, QColor(25, 25, 45));
     baseGradient.setColorAt(1.0, QColor(10, 10, 20));
     p.fillRect(0, 0, w, h, baseGradient);
-    
-    // Background image with 35% opacity and fade from middle to bottom
+
+    // Optional background image composited at 35% opacity
     if (!m_bgPixmap.isNull()) {
-        // Draw background at 35% opacity
         p.setOpacity(0.35);
         p.drawPixmap(0, 0, m_bgPixmap);
         p.setOpacity(1.0);
-        
-        // Fade overlay: solid from middle to bottom (gradient that fades to background)
+
+        // Fade overlay: transparent at mid-height, fully opaque at the bottom
         QLinearGradient fadeGradient(0, h * 0.5, 0, h);
-        fadeGradient.setColorAt(0.0, QColor(15, 15, 25, 0));       // Transparent at middle
-        fadeGradient.setColorAt(0.7, QColor(15, 15, 25, 200));     // Mostly opaque
-        fadeGradient.setColorAt(1.0, QColor(10, 10, 20, 255));     // Fully opaque at bottom
-        p.fillRect(0, (int)(h * 0.5), w, (int)(h * 0.5), fadeGradient);
+        fadeGradient.setColorAt(0.0, QColor(15, 15, 25,   0));
+        fadeGradient.setColorAt(0.7, QColor(15, 15, 25, 200));
+        fadeGradient.setColorAt(1.0, QColor(10, 10, 20, 255));
+        p.fillRect(0, static_cast<int>(h * 0.5),
+                   w, static_cast<int>(h * 0.5), fadeGradient);
     }
-    
-    // Border
+
+    // Window border
     p.setPen(QColor(60, 60, 80));
     p.drawRect(0, 0, w - 1, h - 1);
-    
-    // Logo (centered upper area)
+
+    // Application logo (centred in the upper portion)
     if (!m_logoPixmap.isNull()) {
         int logoX = (w - m_logoPixmap.width()) / 2;
-        int logoY = 40;
-        p.drawPixmap(logoX, logoY, m_logoPixmap);
+        p.drawPixmap(logoX, 40, m_logoPixmap);
     }
-    
-    // Title
+
+    // Application title with version string
     p.setFont(QFont("Segoe UI", 24, QFont::Bold));
     p.setPen(Qt::white);
-    QRect titleRect(0, 170, w, 35);
-    p.drawText(titleRect, Qt::AlignCenter, tr("TStar v") + QString(TStar::getVersion()));
-    
+    p.drawText(QRect(0, 170, w, 35), Qt::AlignCenter,
+               tr("TStar v") + QString(TStar::getVersion()));
+
     // Subtitle
     p.setFont(QFont("Segoe UI", 16));
     p.setPen(QColor(180, 180, 200));
-    QRect subtitleRect(0, 205, w, 30);
-    p.drawText(subtitleRect, Qt::AlignCenter, tr("Professional astro editing app"));
-    
-    // Progress bar
-    int barMargin = 50;
-    int barHeight = 4;
-    int barY = h - 60;
-    int barWidth = w - (barMargin * 2);
-    
+    p.drawText(QRect(0, 205, w, 30), Qt::AlignCenter,
+               tr("Professional astro editing app"));
+
+    // Progress bar track
+    const int barMargin = 50;
+    const int barHeight = 4;
+    const int barY      = h - 60;
+    const int barWidth  = w - (barMargin * 2);
+
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(40, 40, 60));
     p.drawRoundedRect(barMargin, barY, barWidth, barHeight, 2, 2);
-    
+
+    // Progress bar fill
     if (m_displayedProgress > 0.0f) {
         int fillWidth = static_cast<int>(barWidth * m_displayedProgress / 100.0f);
         QLinearGradient barGrad(barMargin, 0, barMargin + barWidth, 0);
-        barGrad.setColorAt(0.0, QColor(80, 140, 220));
+        barGrad.setColorAt(0.0, QColor( 80, 140, 220));
         barGrad.setColorAt(1.0, QColor(140, 180, 255));
         p.setBrush(barGrad);
         p.drawRoundedRect(barMargin, barY, fillWidth, barHeight, 2, 2);
     }
-    
-    // Loading message
+
+    // Current loading message
     p.setFont(QFont("Segoe UI", 9));
     p.setPen(QColor(150, 150, 180));
-    QRect msgRect(barMargin, barY + 10, barWidth, 20);
-    p.drawText(msgRect, Qt::AlignLeft | Qt::AlignVCenter, m_currentMessage);
-    
-    // Copyright
+    p.drawText(QRect(barMargin, barY + 10, barWidth, 20),
+               Qt::AlignLeft | Qt::AlignVCenter, m_currentMessage);
+
+    // Copyright notice
     p.setFont(QFont("Segoe UI", 8));
     p.setPen(QColor(100, 100, 130));
-    QRect copyrightRect(0, h - 25, w, 20);
-    p.drawText(copyrightRect, Qt::AlignCenter, "© 2026 Fabio Tempera");
-    
+    p.drawText(QRect(0, h - 25, w, 20), Qt::AlignCenter,
+               "(C) 2026 Fabio Tempera");
+
     p.end();
 }
 
-void SplashScreen::startFadeIn() {
+
+// ============================================================================
+// Fade animations
+// ============================================================================
+
+void SplashScreen::startFadeIn()
+{
     setWindowOpacity(0.0);
+
     m_anim = new QPropertyAnimation(this, "windowOpacity", this);
-    m_anim->setDuration(800); // More noticeable fade
+    m_anim->setDuration(800);
     m_anim->setStartValue(0.0);
     m_anim->setEndValue(1.0);
     m_anim->setEasingCurve(QEasingCurve::OutQuad);
     m_anim->start();
 }
 
-void SplashScreen::startFadeOut() {
-    m_progressTimer->stop(); // Stop progress updates
+void SplashScreen::startFadeOut()
+{
+    m_progressTimer->stop();
+
     m_anim = new QPropertyAnimation(this, "windowOpacity", this);
     m_anim->setDuration(800);
     m_anim->setStartValue(1.0);
     m_anim->setEndValue(0.0);
     m_anim->setEasingCurve(QEasingCurve::OutQuad);
-    connect(m_anim, &QPropertyAnimation::finished, this, &SplashScreen::finish);
+    connect(m_anim, &QPropertyAnimation::finished,
+            this, &SplashScreen::finish);
     m_anim->start();
 }
 
-void SplashScreen::finish() {
+void SplashScreen::finish()
+{
     hide();
     close();
     deleteLater();
