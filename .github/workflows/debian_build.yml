@@ -14,8 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y build-essential libgl1-mesa-dev cmake clazy g++ ninja-build pkg-config libopencv-dev libgsl-dev libcfitsio-dev libomp-dev libmd4c-dev liblcms2-dev libcurl4-gnutls-dev liblz4-dev libzstd-dev libraw-dev imagemagick
+        uses: eclipse-score/apt-install@main
+        with:
+          packages: build-essential libgl1-mesa-dev cmake clazy g++ ninja-build pkg-config libopencv-dev libgsl-dev libcfitsio-dev libomp-dev libmd4c-dev liblcms2-dev libcurl4-gnutls-dev liblz4-dev libzstd-dev libraw-dev imagemagick
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -38,16 +39,15 @@ jobs:
         run: |
           ./src/build_linux.sh
 
-      - name: Breakpoint if failed
-        if: failure()
+      - name: Create Debian Package
+        run: |
+          ./src/package_deb.sh
+
+      - name: Breakpoint
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
           authorized-users: Seggan
-
-      - name: Create Debian Package
-        run: |
-          ./src/package_deb.sh
 
       - name: Upload Debian Package
         uses: actions/upload-artifact@v4
