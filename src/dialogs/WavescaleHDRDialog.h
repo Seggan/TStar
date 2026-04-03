@@ -1,13 +1,23 @@
 #ifndef WAVESCALEHDRDIALOG_H
 #define WAVESCALEHDRDIALOG_H
 
+// =============================================================================
+// WavescaleHDRDialog.h
+// Dialog for wavelet-based HDR compression of astronomical images.
+// Decomposes the luminance channel via a trous wavelets, modulates wavelet
+// planes according to a brightness mask, and reconstructs with optional
+// dimming gamma and opacity blending.
+// =============================================================================
+
+#include "DialogBase.h"
+#include "../ImageBuffer.h"
+
 #include <QDialog>
 #include <QThread>
-#include <vector>
-#include <QTimer> // Added for QTimer
-#include <QGroupBox> // Added for QGroupBox
-#include "../ImageBuffer.h"
+#include <QTimer>
+#include <QGroupBox>
 #include <QPointer>
+#include <vector>
 
 class ImageViewer;
 class QSlider;
@@ -16,11 +26,23 @@ class QCheckBox;
 class QPushButton;
 class QProgressBar;
 
+// =============================================================================
+// WavescaleHDRWorker  --  Background thread that performs the wavelet
+// decomposition, mask-weighted plane modulation, and reconstruction.
+// =============================================================================
 class WavescaleHDRWorker : public QThread {
     Q_OBJECT
+
 public:
-    WavescaleHDRWorker(QObject* parent = nullptr);
-    void setup(const ImageBuffer& src, int scales, float compression, float maskGamma, float dimmingGamma); // Updated signature
+    explicit WavescaleHDRWorker(QObject* parent = nullptr);
+
+    /// Configure the worker parameters before starting the thread.
+    void setup(const ImageBuffer& src,
+               int   scales,
+               float compression,
+               float maskGamma,
+               float dimmingGamma);
+
     void run() override;
 
 signals:
@@ -29,24 +51,29 @@ signals:
 
 private:
     ImageBuffer m_src;
-    int m_scales;
-    float m_compression;
-    float m_maskGamma;
-    float m_dimmingGamma; // New
+    int         m_scales;
+    float       m_compression;
+    float       m_maskGamma;
+    float       m_dimmingGamma;
 };
 
-#include "DialogBase.h"
-
+// =============================================================================
+// WavescaleHDRDialog  --  Main dialog providing the user interface for the
+// wavelet HDR tool, including an embedded preview viewer and mask preview.
+// =============================================================================
 class WavescaleHDRDialog : public DialogBase {
     Q_OBJECT
+
 public:
-    explicit WavescaleHDRDialog(QWidget* parent = nullptr, ImageViewer* targetViewer = nullptr);
+    explicit WavescaleHDRDialog(QWidget* parent = nullptr,
+                                ImageViewer* targetViewer = nullptr);
     ~WavescaleHDRDialog();
-    
+
     void setViewer(ImageViewer* v);
     ImageViewer* viewer() const { return m_targetViewer; }
 
 signals:
+    /// Emitted when the user clicks Apply, carrying the final processed buffer.
     void applyInternal(const ImageBuffer& result);
 
 private slots:
@@ -62,48 +89,52 @@ protected:
 private:
     void createUI();
     void startPreview();
-    void updateQuickMask(); // New fast mask update
-    void applyOpacityBlend(); // Blend m_rawResult with m_originalBuffer using opacity + mask
 
-    ImageViewer* m_viewer; // Internal Preview
-    QLabel* m_maskLabel; // Small preview of mask
-    
+    /// Fast mask preview update using cached downscaled luminance data.
+    void updateQuickMask();
+
+    /// Blends the raw worker result with the original buffer using the
+    /// current opacity setting and any active mask.
+    void applyOpacityBlend();
+
+    // --- UI widgets ---
+    ImageViewer* m_viewer;         ///< Embedded preview viewer
+    QLabel*      m_maskLabel;      ///< Thumbnail mask preview
+
     QSlider* m_scalesSlider;
     QSlider* m_compSlider;
     QSlider* m_gammaSlider;
-    
-    // NEW: Dimming Gamma Slider (to fix shadow crushing)
     QSlider* m_dimmingSlider;
-    QLabel* m_dimmingLabel;
-
     QSlider* m_opacitySlider = nullptr;
-    QLabel*  m_opacityLabel  = nullptr;
 
     QLabel* m_scalesLabel;
     QLabel* m_compLabel;
     QLabel* m_gammaLabel;
-    
-    QCheckBox* m_showOriginalCheck;
-    QPushButton* m_previewBtn;
-    QPushButton* m_applyBtn;
-    QPushButton* m_closeBtn;
+    QLabel* m_dimmingLabel;
+    QLabel* m_opacityLabel  = nullptr;
+
+    QCheckBox*    m_showOriginalCheck;
+    QPushButton*  m_previewBtn;
+    QPushButton*  m_applyBtn;
+    QPushButton*  m_closeBtn;
     QProgressBar* m_progressBar;
-    
-    // Logic
-    QPointer<ImageViewer> m_targetViewer; // Source Image Window (Safe Pointer)
-    ImageBuffer m_previewBuffer; // Current processed result (mask+opacity blended)
-    ImageBuffer m_rawResult;     // Unblended worker output
-    ImageBuffer m_maskBuffer;    // Current mask
-    ImageBuffer m_originalBuffer; 
-    
-    // Cache for fast mask preview
-    std::vector<float> m_L_channel_cache; 
-    int m_cacheW = 0;
-    int m_cacheH = 0;
-    
+
+    // --- Processing state ---
+    QPointer<ImageViewer> m_targetViewer;   ///< Source image window (safe pointer)
+    ImageBuffer           m_previewBuffer;  ///< Current result (mask + opacity blended)
+    ImageBuffer           m_rawResult;      ///< Unblended worker output
+    ImageBuffer           m_maskBuffer;     ///< Current mask from the worker
+    ImageBuffer           m_originalBuffer; ///< Snapshot of the source image
+
+    // --- Downscaled luminance cache for fast mask preview ---
+    std::vector<float> m_L_channel_cache;
+    int                m_cacheW = 0;
+    int                m_cacheH = 0;
+
+    // --- Worker ---
     WavescaleHDRWorker* m_worker;
-    bool m_isPreviewDirty;
-    bool m_isFirstShow = true;
+    bool                m_isPreviewDirty;
+    bool                m_isFirstShow = true;
 };
 
-#endif // WAVESCALESHDRDIALOG_H
+#endif // WAVESCALEHDRDIALOG_H

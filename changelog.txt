@@ -1,6 +1,17 @@
 TStar Changelog
 ===============
 
+Version 1.8.5
+-------------
+- Improved WCS and catalog star handling during crop operations
+- Hardened native plate solver for increased mathematical robustness
+- Implemented cancellation support for missing processes
+- Fixed UI layout and boundary clamping issues in crop tools
+- Added RCD and AHD demosaicing algorithms for high-quality processing
+- Implemented multi-pass Markesteijn and cosmetic correction for X-Trans sensors
+- Improved resource monitor robustness and cross-platform swap support
+- Other minor bugfixes
+
 Version 1.8.4
 -------------
 - Added PGC catalog integration for the annotation tool
@@ -331,6 +342,6 @@ Version 1.0.0
 - Initial release
 - Modern UI with Dark Theme
 - Standard and advanced astrophotography tools
-- AI Integration (GraXpert, CosmicClarity, StarNet++)
+- AI Integration (GraXpert, Cosmic Clarity, StarNet++)
 - Centralized Python environment for standalone distribution
 - Unified script management

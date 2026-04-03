@@ -1,1 +1,2 @@
+// Windows resource script: application icon
 IDI_ICON1 ICON DISCARDABLE "images/Logo.ico"

@@ -1,7 +1,15 @@
+// ============================================================================
+// Version.cpp.in
+// CMake-configured source file. @TSTAR_VERSION@ is replaced at build time.
+// ============================================================================
+
 #include "core/Version.h"
 
 namespace TStar {
-    const char* getVersion() {
+
+    const char* getVersion()
+    {
         return "@TSTAR_VERSION@";
     }
-}
+
+} // namespace TStar

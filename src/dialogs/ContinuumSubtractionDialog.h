@@ -1,43 +1,57 @@
 #ifndef CONTINUUM_SUBTRACTION_DIALOG_H
 #define CONTINUUM_SUBTRACTION_DIALOG_H
 
-#include <QComboBox>
-#include <QDoubleSpinBox>
-#include <QSlider>
-#include <QCheckBox>
-#include <QLabel>
-#include <QProgressBar>
-#include <QPushButton>
-#include <QGroupBox>
-#include <QThread>
-#include <QVBoxLayout>
 #include "DialogBase.h"
 #include "../ImageBuffer.h"
 #include "../algos/ChannelOps.h"
+
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QGroupBox>
+#include <QLabel>
+#include <QProgressBar>
+#include <QPushButton>
+#include <QSlider>
+#include <QThread>
+#include <QVBoxLayout>
 
 class ImageViewer;
 class MainWindowCallbacks;
 
 // ============================================================================
-// Processing worker thread — runs full pipeline off the main thread
+// ContinuumSubtractWorker
+//
+// Executes the full continuum subtraction pipeline on a background thread,
+// supporting both starry and starless image pairs per narrowband filter.
+//
+// Pipeline (matching SAS Pro continuum_subtract.py methodology):
+//   BG Neutralization -> Red-to-Green Normalization -> Star-based White Balance
+//   -> Linear Subtraction -> Optional non-linear finalization
 // ============================================================================
-class ContinuumSubtractWorker : public QThread {
+class ContinuumSubtractWorker : public QThread
+{
     Q_OBJECT
+
 public:
-    struct Task {
-        QString name;              // e.g. "Ha", "SII", "OIII"
-        ImageBuffer nbStarry;      // Narrowband (starry)
-        ImageBuffer contStarry;    // Continuum   (starry)
-        ImageBuffer nbStarless;    // Narrowband (starless) — may be invalid
-        ImageBuffer contStarless;  // Continuum   (starless) — may be invalid
-        bool starlessOnly = false; // True if only starless pair is loaded
+    /**
+     * @brief Describes one narrowband subtraction task (one filter, starry + starless pairs).
+     */
+    struct Task
+    {
+        QString     name;          ///< Filter name, e.g. "Ha", "SII", "OIII"
+        ImageBuffer nbStarry;      ///< Narrowband starry image
+        ImageBuffer contStarry;    ///< Continuum starry image
+        ImageBuffer nbStarless;    ///< Narrowband starless image (may be invalid)
+        ImageBuffer contStarless;  ///< Continuum starless image (may be invalid)
+        bool        starlessOnly = false; ///< True when only the starless pair is loaded
     };
 
-    ContinuumSubtractWorker(const std::vector<Task>& tasks,
+    ContinuumSubtractWorker(const std::vector<Task>&       tasks,
                             const ContinuumSubtractParams& params,
-                            bool denoiseWithCC,
-                            const QString& cosmicClarityPath,
-                            QObject* parent = nullptr);
+                            bool                           denoiseWithCC,
+                            const QString&                 cosmicClarityPath,
+                            QObject*                       parent = nullptr);
 
 signals:
     void resultReady(const QString& name, const ImageBuffer& result);
@@ -48,22 +62,33 @@ protected:
     void run() override;
 
 private:
-    std::vector<Task> m_tasks;
+    std::vector<Task>       m_tasks;
     ContinuumSubtractParams m_params;
-    bool m_denoiseCC;
-    QString m_ccPath;
+    bool                    m_denoiseCC;
+    QString                 m_ccPath;
 };
 
 // ============================================================================
-// Dialog — multi-image continuum subtraction UI
+// ContinuumSubtractionDialog
+//
+// Multi-image continuum subtraction UI supporting Ha, SII, OIII narrowband
+// filters with Red, Green, and OSC continuum sources.  Also handles composite
+// HaO3 / S2O3 inputs with automatic channel extraction.
 // ============================================================================
-class ContinuumSubtractionDialog : public DialogBase {
+class ContinuumSubtractionDialog : public DialogBase
+{
     Q_OBJECT
+
 public:
     explicit ContinuumSubtractionDialog(QWidget* parent = nullptr);
     ~ContinuumSubtractionDialog();
 
     void setViewer(ImageViewer* v);
+
+    /**
+     * @brief Refreshes the list of available open images.
+     *        Kept as a public slot for MainWindow compatibility.
+     */
     void refreshImageList();
 
 private slots:
@@ -75,23 +100,26 @@ private slots:
     void onWorkerDone();
 
 private:
-    // Load image from open views or file
-    void loadImage(const QString& channel);
-    void populateCombo(QComboBox* combo);
-
-    // Image slots for NB filters (starry + starless)
-    struct ImageSlot {
-        ImageBuffer buffer;
-        QLabel*     label = nullptr;
+    // --- Image slot ---
+    // Represents a single load button / status label pair for one image input.
+    struct ImageSlot
+    {
+        ImageBuffer  buffer;
+        QLabel*      label  = nullptr;
         QPushButton* button = nullptr;
+
         bool loaded() const { return buffer.isValid(); }
-        void clear() { buffer = ImageBuffer(); if (label) label->setText("—"); }
+        void clear()
+        {
+            buffer = ImageBuffer();
+            if (label) label->setText("---");
+        }
     };
 
     // --- Narrowband filter slots ---
-    ImageSlot m_haStarry,   m_haStarless;
-    ImageSlot m_siiStarry,  m_siiStarless;
-    ImageSlot m_oiiiStarry, m_oiiiStarless;
+    ImageSlot m_haStarry,    m_haStarless;
+    ImageSlot m_siiStarry,   m_siiStarless;
+    ImageSlot m_oiiiStarry,  m_oiiiStarless;
 
     // --- Composite slots (HaO3, S2O3) ---
     ImageSlot m_hao3Starry,  m_hao3Starless;
@@ -102,39 +130,52 @@ private:
     ImageSlot m_greenStarry, m_greenStarless;
     ImageSlot m_oscStarry,   m_oscStarless;
 
-    // Helper: resolve continuum for a given NB filter
-    // Ha/SII → Red or OSC R-channel; OIII → Green or OSC G-channel
-    bool getContinuumForFilter(const QString& filter, bool starless,
-                               ImageBuffer& outCont);
+    // --- Image loading ---
+    void loadImage(const QString& channel);
+    void populateCombo(QComboBox* combo);
 
-    // Handle HaO3/S2O3 composite extraction
-    void extractFromComposite(const QString& composite, bool starless, const ImageBuffer& img);
+    /**
+     * @brief Resolves the continuum buffer for a given NB filter.
+     *        Ha/SII map to Red (or OSC R-channel); OIII maps to Green (or OSC G-channel).
+     * @return True if a valid continuum source was found.
+     */
+    bool getContinuumForFilter(const QString& filter,
+                               bool           starless,
+                               ImageBuffer&   outCont);
 
-    // UI widgets
+    /**
+     * @brief Extracts individual emission channels from a composite HaO3 or S2O3 image.
+     *        The OIII channel is averaged with any previously loaded OIII data.
+     */
+    void extractFromComposite(const QString&     composite,
+                              bool               starless,
+                              const ImageBuffer& img);
+
+    /**
+     * @brief Creates a Load button + status label pair and wires it to loadImage().
+     */
+    void createSlotUI(QVBoxLayout* layout,
+                      ImageSlot&   slot,
+                      const QString& label,
+                      const QString& channel);
+
+    // --- UI references ---
     MainWindowCallbacks* m_mainWindow = nullptr;
-    ImageViewer* m_viewer = nullptr;
+    ImageViewer*         m_viewer     = nullptr;
 
-    // Parameters
     QDoubleSpinBox* m_qFactorSpin;
     QSlider*        m_qFactorSlider;
     QCheckBox*      m_outputLinearCheck;
     QCheckBox*      m_denoiseCheck;
-
-    // Settings
     QDoubleSpinBox* m_thresholdSpin;
     QDoubleSpinBox* m_curvesSpin;
 
-    // Status
     QLabel*       m_statusLabel;
     QProgressBar* m_progress;
     QPushButton*  m_executeBtn;
 
-    // Worker
+    // --- Worker ---
     ContinuumSubtractWorker* m_worker = nullptr;
-
-    // Helper: create a Load button + label pair, wired to loadImage()
-    void createSlotUI(QVBoxLayout* layout, ImageSlot& slot,
-                      const QString& label, const QString& channel);
 };
 
 #endif // CONTINUUM_SUBTRACTION_DIALOG_H

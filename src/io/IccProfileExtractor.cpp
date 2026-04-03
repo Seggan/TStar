@@ -1,4 +1,5 @@
 #include "IccProfileExtractor.h"
+
 #include <QFile>
 #include <QDataStream>
 #include <QFileInfo>
@@ -6,314 +7,372 @@
 #include <QtEndian>
 #include <QXmlStreamReader>
 
-bool IccProfileExtractor::extractFromFile(const QString& filePath, QByteArray& iccData) {
-    QFileInfo fi(filePath);
-    QString ext = fi.suffix().toLower();
-    
-    // Try format-specific extractors based on file extension
-    if (ext == "tif" || ext == "tiff") {
-        return extractFromTiff(filePath, iccData);
-    } else if (ext == "png") {
-        return extractFromPng(filePath, iccData);
-    } else if (ext == "jpg" || ext == "jpeg") {
-        return extractFromJpeg(filePath, iccData);
-    } else if (ext == "fits" || ext == "fit") {
-        return extractFromFits(filePath, iccData);
-    } else if (ext == "xisf") {
-        return extractFromXisf(filePath, iccData);
-    } else if (ext == "cr2" || ext == "crw" || ext == "nef" || ext == "nrw" || 
-               ext == "arw" || ext == "dng" || ext == "raf" || ext == "orf" || 
-               ext == "rw2" || ext == "raw") {
+
+// =============================================================================
+// Format dispatch
+// =============================================================================
+
+bool IccProfileExtractor::extractFromFile(const QString& filePath, QByteArray& iccData)
+{
+    const QString ext = QFileInfo(filePath).suffix().toLower();
+
+    if (ext == "tif"  || ext == "tiff") return extractFromTiff(filePath, iccData);
+    if (ext == "png")                   return extractFromPng(filePath,  iccData);
+    if (ext == "jpg"  || ext == "jpeg") return extractFromJpeg(filePath, iccData);
+    if (ext == "fits" || ext == "fit")  return extractFromFits(filePath, iccData);
+    if (ext == "xisf")                  return extractFromXisf(filePath, iccData);
+
+    // Camera RAW extensions supported by LibRaw.
+    static const QStringList rawExts = {
+        "cr2", "crw", "nef", "nrw", "arw", "dng", "raf",
+        "orf", "rw2", "raw"
+    };
+    if (rawExts.contains(ext))
         return extractFromRaw(filePath, iccData);
-    }
-    
+
     return false;
 }
 
-bool IccProfileExtractor::extractFromTiff(const QString& filePath, QByteArray& iccData) {
-    // TIFF ICC profile tag: 0x8773 (34675 in decimal)
-    const quint16 TIFF_ICC_PROFILE_TAG = 34675;
-    
+
+// =============================================================================
+// TIFF extraction (IFD tag 34675)
+// =============================================================================
+
+bool IccProfileExtractor::extractFromTiff(const QString& filePath, QByteArray& iccData)
+{
+    static const quint16 TIFF_ICC_PROFILE_TAG = 34675;
+
     QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
+    if (!file.open(QIODevice::ReadOnly))
         return false;
-    }
-    
+
     QDataStream stream(&file);
-    
-    // Read byte order indicator
-    quint16 byteOrder;
+
+    // Determine byte order from the TIFF header.
+    quint16 byteOrder = 0;
     stream >> byteOrder;
-    if (byteOrder == 0x4949) {
-        stream.setByteOrder(QDataStream::LittleEndian);
-    } else if (byteOrder == 0x4D4D) {
-        stream.setByteOrder(QDataStream::BigEndian);
-    } else {
-        return false;
-    }
-    
-    // Check TIFF version (should be 42)
-    quint16 version;
+
+    if      (byteOrder == 0x4949) stream.setByteOrder(QDataStream::LittleEndian);
+    else if (byteOrder == 0x4D4D) stream.setByteOrder(QDataStream::BigEndian);
+    else                          return false;
+
+    // Verify TIFF magic number.
+    quint16 version = 0;
     stream >> version;
-    if (version != 42) {
+    if (version != 42)
         return false;
-    }
-    
-    // Read IFD offset
-    quint32 ifdOffset;
+
+    // Navigate to the first Image File Directory.
+    quint32 ifdOffset = 0;
     stream >> ifdOffset;
-    
-    // Seek to first IFD
-    if (!file.seek(ifdOffset)) {
+    if (!file.seek(ifdOffset))
         return false;
-    }
-    
-    // Read IFD entries
-    quint16 numEntries;
+
+    // Scan all IFD entries for the ICC profile tag.
+    quint16 numEntries = 0;
     stream >> numEntries;
-    
-    for (int i = 0; i < numEntries; ++i) {
-        quint16 tag, type;
-        quint32 count, value;
+
+    for (int i = 0; i < numEntries; ++i)
+    {
+        quint16 tag = 0, type = 0;
+        quint32 count = 0, value = 0;
         stream >> tag >> type >> count >> value;
-        
-        if (tag == TIFF_ICC_PROFILE_TAG) {
-            // Found ICC profile tag
-            // Type 7 = UNDEFINED (raw bytes)
-            // Value contains either the data (if <= 4 bytes) or offset to data
-            qint64 savePos = file.pos();
-            
-            if (count <= 4) {
-                // Data is in the value field
-                iccData.clear();
-                iccData.resize(count);
-                QByteArray temp = QByteArray::fromRawData((char*)&value, count);
-                iccData = temp;
-            } else {
-                // Data is at offset specified by value
-                if (file.seek(value)) {
-                    iccData = file.read(count);
-                }
-            }
-            
-            file.seek(savePos);
-            return !iccData.isEmpty();
+
+        if (tag != TIFF_ICC_PROFILE_TAG)
+            continue;
+
+        const qint64 savePos = file.pos();
+
+        if (count <= 4)
+        {
+            // Data fits in the value field directly.
+            iccData = QByteArray::fromRawData(reinterpret_cast<const char*>(&value),
+                                              static_cast<int>(count));
         }
+        else
+        {
+            // Value field contains the offset to the profile data.
+            if (file.seek(value))
+                iccData = file.read(static_cast<qint64>(count));
+        }
+
+        file.seek(savePos);
+        return !iccData.isEmpty();
     }
-    
+
     return false;
 }
+
+
+// =============================================================================
+// PNG extraction (iCCP chunk)
+// =============================================================================
 
 #include <zlib.h>
 
-bool IccProfileExtractor::extractFromPng(const QString& filePath, QByteArray& iccData) {
-    // PNG ICC profile chunk: "iCCP"
+bool IccProfileExtractor::extractFromPng(const QString& filePath, QByteArray& iccData)
+{
     QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
+    if (!file.open(QIODevice::ReadOnly))
         return false;
-    }
-    
-    // PNG signature: 137 80 78 71 13 10 26 10 (in decimal)
-    QByteArray pngSig = file.read(8);
-    if (pngSig.size() != 8 || pngSig != QByteArray("\x89PNG\r\n\x1a\n")) {
+
+    // Verify the 8-byte PNG signature.
+    const QByteArray pngSig = file.read(8);
+    if (pngSig.size() != 8 || pngSig != QByteArray("\x89PNG\r\n\x1a\n"))
         return false;
-    }
-    
-    // Read chunks
-    while (!file.atEnd()) {
+
+    // Iterate over PNG chunks until iCCP is found or IEND is reached.
+    while (!file.atEnd())
+    {
+        // Chunk length (big-endian, 4 bytes).
         QByteArray lenData = file.read(4);
-        if (lenData.size() != 4) break;
-        
-        quint32 length = (quint8)lenData[0] << 24 | (quint8)lenData[1] << 16 |
-                         (quint8)lenData[2] << 8 | (quint8)lenData[3];
-        
-        QByteArray chunkType = file.read(4);
-        if (chunkType.size() != 4) break;
-        
-        if (chunkType == "iCCP") {
-            // Found ICC profile chunk
-            // Format: profile name (null-terminated) + compression method + compressed ICC profile
-            QByteArray chunkData = file.read(length);
-            
-            // Skip profile name (read until null terminator)
-            int nameLen = chunkData.indexOf('\0') + 1;
-            if (nameLen > 0 && nameLen < chunkData.size()) {
-                // Skip compression method (1 byte)
-                int startIdx = nameLen + 1;
-                if (startIdx < chunkData.size()) {
-                    // Remaining data is zlib-compressed ICC profile
-                    QByteArray compressedData = chunkData.mid(startIdx);
-                    
-                    // Simple decompression using qUncompress (requires prepending 4-byte size)
-                    // But we don't know the uncompressed size easily. 
-                    // Better use zlib's uncompress or a loop.
-                    // For ICC profiles, we can estimate a max size (e.g., 2MB)
-                    unsigned long uncompressedSize = 2 * 1024 * 1024; 
-                    iccData.resize(uncompressedSize);
-                    
-                    int res = uncompress((Bytef*)iccData.data(), &uncompressedSize, 
-                                       (const Bytef*)compressedData.data(), compressedData.size());
-                    
-                    if (res == Z_OK) {
-                        iccData.resize(uncompressedSize);
-                        return true;
-                    } else if (res == Z_BUF_ERROR) {
-                        // Buffer too small, try one more time with 10MB (extremely large for ICC)
-                        uncompressedSize = 10 * 1024 * 1024;
-                        iccData.resize(uncompressedSize);
-                        if (uncompress((Bytef*)iccData.data(), &uncompressedSize, 
-                                     (const Bytef*)compressedData.data(), compressedData.size()) == Z_OK) {
-                            iccData.resize(uncompressedSize);
-                            return true;
-                        }
-                    }
+        if (lenData.size() != 4)
+            break;
+
+        const quint32 length =
+            (static_cast<quint8>(lenData[0]) << 24) |
+            (static_cast<quint8>(lenData[1]) << 16) |
+            (static_cast<quint8>(lenData[2]) <<  8) |
+             static_cast<quint8>(lenData[3]);
+
+        const QByteArray chunkType = file.read(4);
+        if (chunkType.size() != 4)
+            break;
+
+        if (chunkType == "IEND")
+            break;
+
+        if (chunkType == "iCCP")
+        {
+            // iCCP layout:
+            //   profile name (null-terminated string)
+            //   compression method (1 byte, always 0 = zlib)
+            //   zlib-compressed ICC profile data
+            const QByteArray chunkData = file.read(static_cast<qint64>(length));
+
+            const int nameEnd = chunkData.indexOf('\0');
+            if (nameEnd < 0 || nameEnd + 2 >= chunkData.size())
+            {
+                file.read(4); // Skip CRC.
+                continue;
+            }
+
+            // Skip name + null terminator + compression method byte.
+            const int dataStart = nameEnd + 2;
+            const QByteArray compressed = chunkData.mid(dataStart);
+
+            // Decompress; try a 2 MB buffer first, expanding to 10 MB on overflow.
+            unsigned long uncompressedSize = 2 * 1024 * 1024;
+            iccData.resize(static_cast<int>(uncompressedSize));
+
+            int res = uncompress(
+                reinterpret_cast<Bytef*>(iccData.data()), &uncompressedSize,
+                reinterpret_cast<const Bytef*>(compressed.constData()),
+                static_cast<uLong>(compressed.size()));
+
+            if (res == Z_OK)
+            {
+                iccData.resize(static_cast<int>(uncompressedSize));
+                return true;
+            }
+            if (res == Z_BUF_ERROR)
+            {
+                uncompressedSize = 10 * 1024 * 1024;
+                iccData.resize(static_cast<int>(uncompressedSize));
+                if (uncompress(
+                        reinterpret_cast<Bytef*>(iccData.data()), &uncompressedSize,
+                        reinterpret_cast<const Bytef*>(compressed.constData()),
+                        static_cast<uLong>(compressed.size())) == Z_OK)
+                {
+                    iccData.resize(static_cast<int>(uncompressedSize));
+                    return true;
                 }
             }
-        } else if (chunkType == "IEND") {
-            break;  // End of PNG chunks
-        } else {
-            // Skip other chunks
-            file.read(length);
         }
-        
-        // Skip CRC (4 bytes)
-        file.read(4);
+        else
+        {
+            file.read(static_cast<qint64>(length));
+        }
+
+        file.read(4); // Skip the 4-byte CRC.
     }
-    
+
     return false;
 }
 
-bool IccProfileExtractor::extractFromJpeg(const QString& filePath, QByteArray& iccData) {
+
+// =============================================================================
+// JPEG extraction (APP2 markers)
+// =============================================================================
+
+bool IccProfileExtractor::extractFromJpeg(const QString& filePath, QByteArray& iccData)
+{
     QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
+    if (!file.open(QIODevice::ReadOnly))
         return false;
-    }
-    
-    // Check JPEG SOI marker (0xFFD8)
-    quint8 byte1, byte2;
-    if (file.read((char*)&byte1, 1) != 1 || file.read((char*)&byte2, 1) != 1) return false;
-    if (byte1 != 0xFF || byte2 != 0xD8) return false;
-    
+
+    // Verify JPEG SOI marker (0xFF 0xD8).
+    quint8 b1 = 0, b2 = 0;
+    if (file.read(reinterpret_cast<char*>(&b1), 1) != 1 ||
+        file.read(reinterpret_cast<char*>(&b2), 1) != 1)
+        return false;
+
+    if (b1 != 0xFF || b2 != 0xD8)
+        return false;
+
+    // Collect ICC segments (JPEG may split a profile across multiple APP2 markers).
     QMap<int, QByteArray> segments;
-    
-    // Scan for APP2 markers
-    while (!file.atEnd()) {
-        quint8 m1, m2;
-        if (file.read((char*)&m1, 1) != 1 || file.read((char*)&m2, 1) != 1) break;
-        if (m1 != 0xFF) continue;
-        
-        if (m2 == 0xE2) { // APP2
-            quint16 length;
-            file.read((char*)&length, 2);
-            length = (quint8)((uchar*)&length)[0] << 8 | (quint8)((uchar*)&length)[1];
-            
-            if (length > 2) {
-                QByteArray appData = file.read(length - 2);
-                if (appData.startsWith("ICC_PROFILE\0")) {
-                    // Format: "ICC_PROFILE\0" (12 bytes) + index (1 byte) + count (1 byte) + data
-                    if (appData.size() > 14) {
-                        int index = (quint8)appData[12];
-                        // int count = (quint8)appData[13]; // Unused
-                        segments[index] = appData.mid(14);
-                    }
-                }
-            }
-        } else if (m2 == 0xDA) { // SOS - Start of Scan, stop searching
+
+    while (!file.atEnd())
+    {
+        quint8 m1 = 0, m2 = 0;
+        if (file.read(reinterpret_cast<char*>(&m1), 1) != 1 ||
+            file.read(reinterpret_cast<char*>(&m2), 1) != 1)
             break;
-        } else if (m2 >= 0xD0 && m2 <= 0xD9) {
-            // No length
-        } else {
-            // Skip marker with length
-            quint16 length;
-            file.read((char*)&length, 2);
-            length = (quint8)((uchar*)&length)[0] << 8 | (quint8)((uchar*)&length)[1];
-            if (length > 2) file.read(length - 2);
+
+        if (m1 != 0xFF)
+            continue;
+
+        if (m2 == 0xDA)  // SOS: Start of Scan; no more metadata segments follow.
+            break;
+
+        if (m2 >= 0xD0 && m2 <= 0xD9)  // Markers without a length field.
+            continue;
+
+        // Read the 2-byte big-endian segment length (includes the length bytes).
+        quint16 length = 0;
+        file.read(reinterpret_cast<char*>(&length), 2);
+        length = (static_cast<quint8>(reinterpret_cast<const uchar*>(&length)[0]) << 8) |
+                  static_cast<quint8>(reinterpret_cast<const uchar*>(&length)[1]);
+
+        if (length < 2)
+            continue;
+
+        const QByteArray appData = file.read(length - 2);
+
+        if (m2 == 0xE2 && appData.startsWith("ICC_PROFILE\0"))
+        {
+            // Format: "ICC_PROFILE\0" (12 bytes) + segment index + total count + data.
+            if (appData.size() > 14)
+            {
+                const int index = static_cast<quint8>(appData[12]);
+                segments[index] = appData.mid(14);
+            }
         }
     }
-    
-    if (segments.isEmpty()) return false;
-    
-    // Concatenate segments in order
+
+    if (segments.isEmpty())
+        return false;
+
+    // Reassemble segments in ascending index order.
     iccData.clear();
-    for (int i = 1; i <= segments.size(); ++i) {
-        if (!segments.contains(i)) return false; // Missing segment
+    for (int i = 1; i <= segments.size(); ++i)
+    {
+        if (!segments.contains(i))
+            return false;  // A segment is missing; the profile is incomplete.
         iccData.append(segments[i]);
     }
-    
+
     return !iccData.isEmpty();
 }
 
+
+// =============================================================================
+// FITS extraction (dedicated ICC_PROFILE HDU)
+// =============================================================================
+
+// Include CFITSIO here to avoid polluting earlier translation units.
 #include <fitsio.h>
-// Undefine TBYTE immediately to avoid conflict with Windows headers (typedef WCHAR TBYTE)
+
+// On Windows, <fitsio.h> may define TBYTE as a macro that conflicts with the
+// Windows SDK typedef. Undefine it immediately after the include.
 #ifdef TBYTE
-#undef TBYTE
+#  undef TBYTE
 #endif
 
-bool IccProfileExtractor::extractFromFits(const QString& filePath, QByteArray& iccData) {
-    fitsfile *fptr;
-    int status = 0;
-    
-    if (fits_open_file(&fptr, filePath.toUtf8().constData(), READONLY, &status)) {
+bool IccProfileExtractor::extractFromFits(const QString& filePath, QByteArray& iccData)
+{
+    fitsfile* fptr   = nullptr;
+    int       status = 0;
+
+    if (fits_open_file(&fptr, filePath.toUtf8().constData(), READONLY, &status))
         return false;
-    }
-    
-    int num_hdus;
+
+    int num_hdus = 0;
     fits_get_num_hdus(fptr, &num_hdus, &status);
-    
-    for (int hdu = 1; hdu <= num_hdus; hdu++) {
-        int hdutype;
+
+    for (int hdu = 1; hdu <= num_hdus; hdu++)
+    {
+        int hdutype = 0;
         fits_movabs_hdu(fptr, hdu, &hdutype, &status);
-        
-        char extname[FLEN_VALUE];
-        if (fits_read_key(fptr, TSTRING, "EXTNAME", extname, NULL, &status) == 0) {
-            QString name = QString::fromUtf8(extname).trimmed().toUpper();
-            if (name == "ICC_PROFILE" || name == "ICCPROFILE") {
-                // Read binary data from this HDU
-                long naxes[2];
-                int naxis;
+
+        char extname[FLEN_VALUE] = "";
+        if (fits_read_key(fptr, TSTRING, "EXTNAME", extname, nullptr, &status) == 0)
+        {
+            const QString name = QString::fromUtf8(extname).trimmed().toUpper();
+
+            if (name == "ICC_PROFILE" || name == "ICCPROFILE")
+            {
+                int  naxis = 0;
+                long naxes[2] = {0, 0};
                 fits_get_img_dim(fptr, &naxis, &status);
-                if (naxis > 0) {
+
+                if (naxis > 0)
+                {
                     fits_get_img_size(fptr, 2, naxes, &status);
                     long nelements = naxes[0];
                     if (naxis > 1) nelements *= naxes[1];
-                    
-                    iccData.resize(nelements);
-                    // Use literal 11 (TBYTE) to avoid macro conflicts with Windows headers
-                    fits_read_img(fptr, 11, 1, nelements, NULL, iccData.data(), NULL, &status);
-                    
-                    if (status == 0) {
+
+                    iccData.resize(static_cast<int>(nelements));
+
+                    // Use the literal value 11 (TBYTE) to avoid the Windows macro conflict.
+                    fits_read_img(fptr, 11, 1, nelements, nullptr,
+                                  iccData.data(), nullptr, &status);
+
+                    if (status == 0)
+                    {
                         fits_close_file(fptr, &status);
                         return true;
                     }
                 }
             }
         }
-        status = 0; // Reset status for next HDU if one fails
+
+        // Reset status so subsequent HDU operations are not aborted.
+        status = 0;
     }
-    
+
     fits_close_file(fptr, &status);
     return false;
 }
 
+
+// =============================================================================
+// Camera RAW extraction (LibRaw)
+// =============================================================================
+
 #ifdef HAVE_LIBRAW
-#include <libraw/libraw.h>
+#  include <libraw/libraw.h>
 #endif
 
-bool IccProfileExtractor::extractFromRaw(const QString& filePath, QByteArray& iccData) {
+bool IccProfileExtractor::extractFromRaw(const QString& filePath, QByteArray& iccData)
+{
 #ifdef HAVE_LIBRAW
     LibRaw processor;
-    
-    // Only open the file, don't unpack yet
-    if (processor.open_file(filePath.toUtf8().constData()) != LIBRAW_SUCCESS) {
+
+    // Open the file without unpacking the image data.
+    if (processor.open_file(filePath.toUtf8().constData()) != LIBRAW_SUCCESS)
         return false;
-    }
-    
-    // Check if ICC profile exists
-    if (processor.imgdata.color.profile_length > 0 && processor.imgdata.color.profile) {
-        iccData = QByteArray((const char*)processor.imgdata.color.profile, processor.imgdata.color.profile_length);
+
+    if (processor.imgdata.color.profile_length > 0 &&
+        processor.imgdata.color.profile != nullptr)
+    {
+        iccData = QByteArray(
+            static_cast<const char*>(processor.imgdata.color.profile),
+            static_cast<int>(processor.imgdata.color.profile_length));
         return true;
     }
-    
+
     return false;
 #else
     Q_UNUSED(filePath)
@@ -322,38 +381,52 @@ bool IccProfileExtractor::extractFromRaw(const QString& filePath, QByteArray& ic
 #endif
 }
 
-bool IccProfileExtractor::extractFromXisf(const QString& filePath, QByteArray& iccData) {
+
+// =============================================================================
+// XISF extraction (inline ICCProfile element)
+// =============================================================================
+
+bool IccProfileExtractor::extractFromXisf(const QString& filePath, QByteArray& iccData)
+{
     QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) return false;
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
 
-    // Check signature
-    QByteArray sig = file.read(8);
-    if (sig != "XISF0100") return false;
+    // Verify the XISF 1.0 signature.
+    const QByteArray sig = file.read(8);
+    if (sig != "XISF0100")
+        return false;
 
-    // Read header length
+    // Read the XML header length (little-endian uint32).
     uchar lenBytes[4];
-    if (file.read((char*)lenBytes, 4) != 4) return false;
-    quint32 headerLen = qFromLittleEndian<quint32>(lenBytes);
+    if (file.read(reinterpret_cast<char*>(lenBytes), 4) != 4)
+        return false;
 
-    // Skip reserved
-    file.read(4);
+    const quint32 headerLen = qFromLittleEndian<quint32>(lenBytes);
 
-    if (headerLen == 0 || headerLen > 20 * 1024 * 1024) return false; // 20MB safety
+    file.read(4); // Skip 4 reserved bytes.
 
-    QByteArray xmlBytes = file.read(headerLen);
+    // Apply a safety limit to prevent allocating unreasonable buffers.
+    if (headerLen == 0 || headerLen > 20 * 1024 * 1024)
+        return false;
+
+    const QByteArray xmlBytes = file.read(static_cast<qint64>(headerLen));
+
+    // Scan the XML header for an ICCProfile element with inline base64 data.
     QXmlStreamReader xml(xmlBytes);
-
-    while (!xml.atEnd()) {
+    while (!xml.atEnd())
+    {
         xml.readNext();
-        if (xml.isStartElement() && xml.name() == "ICCProfile") {
-            // XISF stores ICC profiles inline as base64 or in an attachment.
-            // Primarily support base64 for now as it's the most common.
-            QString profileData = xml.readElementText();
-            if (!profileData.isEmpty()) {
+        if (xml.isStartElement() && xml.name() == "ICCProfile")
+        {
+            const QString profileData = xml.readElementText();
+            if (!profileData.isEmpty())
+            {
                 iccData = QByteArray::fromBase64(profileData.toUtf8());
                 return !iccData.isEmpty();
             }
         }
     }
+
     return false;
 }

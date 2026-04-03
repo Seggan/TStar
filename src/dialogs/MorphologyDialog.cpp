@@ -18,24 +18,28 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWheelEvent>
-
 #include <opencv2/opencv.hpp>
 #include <algorithm>
 
+// =============================================================================
+// Anonymous namespace: internal conversion utilities
+// =============================================================================
 namespace {
-static cv::Mat imageBufferToMatFloat(const ImageBuffer& src) {
-    const int w = src.width();
-    const int h = src.height();
-    const int c = src.channels();
-    const float* in = src.data().data();
+
+// Convert an ImageBuffer (float32 [0,1]) to a cv::Mat for OpenCV processing.
+static cv::Mat imageBufferToMatFloat(const ImageBuffer& src)
+{
+    const int    w   = src.width();
+    const int    h   = src.height();
+    const int    c   = src.channels();
+    const float* in  = src.data().data();
 
     if (c == 1) {
         cv::Mat out(h, w, CV_32FC1);
-        float* dst = out.ptr<float>(0);
-        const size_t count = static_cast<size_t>(w) * static_cast<size_t>(h);
-        for (size_t i = 0; i < count; ++i) {
+        float*  dst   = out.ptr<float>(0);
+        const size_t count = static_cast<size_t>(w) * h;
+        for (size_t i = 0; i < count; ++i)
             dst[i] = std::clamp(in[i], 0.0f, 1.0f);
-        }
         return out;
     }
 
@@ -52,18 +56,19 @@ static cv::Mat imageBufferToMatFloat(const ImageBuffer& src) {
     return out;
 }
 
-static void matFloatToImageBuffer(const cv::Mat& src, ImageBuffer& dst) {
-    const int w = dst.width();
-    const int h = dst.height();
-    const int c = dst.channels();
-    float* out = dst.data().data();
+// Write a processed cv::Mat back into an existing ImageBuffer, preserving metadata.
+static void matFloatToImageBuffer(const cv::Mat& src, ImageBuffer& dst)
+{
+    const int   w   = dst.width();
+    const int   h   = dst.height();
+    const int   c   = dst.channels();
+    float*      out = dst.data().data();
 
     if (c == 1) {
         for (int y = 0; y < h; ++y) {
             const float* row = src.ptr<float>(y);
-            for (int x = 0; x < w; ++x) {
+            for (int x = 0; x < w; ++x)
                 out[y * w + x] = std::clamp(row[x], 0.0f, 1.0f);
-            }
         }
         return;
     }
@@ -79,21 +84,33 @@ static void matFloatToImageBuffer(const cv::Mat& src, ImageBuffer& dst) {
     }
 }
 
-static QString zoomText(float zoom) {
+// Format a zoom factor as a human-readable string (e.g. "1.25x").
+static QString zoomText(float zoom)
+{
     return QString::number(zoom, 'f', 2) + "x";
 }
-} // namespace
+
+} // anonymous namespace
+
+// =============================================================================
+// Constructor / Destructor
+// =============================================================================
 
 MorphologyDialog::MorphologyDialog(QWidget* parent)
-    : DialogBase(parent, tr("Morphological Operations")) {
+    : DialogBase(parent, tr("Morphological Operations"))
+{
     m_mainWindow = getCallbacks();
     setWindowTitle(tr("Morphological Operations"));
     resize(900, 640);
 
-    if (m_mainWindow && m_mainWindow->getCurrentViewer() && m_mainWindow->getCurrentViewer()->getBuffer().isValid()) {
+    if (m_mainWindow &&
+        m_mainWindow->getCurrentViewer() &&
+        m_mainWindow->getCurrentViewer()->getBuffer().isValid())
+    {
         m_sourceImage = m_mainWindow->getCurrentViewer()->getBuffer();
     }
 
+    // Debounce preview updates to avoid redundant computation during rapid slider changes
     m_previewTimer = new QTimer(this);
     m_previewTimer->setSingleShot(true);
     m_previewTimer->setInterval(200);
@@ -103,15 +120,20 @@ MorphologyDialog::MorphologyDialog(QWidget* parent)
     QTimer::singleShot(250, this, &MorphologyDialog::updatePreview);
 }
 
-MorphologyDialog::~MorphologyDialog() {}
+MorphologyDialog::~MorphologyDialog() = default;
 
-bool MorphologyDialog::eventFilter(QObject* obj, QEvent* ev) {
+// =============================================================================
+// Event Filter: Ctrl+Wheel zoom on the preview viewport
+// =============================================================================
+
+bool MorphologyDialog::eventFilter(QObject* obj, QEvent* ev)
+{
     if (obj == m_view->viewport() && ev->type() == QEvent::Wheel) {
         QWheelEvent* we = static_cast<QWheelEvent*>(ev);
         if (we->modifiers().testFlag(Qt::ControlModifier)) {
-            const float factor = (we->angleDelta().y() > 0) ? 1.15f : (1.0f / 1.15f);
+            const float factor  = (we->angleDelta().y() > 0) ? 1.15f : (1.0f / 1.15f);
             const float newZoom = std::clamp(m_zoom * factor, 0.10f, 10.0f);
-            const float actual = newZoom / m_zoom;
+            const float actual  = newZoom / m_zoom;
             m_zoom = newZoom;
             m_view->scale(actual, actual);
             return true;
@@ -120,34 +142,50 @@ bool MorphologyDialog::eventFilter(QObject* obj, QEvent* ev) {
     return DialogBase::eventFilter(obj, ev);
 }
 
-void MorphologyDialog::setSource(const ImageBuffer& img) {
-    m_sourceImage = img;
+// =============================================================================
+// Public API
+// =============================================================================
+
+void MorphologyDialog::setSource(const ImageBuffer& img)
+{
+    m_sourceImage  = img;
     m_firstDisplay = true;
     updatePreview();
 }
 
-void MorphologyDialog::setupUi() {
+// =============================================================================
+// UI Construction
+// =============================================================================
+
+void MorphologyDialog::setupUi()
+{
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
-    QGroupBox* grp = new QGroupBox(tr("Morphological Parameters"));
+    // -------------------------------------------------------------------------
+    // Parameter group: operation type, kernel size, iteration count, apply target
+    // -------------------------------------------------------------------------
+    QGroupBox*   grp  = new QGroupBox(tr("Morphological Parameters"));
     QGridLayout* grid = new QGridLayout(grp);
 
     grid->addWidget(new QLabel(tr("Operation:")), 0, 0);
     m_cbOp = new QComboBox();
-    m_cbOp->addItems({tr("Erosion"), tr("Dilation"), tr("Opening"), tr("Closing")});
-    connect(m_cbOp, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
-        if (m_previewCheck && m_previewCheck->isChecked()) m_previewTimer->start();
-    });
+    m_cbOp->addItems({ tr("Erosion"), tr("Dilation"), tr("Opening"), tr("Closing") });
+    connect(m_cbOp, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { if (m_previewCheck && m_previewCheck->isChecked()) m_previewTimer->start(); });
     grid->addWidget(m_cbOp, 0, 1, 1, 2);
 
-    // Helper for slider rows
-    auto addSliderRow = [&](int row, const QString& label, QSlider*& slider, QSpinBox*& spin, int min, int max, int def, int step = 1) {
+    // Helper: create a synchronised slider + spin-box row
+    auto addSliderRow = [&](int row, const QString& label,
+                            QSlider*& slider, QSpinBox*& spin,
+                            int min, int max, int def, int step = 1)
+    {
         grid->addWidget(new QLabel(label), row, 0);
+
         slider = new QSlider(Qt::Horizontal);
         slider->setRange(min, max);
         slider->setSingleStep(step);
         slider->setValue(def);
-        
+
         spin = new QSpinBox();
         spin->setRange(min, max);
         spin->setSingleStep(step);
@@ -155,20 +193,21 @@ void MorphologyDialog::setupUi() {
         spin->setFixedWidth(60);
 
         grid->addWidget(slider, row, 1);
-        grid->addWidget(spin, row, 2);
+        grid->addWidget(spin,   row, 2);
 
-        connect(slider, &QSlider::valueChanged, this, [spin, this](int v){ 
-            spin->blockSignals(true); spin->setValue(v); spin->blockSignals(false); 
+        connect(slider, &QSlider::valueChanged, this, [spin, this](int v) {
+            spin->blockSignals(true);  spin->setValue(v);  spin->blockSignals(false);
             if (m_previewCheck && m_previewCheck->isChecked()) m_previewTimer->start();
         });
-        connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [slider, this](int v){
-            slider->blockSignals(true); slider->setValue(v); slider->blockSignals(false); 
+        connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [slider, this](int v) {
+            slider->blockSignals(true); slider->setValue(v); slider->blockSignals(false);
             if (m_previewCheck && m_previewCheck->isChecked()) m_previewTimer->start();
         });
     };
 
     addSliderRow(1, tr("Kernel size:"), m_sliderKernel, m_spinKernel, 1, 31, 3, 2);
-    // Enforce odd values for kernel
+
+    // Morphological kernels require odd dimensions; auto-correct even values
     connect(m_spinKernel, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int k) {
         if (k % 2 == 0) {
             m_spinKernel->setValue(k + 1);
@@ -186,28 +225,38 @@ void MorphologyDialog::setupUi() {
 
     mainLayout->addWidget(grp);
 
+    // -------------------------------------------------------------------------
+    // Preview: scrollable graphics view with drag-pan support
+    // -------------------------------------------------------------------------
     m_scene = new QGraphicsScene(this);
-    m_view = new QGraphicsView(m_scene);
+    m_view  = new QGraphicsView(m_scene);
     m_view->setBackgroundBrush(Qt::black);
     m_view->setDragMode(QGraphicsView::ScrollHandDrag);
     m_view->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     m_view->setResizeAnchor(QGraphicsView::AnchorUnderMouse);
     m_view->viewport()->installEventFilter(this);
+
     m_pixmapItem = new QGraphicsPixmapItem();
     m_scene->addItem(m_pixmapItem);
     mainLayout->addWidget(m_view, 1);
 
-    QHBoxLayout* zoomRow = new QHBoxLayout();
-    zoomRow->addWidget(new QLabel(tr("Zoom: Ctrl+Wheel")));
+    // -------------------------------------------------------------------------
+    // Zoom toolbar
+    // -------------------------------------------------------------------------
+    QHBoxLayout* zoomRow    = new QHBoxLayout();
     QPushButton* zoomOutBtn = new QPushButton(tr("-")); zoomOutBtn->setFixedWidth(28);
-    QPushButton* zoomInBtn = new QPushButton(tr("+")); zoomInBtn->setFixedWidth(28);
-    QPushButton* fitBtn = new QPushButton(tr("Fit"));
-    QLabel* zoomStatus = new QLabel(zoomText(1.0f)); zoomStatus->setMinimumWidth(60);
+    QPushButton* zoomInBtn  = new QPushButton(tr("+")); zoomInBtn->setFixedWidth(28);
+    QPushButton* fitBtn     = new QPushButton(tr("Fit"));
+    QLabel*      zoomStatus = new QLabel(zoomText(1.0f)); zoomStatus->setMinimumWidth(60);
 
-    connect(zoomOutBtn, &QPushButton::clicked, this, [this, zoomStatus]() { zoomOut(); zoomStatus->setText(zoomText(m_zoom)); });
-    connect(zoomInBtn, &QPushButton::clicked, this, [this, zoomStatus]() { zoomIn(); zoomStatus->setText(zoomText(m_zoom)); });
-    connect(fitBtn, &QPushButton::clicked, this, [this, zoomStatus]() { zoomFit(); zoomStatus->setText(zoomText(m_zoom)); });
+    connect(zoomOutBtn, &QPushButton::clicked, this, [this, zoomStatus]() {
+        zoomOut(); zoomStatus->setText(zoomText(m_zoom)); });
+    connect(zoomInBtn,  &QPushButton::clicked, this, [this, zoomStatus]() {
+        zoomIn();  zoomStatus->setText(zoomText(m_zoom)); });
+    connect(fitBtn,     &QPushButton::clicked, this, [this, zoomStatus]() {
+        zoomFit(); zoomStatus->setText(zoomText(m_zoom)); });
 
+    zoomRow->addWidget(new QLabel(tr("Zoom: Ctrl+Wheel")));
     zoomRow->addWidget(zoomOutBtn);
     zoomRow->addWidget(zoomInBtn);
     zoomRow->addWidget(fitBtn);
@@ -215,14 +264,18 @@ void MorphologyDialog::setupUi() {
     zoomRow->addStretch();
     mainLayout->addLayout(zoomRow);
 
+    // -------------------------------------------------------------------------
+    // Bottom button row: Preview toggle, Reset, Cancel, Apply
+    // -------------------------------------------------------------------------
     QHBoxLayout* btnLayout = new QHBoxLayout();
+
     m_previewCheck = new QCheckBox(tr("Preview"));
     m_previewCheck->setChecked(true);
     connect(m_previewCheck, &QCheckBox::toggled, this, [this](bool on) {
-        if (on) updatePreview();
-        else if (m_sourceImage.isValid()) {
-            QImage qimg = m_sourceImage.getDisplayImage();
-            m_pixmapItem->setPixmap(QPixmap::fromImage(qimg));
+        if (on) {
+            updatePreview();
+        } else if (m_sourceImage.isValid()) {
+            m_pixmapItem->setPixmap(QPixmap::fromImage(m_sourceImage.getDisplayImage()));
             m_scene->setSceneRect(m_pixmapItem->boundingRect());
         }
     });
@@ -243,41 +296,64 @@ void MorphologyDialog::setupUi() {
     mainLayout->addLayout(btnLayout);
 }
 
-void MorphologyDialog::applyMorphology(const ImageBuffer& src, int opIndex, int kernelSize, int iterations, ImageBuffer& dst) const {
+// =============================================================================
+// Morphology Engine
+// =============================================================================
+
+// Apply the morphological operation identified by opIndex to src, writing to dst.
+// An elliptical structuring element is used; kernelSize is forced odd if necessary.
+void MorphologyDialog::applyMorphology(const ImageBuffer& src,
+                                       int opIndex,
+                                       int kernelSize,
+                                       int iterations,
+                                       ImageBuffer& dst) const
+{
     if (!src.isValid()) { dst = ImageBuffer(); return; }
 
     cv::Mat mat = imageBufferToMatFloat(src);
     if (kernelSize % 2 == 0) kernelSize += 1;
-    cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(kernelSize, kernelSize));
-    
+
+    const cv::Mat element = cv::getStructuringElement(
+        cv::MORPH_ELLIPSE, cv::Size(kernelSize, kernelSize));
+
     cv::Mat out;
-    // 0: Erosion, 1: Dilation, 2: Opening, 3: Closing
-    if (opIndex == 0) cv::erode(mat, out, element, cv::Point(-1,-1), iterations);
-    else if (opIndex == 1) cv::dilate(mat, out, element, cv::Point(-1,-1), iterations);
-    else if (opIndex == 2) cv::morphologyEx(mat, out, cv::MORPH_OPEN, element, cv::Point(-1,-1), iterations);
-    else if (opIndex == 3) cv::morphologyEx(mat, out, cv::MORPH_CLOSE, element, cv::Point(-1,-1), iterations);
-    else out = mat.clone();
-    
+    switch (opIndex) {
+        case 0: cv::erode    (mat, out, element, cv::Point(-1,-1), iterations); break;
+        case 1: cv::dilate   (mat, out, element, cv::Point(-1,-1), iterations); break;
+        case 2: cv::morphologyEx(mat, out, cv::MORPH_OPEN,  element, cv::Point(-1,-1), iterations); break;
+        case 3: cv::morphologyEx(mat, out, cv::MORPH_CLOSE, element, cv::Point(-1,-1), iterations); break;
+        default: out = mat.clone(); break;
+    }
+
     dst = src;
     matFloatToImageBuffer(out, dst);
 }
 
-void MorphologyDialog::updatePreview() {
+// =============================================================================
+// Preview
+// =============================================================================
+
+void MorphologyDialog::updatePreview()
+{
     if (!m_sourceImage.isValid()) return;
     if (m_previewCheck && !m_previewCheck->isChecked()) return;
 
-    applyMorphology(m_sourceImage, m_cbOp->currentIndex(), m_spinKernel->value(), m_spinIter->value(), m_previewImage);
+    applyMorphology(m_sourceImage,
+                    m_cbOp->currentIndex(),
+                    m_spinKernel->value(),
+                    m_spinIter->value(),
+                    m_previewImage);
 
+    // Respect the active mask: blend the result back onto the original
     if (m_sourceImage.hasMask()) {
-        MaskLayer ml = *m_sourceImage.getMask();
-        m_previewImage.setMask(ml);
+        m_previewImage.setMask(*m_sourceImage.getMask());
         m_previewImage.blendResult(m_sourceImage);
     }
 
-    QImage qimg = m_previewImage.getDisplayImage();
-    m_pixmapItem->setPixmap(QPixmap::fromImage(qimg));
+    m_pixmapItem->setPixmap(QPixmap::fromImage(m_previewImage.getDisplayImage()));
     m_scene->setSceneRect(m_pixmapItem->boundingRect());
 
+    // Fit to view on the first display; thereafter preserve the user's zoom level
     if (m_firstDisplay) {
         m_view->fitInView(m_pixmapItem, Qt::KeepAspectRatio);
         m_zoom = std::clamp(static_cast<float>(m_view->transform().m11()), 0.10f, 10.0f);
@@ -285,8 +361,14 @@ void MorphologyDialog::updatePreview() {
     }
 }
 
-void MorphologyDialog::onApply() {
+// =============================================================================
+// Apply / Reset
+// =============================================================================
+
+void MorphologyDialog::onApply()
+{
     if (!m_mainWindow) return;
+
     ImageViewer* viewer = m_mainWindow->getCurrentViewer();
     if (!viewer || !viewer->getBuffer().isValid()) {
         QMessageBox::warning(this, tr("No Image"), tr("Please select an image first."));
@@ -295,17 +377,17 @@ void MorphologyDialog::onApply() {
 
     const ImageBuffer source = viewer->getBuffer();
     ImageBuffer output;
-    applyMorphology(source, m_cbOp->currentIndex(), m_spinKernel->value(), m_spinIter->value(), output);
+    applyMorphology(source, m_cbOp->currentIndex(), m_spinKernel->value(),
+                    m_spinIter->value(), output);
 
     if (source.hasMask()) {
-        MaskLayer ml = *source.getMask();
-        output.setMask(ml);
+        output.setMask(*source.getMask());
         output.blendResult(source);
     }
 
-    const bool createNew = (m_applyTargetCombo->currentIndex() == 1);
-    if (createNew) {
-        m_mainWindow->createResultWindow(output, tr("%1 [Morphology]").arg(viewer->windowTitle()));
+    if (m_applyTargetCombo->currentIndex() == 1) {
+        m_mainWindow->createResultWindow(output,
+            tr("%1 [Morphology]").arg(viewer->windowTitle()));
     } else {
         viewer->pushUndo(tr("Morphology"));
         viewer->setBuffer(output, viewer->windowTitle(), true);
@@ -316,45 +398,54 @@ void MorphologyDialog::onApply() {
     accept();
 }
 
-void MorphologyDialog::onReset() {
-    m_cbOp->blockSignals(true); 
-    if (m_sliderKernel) m_sliderKernel->blockSignals(true);
-    if (m_spinKernel) m_spinKernel->blockSignals(true);
-    if (m_sliderIter) m_sliderIter->blockSignals(true);
-    if (m_spinIter) m_spinIter->blockSignals(true);
+// Reset all controls to their defaults and refresh the preview.
+void MorphologyDialog::onReset()
+{
+    // Block signals to prevent cascading preview updates during reset
+    for (QObject* obj : QObjectList{ m_cbOp, m_sliderKernel, m_spinKernel,
+                                     m_sliderIter, m_spinIter })
+    {
+        if (obj) obj->blockSignals(true);
+    }
 
-    m_cbOp->setCurrentIndex(0); 
-    if (m_spinKernel) m_spinKernel->setValue(3); 
+    m_cbOp->setCurrentIndex(0);
+    if (m_spinKernel)   m_spinKernel->setValue(3);
     if (m_sliderKernel) m_sliderKernel->setValue(3);
-    if (m_spinIter) m_spinIter->setValue(1);
-    if (m_sliderIter) m_sliderIter->setValue(1);
-    
-    m_applyTargetCombo->setCurrentIndex(0); 
+    if (m_spinIter)     m_spinIter->setValue(1);
+    if (m_sliderIter)   m_sliderIter->setValue(1);
+    m_applyTargetCombo->setCurrentIndex(0);
     m_previewCheck->setChecked(true);
 
-    m_cbOp->blockSignals(false); 
-    if (m_sliderKernel) m_sliderKernel->blockSignals(false);
-    if (m_spinKernel) m_spinKernel->blockSignals(false);
-    if (m_sliderIter) m_sliderIter->blockSignals(false);
-    if (m_spinIter) m_spinIter->blockSignals(false);
+    for (QObject* obj : QObjectList{ m_cbOp, m_sliderKernel, m_spinKernel,
+                                     m_sliderIter, m_spinIter })
+    {
+        if (obj) obj->blockSignals(false);
+    }
 
     m_firstDisplay = true;
     updatePreview();
 }
 
-void MorphologyDialog::zoomIn() {
+// =============================================================================
+// Zoom Helpers
+// =============================================================================
+
+void MorphologyDialog::zoomIn()
+{
     const float newZoom = std::clamp(m_zoom * 1.15f, 0.10f, 10.0f);
-    const float actual = newZoom / m_zoom;
-    m_zoom = newZoom; m_view->scale(actual, actual);
+    m_view->scale(newZoom / m_zoom, newZoom / m_zoom);
+    m_zoom = newZoom;
 }
 
-void MorphologyDialog::zoomOut() {
+void MorphologyDialog::zoomOut()
+{
     const float newZoom = std::clamp(m_zoom / 1.15f, 0.10f, 10.0f);
-    const float actual = newZoom / m_zoom;
-    m_zoom = newZoom; m_view->scale(actual, actual);
+    m_view->scale(newZoom / m_zoom, newZoom / m_zoom);
+    m_zoom = newZoom;
 }
 
-void MorphologyDialog::zoomFit() {
+void MorphologyDialog::zoomFit()
+{
     if (!m_pixmapItem || m_pixmapItem->pixmap().isNull()) return;
     m_view->fitInView(m_pixmapItem, Qt::KeepAspectRatio);
     m_zoom = std::clamp(static_cast<float>(m_view->transform().m11()), 0.10f, 10.0f);

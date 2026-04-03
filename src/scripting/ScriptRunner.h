@@ -1,9 +1,21 @@
+/**
+ * @file ScriptRunner.h
+ * @brief Executes parsed script commands through registered handlers.
+ *
+ * ScriptRunner is the central execution engine for TStar scripts. It
+ * maintains a registry of available commands, manages script-level
+ * variables, handles variable substitution at execution time, and
+ * provides progress / logging / cancellation infrastructure.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
 
 #ifndef SCRIPT_RUNNER_H
 #define SCRIPT_RUNNER_H
 
 #include "ScriptTypes.h"
 #include "ScriptParser.h"
+
 #include <QObject>
 #include <QMap>
 #include <atomic>
@@ -12,193 +24,175 @@ namespace Scripting {
 
 class ScriptRunner : public QObject {
     Q_OBJECT
-    
+
 public:
     explicit ScriptRunner(QObject* parent = nullptr);
     ~ScriptRunner() override;
-    
-    //=========================================================================
-    // COMMAND REGISTRATION
-    //=========================================================================
-    
-    /**
-     * @brief Register a command
-     */
+
+    // ========================================================================
+    // Command registration
+    // ========================================================================
+
+    /** @brief Register a single command definition. */
     void registerCommand(const CommandDef& def);
-    
-    /**
-     * @brief Register multiple commands
-     */
+
+    /** @brief Register a batch of command definitions. */
     void registerCommands(const QVector<CommandDef>& defs);
-    
-    /**
-     * @brief Check if command is registered
-     */
+
+    /** @brief Check whether a command with the given name is registered. */
     bool hasCommand(const QString& name) const;
-    
-    /**
-     * @brief Get command definition
-     */
+
+    /** @brief Look up a command definition by name; returns nullptr if not found. */
     const CommandDef* getCommand(const QString& name) const;
-    
-    /**
-     * @brief Get all registered commands
-     */
+
+    /** @brief Return the names of all registered commands. */
     QStringList registeredCommands() const;
-    
-    //=========================================================================
-    // SCRIPT EXECUTION
-    //=========================================================================
-    
+
+    // ========================================================================
+    // Script execution
+    // ========================================================================
+
     /**
-     * @brief Execute a script file
-     * @param path Path to script file
-     * @return Execution result
+     * @brief Parse and execute a script file.
+     * @param path  Filesystem path to the script.
+     * @return Overall execution result.
      */
     ScriptResult executeFile(const QString& path);
-    
+
     /**
-     * @brief Execute a script string
-     * @param content Script content
-     * @return Execution result
+     * @brief Parse and execute a script provided as a string.
+     * @param content  Full script text.
+     * @return Overall execution result.
      */
     ScriptResult executeString(const QString& content);
-    
+
     /**
-     * @brief Execute pre-parsed commands
-     * @param commands Commands to execute
-     * @return Execution result
+     * @brief Execute a pre-parsed list of commands.
+     * @param commands  Commands to execute sequentially.
+     * @return Overall execution result.
      */
     ScriptResult executeCommands(const QVector<ScriptCommand>& commands);
-    
+
     /**
-     * @brief Execute a single command
-     * @param cmd Command to execute
-     * @return true on success
+     * @brief Execute a single command (variable substitution + validation + handler).
+     * @param cmd  The command to execute.
+     * @return true on success.
      */
     bool executeCommand(const ScriptCommand& cmd);
-    
-    //=========================================================================
-    // VARIABLES
-    //=========================================================================
-    
-    /**
-     * @brief Set a variable
-     */
+
+    // ========================================================================
+    // Variables
+    // ========================================================================
+
+    /** @brief Set a script-level variable. */
     void setVariable(const QString& name, const QString& value);
-    
-    /**
-     * @brief Get a variable
-     */
+
+    /** @brief Retrieve a script-level variable (empty string if undefined). */
     QString variable(const QString& name) const;
-    
-    /**
-     * @brief Get all variables
-     */
+
+    /** @brief Access the full variable map. */
     const QMap<QString, QString>& variables() const { return m_variables; }
-    
-    //=========================================================================
-    // WORKING DIRECTORY
-    //=========================================================================
-    
-    /**
-     * @brief Set working directory for the script
-     */
+
+    // ========================================================================
+    // Working directory
+    // ========================================================================
+
+    /** @brief Set the working directory for relative path resolution. */
     void setWorkingDirectory(const QString& path);
-    
-    /**
-     * @brief Get current working directory
-     */
+
+    /** @brief Get the current working directory. */
     QString workingDirectory() const { return m_workingDir; }
-    
-    //=========================================================================
-    // CANCELLATION
-    //=========================================================================
-    
-    void requestCancel();  // Declaration only, implementation in .cpp
+
+    // ========================================================================
+    // Cancellation
+    // ========================================================================
+
+    /** @brief Request cancellation of the running script. */
+    void requestCancel();
+
+    /** @brief Check whether cancellation has been requested. */
     bool isCancelled() const { return m_cancelled.load(); }
-    void resetCancel();    // Declaration only, implementation in .cpp
-    
-    //=========================================================================
-    // ERROR HANDLING
-    //=========================================================================
-    
+
+    /** @brief Clear the cancellation flag so a new script can be executed. */
+    void resetCancel();
+
+    // ========================================================================
+    // Error handling
+    // ========================================================================
+
     /**
-     * @brief Set error information
+     * @brief Record an error and emit a log message.
+     * @param message     Human-readable error description.
+     * @param lineNumber  Source line that caused the error (0 if unknown).
      */
     void setError(const QString& message, int lineNumber);
-    
-    /**
-     * @brief Get last error message
-     */
+
+    /** @brief Retrieve the most recent error message. */
     QString lastError() const { return m_lastError; }
-    
-    /**
-     * @brief Get last error line number
-     */
+
+    /** @brief Retrieve the source line of the most recent error. */
     int lastErrorLine() const { return m_lastErrorLine; }
-    
+
+    // ========================================================================
+    // Logging
+    // ========================================================================
+
     /**
-     * @brief Direct logging function for critical paths (bypasses signal overhead)
-     * This is used in tight loops to avoid Qt event processing overhead
+     * @brief Emit a log message.
+     *
+     * Intended for use inside tight command loops where signal/slot
+     * overhead needs to be minimized. Currently delegates to the
+     * logMessage signal.
      */
     void logMessageDirect(const QString& message, const QString& color);
-    
+
     /**
-     * @brief Perform variable substitution ($VAR or ${VAR})
+     * @brief Perform variable substitution on the given text.
+     *
+     * Supports both ${VAR} and $VAR syntax. Resolves against script
+     * variables first, then against dynamic metadata from the current image.
      */
     QString substituteVariables(const QString& text) const;
 
 signals:
-    /**
-     * @brief Emitted before executing a command
-     */
+    /** @brief Emitted immediately before a command is executed. */
     void commandStarted(const QString& name, int lineNumber);
-    
-    /**
-     * @brief Emitted after executing a command
-     */
+
+    /** @brief Emitted immediately after a command finishes. */
     void commandFinished(const QString& name, bool success);
-    
-    /**
-     * @brief Progress update
-     */
+
+    /** @brief Progress update: descriptive message and fraction [0..1]. */
     void progressChanged(const QString& message, double progress);
-    
-    /**
-     * @brief Log message
-     */
+
+    /** @brief General-purpose log message with a color hint. */
     void logMessage(const QString& message, const QString& color);
-    
-    /**
-     * @brief Script execution finished
-     */
+
+    /** @brief Emitted when the entire script has finished. */
     void finished(bool success);
-    
-    /**
-     * @brief Signal for cancellation requested
-     */
+
+    /** @brief Emitted when cancellation has been requested. */
     void cancelRequested();
-    
+
     /**
-     * @brief Emitted when a script command loads an image
-     * The image is available via StackingCommands::getCurrentImage()
+     * @brief Emitted when a script command loads a new image.
+     *
+     * The image data is available through
+     * StackingCommands::getCurrentImage().
      */
     void imageLoaded(const QString& title);
 
-
 private:
-    /**
-     * @brief Validate command arguments
-     */
+    /** @brief Validate a command's argument count against its definition. */
     bool validateCommand(const ScriptCommand& cmd);
-    
-    QMap<QString, CommandDef> m_commands;
-    QMap<QString, QString> m_variables;
-    QString m_workingDir;
-    QString m_lastError;
-    int m_lastErrorLine = 0;
-    std::atomic<bool> m_cancelled{false};
+
+    // -- Member data ---------------------------------------------------------
+
+    QMap<QString, CommandDef>  m_commands;            ///< Registered command handlers.
+    QMap<QString, QString>    m_variables;            ///< Script-level variables.
+    QString                   m_workingDir;           ///< Current working directory.
+    QString                   m_lastError;            ///< Most recent error message.
+    int                       m_lastErrorLine = 0;    ///< Line number of last error.
+    std::atomic<bool>         m_cancelled{false};     ///< Cancellation flag.
 };
 
 } // namespace Scripting

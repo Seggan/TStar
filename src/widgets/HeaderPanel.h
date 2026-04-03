@@ -5,28 +5,37 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QLineEdit>
+
 #include "../ImageBuffer.h"
 
-// Refactored from HeaderViewerDialog to be a reusable panel
+// ---------------------------------------------------------------------------
+// HeaderPanel
+// A reusable widget that displays the raw FITS header cards (keyword, value,
+// comment) of an ImageBuffer in a searchable, copyable table.
+//
+// Refactored from the original modal HeaderViewerDialog so that the header
+// can be embedded as a panel inside the left sidebar.
+// ---------------------------------------------------------------------------
 class HeaderPanel : public QWidget {
     Q_OBJECT
+
 public:
     explicit HeaderPanel(QWidget* parent = nullptr);
-    
-    // Updates the view with new metadata
+
+    // Populates the table with the given image metadata
     void setMetadata(const ImageBuffer::Metadata& meta);
-    
-    // Clears the view
+
+    // Clears all rows from the table
     void clear();
 
 private:
     void setupUI();
     void filterRows(const QString& text);
     void copySelectedToClipboard();
-    
+
     ImageBuffer::Metadata m_meta;
-    QTableWidget* m_table;
-    QLineEdit* m_searchBox;
+    QTableWidget*         m_table;
+    QLineEdit*            m_searchBox;
 };
 
 #endif // HEADERPANEL_H

@@ -1,19 +1,28 @@
+// =============================================================================
+// version.rc.in
+//
+// Windows VERSIONINFO resource template. CMake substitutes the @...@ tokens
+// with the actual version numbers at configure time.
+// =============================================================================
+
 #include <windows.h>
 
+// Application icon
 IDI_ICON1 ICON DISCARDABLE "images/Logo.ico"
 
+// Version information block
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     @TSTAR_VERSION_MAJOR@,@TSTAR_VERSION_MINOR@,@TSTAR_VERSION_PATCH@,0
-PRODUCTVERSION  @TSTAR_VERSION_MAJOR@,@TSTAR_VERSION_MINOR@,@TSTAR_VERSION_PATCH@,0
-FILEFLAGSMASK   0x3fL
+    FILEVERSION    @TSTAR_VERSION_MAJOR@,@TSTAR_VERSION_MINOR@,@TSTAR_VERSION_PATCH@,0
+    PRODUCTVERSION @TSTAR_VERSION_MAJOR@,@TSTAR_VERSION_MINOR@,@TSTAR_VERSION_PATCH@,0
+    FILEFLAGSMASK  0x3fL
 #ifdef _DEBUG
-FILEFLAGS       0x1L
+    FILEFLAGS      0x1L
 #else
-FILEFLAGS       0x0L
+    FILEFLAGS      0x0L
 #endif
-FILEOS          VOS_NT_WINDOWS32
-FILETYPE        VFT_APP
-FILESUBTYPE     VFT2_UNKNOWN
+    FILEOS         VOS_NT_WINDOWS32
+    FILETYPE       VFT_APP
+    FILESUBTYPE    VFT2_UNKNOWN
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN

@@ -1,130 +1,189 @@
 #ifndef TRIANGLEMATCHER_H
 #define TRIANGLEMATCHER_H
 
+// ============================================================================
+// TriangleMatcher
+//
+// Geometric triangle-voting plate-solving engine. Matches two sets of 2D
+// points (image stars and catalog stars) by comparing invariant triangle
+// shape ratios (b/a, c/a). The algorithm:
+//
+//   1. Generates all triangles from the N brightest stars in each list.
+//   2. Votes for star-pair correspondences when triangle shapes match.
+//   3. Extracts top vote-getters and fits an affine transformation.
+//   4. Iteratively refines the transform via sigma-clipped least squares.
+//
+// Based on the geometric voting technique described in Valdes et al. (1995)
+// and the open-source astrometry implementations.
+// ============================================================================
+
 #include <vector>
 #include <cmath>
 #include <algorithm>
 
 // ============================================================================
-// Constants 
+// Compile-time constants
 // ============================================================================
 
-// Max radius in triangle-space (ba,ca) for matching
-#define AT_TRIANGLE_RADIUS    0.002
+// Maximum radius in triangle-space (b/a, c/a) for shape matching
+#define AT_TRIANGLE_RADIUS          0.002
 
-// Matching radius after applying TRANS, in units of list B (arcsec)
-#define AT_MATCH_RADIUS       5.0
+// Matching radius after applying TRANS (arcsec)
+#define AT_MATCH_RADIUS             5.0
 
-// Max distance (arcsec) in iter_trans — hard upper limit
-#define AT_MATCH_MAXDIST     50.0
+// Maximum allowed residual distance in iterTrans (arcsec)
+#define AT_MATCH_MAXDIST            50.0
 
-// Sigma clipping multiplier in iter_trans 
-#define AT_MATCH_NSIGMA       10.0
+// Sigma-clipping multiplier for outlier rejection in iterTrans
+#define AT_MATCH_NSIGMA             10.0
 
-// Percentile for sigma estimation used in iter_trans clipping 
-#define AT_MATCH_PERCENTILE   0.35
+// Percentile for sigma estimation in iterTrans clipping
+#define AT_MATCH_PERCENTILE         0.35
 
-// Percentile used only for the sig diagnostic field (not for clipping)
-#define ONE_STDEV_PERCENTILE  0.683
+// Percentile for the 1-sigma diagnostic (not used for clipping)
+#define ONE_STDEV_PERCENTILE        0.683
 
-// Halt sigma threshold (if dist² at percentile is below this, stop iterating)
-#define AT_MATCH_HALTSIGMA    0.1
+// Halt threshold: stop iterating if sigma falls below this value
+#define AT_MATCH_HALTSIGMA          0.1
 
-// Max image stars for triangle generation 
-// Fewer image-star triangles → much cleaner vote matrix signal-to-noise
-#define AT_MATCH_NBRIGHT          20
-// Max catalog stars for triangle generation 
-#define AT_MATCH_CATALOG_NBRIGHT  60
+// Maximum image stars used for triangle generation
+#define AT_MATCH_NBRIGHT            20
 
-// Min votes in vote matrix for a pair to be valid
-#define AT_MATCH_MINVOTES     2
+// Maximum catalog stars used for triangle generation
+#define AT_MATCH_CATALOG_NBRIGHT    60
 
-// Max iterations in iter_trans
-#define AT_MATCH_MAXITER      5
+// Minimum vote count for a star pair to be considered valid
+#define AT_MATCH_MINVOTES           2
 
-// Prune triangles with ba > this ratio
-#define AT_MATCH_RATIO        0.9
+// Maximum iterations in the sigma-clipping loop
+#define AT_MATCH_MAXITER            5
 
-// Minimum and initial pairs for linear fit
-#define AT_MATCH_STARTN_LINEAR  6
-#define AT_MATCH_REQUIRE_LINEAR 3
+// Prune triangles with b/a ratio above this threshold (near-degenerate)
+#define AT_MATCH_RATIO              0.9
 
-// Tolerance for Gauss elimination pivot
-#define GAUSS_MATRIX_TOL      1.0e-4
+// Minimum number of star pairs required to compute a linear fit
+#define AT_MATCH_STARTN_LINEAR      6
+#define AT_MATCH_REQUIRE_LINEAR     3
 
-// Marker for "no angle constraint"
-#define AT_MATCH_NOANGLE     -999.0
+// Tolerance for pivot detection in Gaussian elimination
+#define GAUSS_MATRIX_TOL            1.0e-4
+
+// Sentinel value indicating no angle constraint
+#define AT_MATCH_NOANGLE            -999.0
+
+// Maximum vote matrix dimension to prevent oversized allocations
+#define AT_MATCH_MAX_VOTE_DIM       500
 
 // ============================================================================
-// Data structures 
+// Data structures
 // ============================================================================
 
-struct MatchStar {
-    int id = 0;
-    int index = 0;      // position in the sorted array
-    double x = 0;
-    double y = 0;
-    double mag = 0;
-    int match_id = -1;  // ID of star in other list which matches
+/**
+ * Represents a single star with position, magnitude, and match linkage.
+ * Aligned to 16 bytes for cache-line efficiency.
+ */
+struct alignas(16) MatchStar {
+    int    id       = 0;
+    int    index    = 0;      // Position in the magnitude-sorted array
+    double x        = 0;
+    double y        = 0;
+    double mag      = 0;
+    int    match_id = -1;     // ID of the matched counterpart (-1 = unmatched)
+    int    _pad     = 0;      // Explicit padding for 16-byte alignment
+    double _res     = 0;      // Reserved (total struct size: 48 bytes)
 };
 
-struct MatchTriangle {
-    int id = 0;
-    int a_index = 0;    // index of vertex OPPOSITE the longest side
-    int b_index = 0;    // index of vertex OPPOSITE the intermediate side
-    int c_index = 0;    // index of vertex OPPOSITE the shortest side
-    double a_length = 0; // Length of longest side (not normalized)
-    double ba = 0;      // Ratio b/a (0..1)
-    double ca = 0;      // Ratio c/a (0..1)
+/**
+ * Represents a triangle formed by three stars. Vertex labels refer to
+ * the sides opposite each vertex:
+ *   a_index -> vertex opposite the longest  side (length = a_length)
+ *   b_index -> vertex opposite the intermediate side
+ *   c_index -> vertex opposite the shortest side
+ */
+struct alignas(16) MatchTriangle {
+    int    id       = 0;
+    int    a_index  = 0;      // Vertex opposite the longest side
+    int    b_index  = 0;      // Vertex opposite the intermediate side
+    int    c_index  = 0;      // Vertex opposite the shortest side
+    double a_length = 0;      // Absolute length of the longest side
+    double ba       = 0;      // Ratio b/a (range [0, 1])
+    double ca       = 0;      // Ratio c/a (range [0, 1])
+    double _res     = 0;      // Explicit padding (total: 48 bytes)
 };
 
-// Linear transformation: x' = x00 + x10*x + x01*y, y' = y00 + y10*x + y01*y
+/**
+ * First-order (affine) linear transformation:
+ *   x' = x00 + x10 * x + x01 * y
+ *   y' = y00 + y10 * x + y01 * y
+ */
 struct GenericTrans {
     double x00 = 0, x10 = 0, x01 = 0;
     double y00 = 0, y10 = 0, y01 = 0;
-    int order = 1;
-    int nr = 0;     // Number of matched pairs remaining after sigma-clip
-    int nm = 0;     // Number of matched pairs found by atMatchLists
-    double sx = 0;  // RMS residual in x
-    double sy = 0;  // RMS residual in y
+    int    order = 1;
+    int    nr    = 0;     // Number of matched pairs after sigma-clipping
+    int    nm    = 0;     // Number of matched pairs found by applyTransAndMatch
+    double sx    = 0;     // RMS residual in X
+    double sy    = 0;     // RMS residual in Y
 };
 
 // ============================================================================
-// TriangleMatcher 
+// TriangleMatcher class
 // ============================================================================
 
 class TriangleMatcher {
 public:
     TriangleMatcher();
 
-    // Max catalog/image stars for triangle generation (AT_MATCH_CATALOG_NBRIGHT = 60)
+    // -- Configuration ----------------------------------------------------
+
+    /** Sets the maximum number of stars used for triangle generation. */
     void setMaxStars(int n) { m_maxStars = n; }
-    // Max image stars for triangle generation (AT_MATCH_NBRIGHT = 20).
+
+    /** Sets the maximum number of image stars for triangle generation. */
     void setMaxImgStars(int n) { m_maxImgStars = n; }
-    // Triangle radius in (ba,ca) space — default AT_TRIANGLE_RADIUS (0.002).
-    // Increase (e.g. 0.003) for images with significant lens distortion or wider fallback.
-    void setTriangleRadius(double r) { m_triangleRadius = r; }
-    double triangleRadius() const { return m_triangleRadius; }
 
-    // Diagnostics from the last solve() call (accessible after failure for logging)
-    int  lastMaxVote()    const { return m_lastMaxVote; }
-    int  lastValidPairs() const { return m_lastValidPairs; }
-    int  lastNmatched()   const { return m_lastNmatched; }
-    // Stage at which the last solve() failed:
-    //  0 = not enough stars, 1 = no triangle votes, 2 = too few vote-winners,
-    //  3 = iterTrans failed, 4 = first match too few, 5 = second iterTrans,
-    //  6 = second match too few, 7 = third iterTrans, 8 = succeeded
-    int  lastFailStage()  const { return m_lastFailStage; }
+    /**
+     * Sets the triangle matching radius in (b/a, c/a) space.
+     * Default is AT_TRIANGLE_RADIUS (0.002). Increase for images with
+     * significant lens distortion (e.g. 0.003).
+     */
+    void   setTriangleRadius(double r) { m_triangleRadius = r; }
+    double triangleRadius() const      { return m_triangleRadius; }
 
-    // Main solve method 
-    //   1. Triangle voting (atFindTrans)
-    //   2. iter_trans (RECALC_NO)
-    //   3. atApplyTrans + atMatchLists
-    //   4. atRecalcTrans (iter_trans RECALC_YES on matched pairs)
-    //   5. Repeat 3-4 for second refinement
-    //
-    // outMatchedA: matched image stars (original coords, used in convergence loop)
-    // outMatchedB: matched catalog stars (current projected coords, updated each iteration)
+    // -- Post-solve diagnostics -------------------------------------------
+
+    int lastMaxVote()    const { return m_lastMaxVote; }
+    int lastValidPairs() const { return m_lastValidPairs; }
+    int lastNmatched()   const { return m_lastNmatched; }
+
+    /**
+     * Stage at which the last solve() call failed or succeeded:
+     *   0 = insufficient input stars
+     *   1 = no triangle votes (or vote allocation failed)
+     *   2 = too few vote-winners above minimum threshold
+     *   3 = initial iterTrans failed
+     *   4 = first applyTransAndMatch yielded too few matches
+     *   5 = first recalculation iterTrans failed
+     *   6 = second applyTransAndMatch yielded too few matches
+     *   7 = second recalculation iterTrans failed
+     *   8 = success
+     */
+    int lastFailStage() const { return m_lastFailStage; }
+
+    // -- Main solve interface ---------------------------------------------
+
+    /**
+     * Performs triangle-voting star matching between image and catalog stars.
+     *
+     * @param imgStars     Image star list (centered pixel coordinates).
+     * @param catStars     Catalog star list (projected tangent-plane coordinates).
+     * @param resultTrans  Output: fitted affine transformation.
+     * @param outMatchedA  Output: matched image stars (original coordinates).
+     * @param outMatchedB  Output: matched catalog stars (projected coordinates).
+     * @param minScale     Minimum allowed scale ratio (-1 to disable).
+     * @param maxScale     Maximum allowed scale ratio (-1 to disable).
+     * @return             True on success.
+     */
     bool solve(const std::vector<MatchStar>& imgStars,
                const std::vector<MatchStar>& catStars,
                GenericTrans& resultTrans,
@@ -132,9 +191,19 @@ public:
                std::vector<MatchStar>& outMatchedB,
                double minScale = -1, double maxScale = -1);
 
-    // === iter_trans — Iterative transformation fitting ===
-    // recalc: if true (RECALC_YES), use all pairs from the start
-    //         if false (RECALC_NO), start with AT_MATCH_STARTN_LINEAR top pairs
+    /**
+     * Iteratively fits a linear transform with sigma-clipping outlier rejection.
+     *
+     * @param nbright       Number of star pairs to consider.
+     * @param starsA        First star list (image stars).
+     * @param starsB        Second star list (catalog stars).
+     * @param winnerIndexA  Indices into starsA (modified in place).
+     * @param winnerIndexB  Indices into starsB (modified in place).
+     * @param recalc        If true (RECALC_YES), use all pairs from the start.
+     *                      If false (RECALC_NO), start with a small subset.
+     * @param trans         Output: fitted transformation.
+     * @return              True on success.
+     */
     bool iterTrans(int nbright,
                    const std::vector<MatchStar>& starsA,
                    const std::vector<MatchStar>& starsB,
@@ -143,9 +212,13 @@ public:
                    bool recalc,
                    GenericTrans& trans);
 
-    // === atApplyTrans + atMatchLists ===
-    // Applies trans to ALL imgStars, finds nearest catStar within radius
-    // Returns number of matched pairs; fills matchedA and matchedB
+    /**
+     * Applies a transform to all image stars and finds nearest-neighbour
+     * matches in the catalog star list within the given radius.
+     * Uses 1-to-1 matching (each catalog star matched at most once).
+     *
+     * @return Number of matched pairs.
+     */
     int applyTransAndMatch(const std::vector<MatchStar>& imgStars,
                            const std::vector<MatchStar>& catStars,
                            const GenericTrans& trans,
@@ -154,32 +227,37 @@ public:
                            std::vector<MatchStar>& matchedListB);
 
 private:
-    int    m_maxStars      = 60;    // AT_MATCH_CATALOG_NBRIGHT
-    int    m_maxImgStars   = 20;    // AT_MATCH_NBRIGHT (unused in solve, kept for API)
-    double m_triangleRadius = AT_TRIANGLE_RADIUS; // configurable, default 0.002
+    // -- Configuration state ----------------------------------------------
+    int    m_maxStars       = AT_MATCH_CATALOG_NBRIGHT;
+    int    m_maxImgStars    = AT_MATCH_NBRIGHT;
+    double m_triangleRadius = AT_TRIANGLE_RADIUS;
 
-    // Last-solve diagnostics (updated even on failure)
+    // -- Diagnostics (updated on every solve() call) ----------------------
     int m_lastMaxVote    = 0;
     int m_lastValidPairs = 0;
     int m_lastNmatched   = 0;
     int m_lastFailStage  = -1;
 
-    // === Triangle Generation (stars_to_triangles) ===
-    // Pre-computes distance matrix, then fills triangle array
-    std::vector<MatchTriangle> generateTriangles(const std::vector<MatchStar>& stars, int nbright);
+    // -- Internal methods -------------------------------------------------
 
-    // Helper: fill a single triangle from distance matrix (port of set_triangle)
-    void setTriangle(MatchTriangle& tri, const std::vector<MatchStar>& stars,
+    /** Generates all triangles from the brightest N stars. */
+    std::vector<MatchTriangle> generateTriangles(
+        const std::vector<MatchStar>& stars, int nbright);
+
+    /** Fills a single MatchTriangle from three star indices and a distance matrix. */
+    void setTriangle(MatchTriangle& tri,
+                     const std::vector<MatchStar>& stars,
                      int s1, int s2, int s3,
-                     const std::vector<std::vector<double>>& distMatrix);
+                     const double* distMatrix, int numStars);
 
-    // === Vote Matrix (make_vote_matrix) ===
-    std::vector<std::vector<int>> computeVotes(const std::vector<MatchTriangle>& triA,
-                                               const std::vector<MatchTriangle>& triB,
-                                               int numStarsA, int numStarsB,
-                                               double minScale, double maxScale);
+    /** Computes the vote matrix by comparing triangles from both lists. */
+    std::vector<int> computeVotes(
+        const std::vector<MatchTriangle>& triA,
+        const std::vector<MatchTriangle>& triB,
+        int numStarsA, int numStarsB,
+        double minScale, double maxScale);
 
-    // === calc_trans_linear — Gauss elimination ===
+    /** Solves for linear transform coefficients via Gaussian elimination. */
     bool calcTransLinear(int nbright,
                          const std::vector<MatchStar>& starsA,
                          const std::vector<MatchStar>& starsB,
@@ -187,14 +265,17 @@ private:
                          const std::vector<int>& idxB,
                          GenericTrans& trans);
 
-    // === Apply transform to a single point ===
-    static void calcTransCoords(double x, double y, const GenericTrans& trans,
+    /** Applies a linear transform to a single (x, y) point. */
+    static void calcTransCoords(double x, double y,
+                                const GenericTrans& trans,
                                 double& newx, double& newy);
 
-    // === Gauss elimination solver ===
-    // Solves in-place: matrix * x = vector, result stored in vector
-    static bool gaussSolve(std::vector<std::vector<double>>& matrix, int n,
-                           std::vector<double>& vector);
+    /**
+     * Gaussian elimination with partial pivoting.
+     * Solves the system matrix * x = vector in-place (result stored in vector).
+     * @param matrix  Flat n*n array (row-major).
+     */
+    static bool gaussSolve(double* matrix, int n, double* vector);
 };
 
 #endif // TRIANGLEMATCHER_H

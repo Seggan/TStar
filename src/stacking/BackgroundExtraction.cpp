@@ -1,67 +1,92 @@
+/**
+ * @file BackgroundExtraction.cpp
+ * @brief Implementation of polynomial background model fitting.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
+
 #include "BackgroundExtraction.h"
 #include "MathUtils.h"
 #include <cmath>
 
 namespace Stacking {
 
-int BackgroundExtraction::numCoeffs(int degree) {
-    // Number of coeffs = (d+1)(d+2)/2
-    // Deg 1: 3 (1, x, y)
-    // Deg 2: 6 (1, x, y, x2, xy, y2)
-    // Deg 3: 10
-    // Deg 4: 15
+// =============================================================================
+// Coefficient Count
+// =============================================================================
+
+int BackgroundExtraction::numCoeffs(int degree)
+{
+    // Number of terms in a 2D polynomial of degree d:
+    //   Degree 1 ->  3  (1, x, y)
+    //   Degree 2 ->  6  (1, x, y, x^2, xy, y^2)
+    //   Degree 3 -> 10
+    //   Degree 4 -> 15
     return (degree + 1) * (degree + 2) / 2;
 }
 
-double BackgroundExtraction::evaluatePoly(double x, double y, int degree, const std::vector<double>& c) {
+// =============================================================================
+// Polynomial Evaluation
+// =============================================================================
+
+double BackgroundExtraction::evaluatePoly(double x, double y, int degree,
+                                          const std::vector<double>& c)
+{
     if (c.empty()) return 0.0;
-    
+
     double sum = 0.0;
-    int idx = 0;
+    int idx    = 0;
+
     for (int d = 0; d <= degree; ++d) {
         for (int k = 0; k <= d; ++k) {
-            // Term x^(d-k) * y^k  (e.g. d=1: k=0->x, k=1->y)
-            int px = d - k;
-            int py = k;
-            if (idx < (int)c.size()) {
+            int px = d - k;   // Power of x.
+            int py = k;       // Power of y.
+
+            if (idx < static_cast<int>(c.size())) {
                 sum += c[idx] * std::pow(x, px) * std::pow(y, py);
             }
-            idx++;
+            ++idx;
         }
     }
+
     return sum;
 }
 
-bool BackgroundExtraction::generateModel(int width, int height, 
-                                       const std::vector<BackgroundSample>& samples, 
-                                       ModelType degree, 
-                                       ImageBuffer& model) 
+// =============================================================================
+// Model Generation
+// =============================================================================
+
+bool BackgroundExtraction::generateModel(int width, int height,
+                                         const std::vector<BackgroundSample>& samples,
+                                         ModelType degree,
+                                         ImageBuffer& model)
 {
     if (samples.empty()) return false;
-    
-    int nCoeffs = numCoeffs(degree);
-    int nSamples = samples.size();
-    
-    if (nSamples < nCoeffs) return false; // Underdetermined
-    
-    // Build Normal Equations: (A^T A) x = A^T B
-    // A is [nSamples x nCoeffs]
-    // A^T A is [nCoeffs x nCoeffs]
-    
+
+    const int nCoeffs  = numCoeffs(degree);
+    const int nSamples = static_cast<int>(samples.size());
+
+    // The system is underdetermined if there are fewer samples than coefficients.
+    if (nSamples < nCoeffs) return false;
+
+    // -------------------------------------------------------------------------
+    // Build Normal Equations:  (A^T A) x = A^T b
+    //
+    //   A is [nSamples x nCoeffs]
+    //   A^T A is [nCoeffs x nCoeffs]  (symmetric positive-definite when solvable)
+    // -------------------------------------------------------------------------
+
     std::vector<double> ata(nCoeffs * nCoeffs, 0.0);
     std::vector<double> atb(nCoeffs, 0.0);
-    
-    // Fill ATA and ATB directly
+
     for (const auto& s : samples) {
-        double x = s.x; // Normalized? Usually better for stability.
-        double y = s.y;
         double val = s.value;
-        
-        // Normalize coordinates to [-1, 1] for numerical stability
-        double xn = (x / width) * 2.0 - 1.0;
-        double yn = (y / height) * 2.0 - 1.0;
-        
-        // Generate terms for this sample
+
+        // Normalize coordinates to [-1, 1] for numerical stability.
+        double xn = (static_cast<double>(s.x) / width)  * 2.0 - 1.0;
+        double yn = (static_cast<double>(s.y) / height) * 2.0 - 1.0;
+
+        // Generate polynomial basis terms for this sample.
         std::vector<double> terms;
         terms.reserve(nCoeffs);
         for (int d = 0; d <= degree; ++d) {
@@ -69,8 +94,8 @@ bool BackgroundExtraction::generateModel(int width, int height,
                 terms.push_back(std::pow(xn, d - k) * std::pow(yn, k));
             }
         }
-        
-        // Add to ATA and ATB
+
+        // Accumulate into A^T A and A^T b.
         for (int i = 0; i < nCoeffs; ++i) {
             for (int j = 0; j < nCoeffs; ++j) {
                 ata[i * nCoeffs + j] += terms[i] * terms[j];
@@ -78,40 +103,44 @@ bool BackgroundExtraction::generateModel(int width, int height,
             atb[i] += terms[i] * val;
         }
     }
-    
-    // Solve
+
+    // -------------------------------------------------------------------------
+    // Solve for polynomial coefficients via Gaussian elimination.
+    // -------------------------------------------------------------------------
+
     std::vector<double> coeffs(nCoeffs);
     if (!MathUtils::solveLinearSystem(nCoeffs, ata, atb, coeffs)) {
         return false;
     }
-    
-    // Generate Model Image
-    model = ImageBuffer(width, height, 1); // Mono model usually (applied per channel)
+
+    // -------------------------------------------------------------------------
+    // Evaluate the polynomial surface at every pixel to produce the model.
+    // -------------------------------------------------------------------------
+
+    model = ImageBuffer(width, height, 1);
     float* data = model.data().data();
-    
+
     #pragma omp parallel for
     for (int y = 0; y < height; ++y) {
-        double yn = (y / (double)height) * 2.0 - 1.0;
+        double yn = (static_cast<double>(y) / height) * 2.0 - 1.0;
+
         for (int x = 0; x < width; ++x) {
-            double xn = (x / (double)width) * 2.0 - 1.0;
-            
-            // Re-evaluate using helper (modified for normalized coords logic)
-            // But helper above assumes generic poly.
-            // We must match the term generation order!
-            
+            double xn = (static_cast<double>(x) / width) * 2.0 - 1.0;
+
+            // Evaluate using the same term ordering as the fitting step.
             double sum = 0.0;
-            int idx = 0;
+            int idx    = 0;
             for (int d = 0; d <= degree; ++d) {
                 for (int k = 0; k <= d; ++k) {
                     sum += coeffs[idx] * std::pow(xn, d - k) * std::pow(yn, k);
-                    idx++;
+                    ++idx;
                 }
             }
-            
+
             data[y * width + x] = static_cast<float>(sum);
         }
     }
-    
+
     return true;
 }
 

@@ -1,286 +1,382 @@
 #include "ArcsinhStretchDialog.h"
 #include "MainWindowCallbacks.h"
 #include "ImageViewer.h"
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
-#include <QDialogButtonBox>
+
 #include <cmath>
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
+// =============================================================================
+// Constructor / Destructor
+// =============================================================================
+
 ArcsinhStretchDialog::ArcsinhStretchDialog(ImageViewer* viewer, QWidget* parent)
-    : DialogBase(parent, tr("Arcsinh Stretch"), 500, 250), m_viewer(nullptr), m_applied(false)
+    : DialogBase(parent, tr("Arcsinh Stretch"), 500, 250)
+    , m_viewer(nullptr)
+    , m_applied(false)
 {
     setMinimumWidth(400);
     setupUI();
     setViewer(viewer);
 }
 
-void ArcsinhStretchDialog::setViewer(ImageViewer* v) {
-    if (m_viewer == v) return;
-    
-    // 1. Restore OLD viewer if preview active/uncommitted
-    if (m_viewer && !m_applied && m_originalBuffer.isValid()) {
+ArcsinhStretchDialog::~ArcsinhStretchDialog()
+{
+    // Restore the original image if the dialog is destroyed without applying.
+    if (!m_applied && m_viewer && m_originalBuffer.isValid())
         m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-    }
+}
 
-    m_viewer = v;
-    m_applied = false;
+// =============================================================================
+// Public interface
+// =============================================================================
+
+void ArcsinhStretchDialog::setViewer(ImageViewer* v)
+{
+    if (m_viewer == v)
+        return;
+
+    // Restore the outgoing viewer before switching to prevent leaving it with
+    // a partially previewed (uncommitted) result.
+    if (m_viewer && !m_applied && m_originalBuffer.isValid())
+        m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
+
+    m_viewer         = v;
+    m_applied        = false;
     m_originalBuffer = ImageBuffer();
-    
-    // 2. Setup NEW viewer
-    if (m_viewer && m_viewer->getBuffer().isValid()) {
+
+    if (m_viewer && m_viewer->getBuffer().isValid())
+    {
         m_originalBuffer = m_viewer->getBuffer();
-        if (m_previewCheck->isChecked()) updatePreview();
+
+        if (m_previewCheck->isChecked())
+            updatePreview();
     }
 }
 
-ArcsinhStretchDialog::~ArcsinhStretchDialog() {
-    if (!m_applied && m_viewer && m_originalBuffer.isValid()) {
-        m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-    }
-}
+// =============================================================================
+// Protected overrides
+// =============================================================================
 
-void ArcsinhStretchDialog::reject() {
-    // Restore original image when cancelled/closed
-    if (!m_applied && m_viewer && m_originalBuffer.isValid()) {
+void ArcsinhStretchDialog::reject()
+{
+    if (!m_applied && m_viewer && m_originalBuffer.isValid())
         m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-    }
+
     QDialog::reject();
 }
 
-void ArcsinhStretchDialog::setupUI() {
+// =============================================================================
+// Private helpers - UI construction
+// =============================================================================
+
+void ArcsinhStretchDialog::setupUI()
+{
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(10);
-    
-    // --- Stretch Factor ---
-    QHBoxLayout* stretchLayout = new QHBoxLayout();
-    QLabel* stretchLabel = new QLabel(tr("Stretch factor:"));
-    m_stretchSpin = new QDoubleSpinBox();
-    m_stretchSpin->setRange(0, 1000);
-    m_stretchSpin->setDecimals(1);
-    m_stretchSpin->setSingleStep(1.0);
-    m_stretchSpin->setValue(0);
-    stretchLayout->addWidget(stretchLabel);
-    stretchLayout->addStretch();
-    stretchLayout->addWidget(m_stretchSpin);
-    mainLayout->addLayout(stretchLayout);
-    
+
+    // -------------------------------------------------------------------------
+    // Stretch factor row
+    // -------------------------------------------------------------------------
+    {
+        QHBoxLayout* row = new QHBoxLayout();
+        row->addWidget(new QLabel(tr("Stretch factor:")));
+        row->addStretch();
+
+        m_stretchSpin = new QDoubleSpinBox();
+        m_stretchSpin->setRange(0, 1000);
+        m_stretchSpin->setDecimals(1);
+        m_stretchSpin->setSingleStep(1.0);
+        m_stretchSpin->setValue(0);
+        row->addWidget(m_stretchSpin);
+
+        mainLayout->addLayout(row);
+    }
+
     m_stretchSlider = new QSlider(Qt::Horizontal);
-    m_stretchSlider->setRange(0, 10000);  // 0-1000 with 0.1 precision
+    m_stretchSlider->setRange(0, 10000); // 0..1000 with 0.1 precision
     m_stretchSlider->setValue(0);
-    m_stretchSlider->setToolTip(tr("The stretch factor adjusts the non-linearity."));
+    m_stretchSlider->setToolTip(tr("Controls the degree of non-linearity applied."));
     mainLayout->addWidget(m_stretchSlider);
-    
-    // --- Black Point ---
-    QHBoxLayout* bpLayout = new QHBoxLayout();
-    QLabel* bpLabel = new QLabel(tr("Black Point:"));
-    m_blackPointSpin = new QDoubleSpinBox();
-    m_blackPointSpin->setRange(0, 0.20);
-    m_blackPointSpin->setDecimals(5);
-    m_blackPointSpin->setSingleStep(0.001);
-    m_blackPointSpin->setValue(0);
-    bpLayout->addWidget(bpLabel);
-    bpLayout->addStretch();
-    bpLayout->addWidget(m_blackPointSpin);
-    mainLayout->addLayout(bpLayout);
-    
+
+    // -------------------------------------------------------------------------
+    // Black point row
+    // -------------------------------------------------------------------------
+    {
+        QHBoxLayout* row = new QHBoxLayout();
+        row->addWidget(new QLabel(tr("Black Point:")));
+        row->addStretch();
+
+        m_blackPointSpin = new QDoubleSpinBox();
+        m_blackPointSpin->setRange(0, 0.20);
+        m_blackPointSpin->setDecimals(5);
+        m_blackPointSpin->setSingleStep(0.001);
+        m_blackPointSpin->setValue(0);
+        row->addWidget(m_blackPointSpin);
+
+        mainLayout->addLayout(row);
+    }
+
     m_blackPointSlider = new QSlider(Qt::Horizontal);
-    m_blackPointSlider->setRange(0, 20000);  // 0-0.2 with 0.00001 precision
+    m_blackPointSlider->setRange(0, 20000); // 0..0.2 with 0.00001 precision
     m_blackPointSlider->setValue(0);
-    m_blackPointSlider->setToolTip(tr("Constant value subtracted from the image."));
+    m_blackPointSlider->setToolTip(tr("Constant offset subtracted from the image before stretching."));
     mainLayout->addWidget(m_blackPointSlider);
-    
-    // --- Clipping Stats ---
-    QHBoxLayout* clipLayout = new QHBoxLayout();
-    m_lowClipLabel = new QLabel(tr("Low: 0.00%"));
-    m_highClipLabel = new QLabel(tr("High: 0.00%"));
-    m_lowClipLabel->setStyleSheet("color: #ff8888; margin-right: 10px;");
-    m_highClipLabel->setStyleSheet("color: #8888ff;");
-    clipLayout->addWidget(m_lowClipLabel);
-    clipLayout->addWidget(m_highClipLabel);
-    clipLayout->addStretch();
-    mainLayout->addLayout(clipLayout);
-    
-    // --- Human Luminance ---
+
+    // -------------------------------------------------------------------------
+    // Clipping statistics display
+    // -------------------------------------------------------------------------
+    {
+        QHBoxLayout* row = new QHBoxLayout();
+
+        m_lowClipLabel = new QLabel(tr("Low: 0.00%"));
+        m_lowClipLabel->setStyleSheet("color: #ff8888; margin-right: 10px;");
+
+        m_highClipLabel = new QLabel(tr("High: 0.00%"));
+        m_highClipLabel->setStyleSheet("color: #8888ff;");
+
+        row->addWidget(m_lowClipLabel);
+        row->addWidget(m_highClipLabel);
+        row->addStretch();
+
+        mainLayout->addLayout(row);
+    }
+
+    // -------------------------------------------------------------------------
+    // Option checkboxes
+    // -------------------------------------------------------------------------
     m_humanLuminanceCheck = new QCheckBox(tr("Human-weighted luminance"));
     m_humanLuminanceCheck->setChecked(true);
-    m_humanLuminanceCheck->setToolTip(tr("For colour images, use human eye luminous efficiency weights to compute the luminance."));
+    m_humanLuminanceCheck->setToolTip(
+        tr("For colour images, weight the luminance channel using human eye "
+           "luminous efficiency (CIE photopic curve) before computing the stretch."));
     mainLayout->addWidget(m_humanLuminanceCheck);
-    
-    // --- Preview ---
+
     m_previewCheck = new QCheckBox(tr("Preview"));
     m_previewCheck->setChecked(true);
     mainLayout->addWidget(m_previewCheck);
-    
-    // --- Buttons ---
-    QHBoxLayout* buttonLayout = new QHBoxLayout();
-    QPushButton* resetBtn = new QPushButton(tr("Reset"));
-    QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
-    QPushButton* applyBtn = new QPushButton(tr("Apply"));
-    applyBtn->setDefault(true);
-    buttonLayout->addWidget(resetBtn);
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(cancelBtn);
-    buttonLayout->addWidget(applyBtn);
-    mainLayout->addLayout(buttonLayout);
-    
-    // --- Connections ---
-    // Slider drag: update spin and clipping stats ONLY (no preview to avoid lag)
-    connect(m_stretchSlider, &QSlider::valueChanged, [this](int val){
-        double dval = val / 10.0;
+
+    // -------------------------------------------------------------------------
+    // Action buttons
+    // -------------------------------------------------------------------------
+    {
+        QHBoxLayout* row    = new QHBoxLayout();
+        QPushButton* reset  = new QPushButton(tr("Reset"));
+        QPushButton* cancel = new QPushButton(tr("Cancel"));
+        QPushButton* apply  = new QPushButton(tr("Apply"));
+        apply->setDefault(true);
+
+        row->addWidget(reset);
+        row->addStretch();
+        row->addWidget(cancel);
+        row->addWidget(apply);
+
+        mainLayout->addLayout(row);
+
+        connect(reset,  &QPushButton::clicked, this, &ArcsinhStretchDialog::onReset);
+        connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
+        connect(apply,  &QPushButton::clicked, this, &ArcsinhStretchDialog::onApply);
+    }
+
+    // -------------------------------------------------------------------------
+    // Signal connections
+    // Slider drag: update the spin box and clipping stats only (no preview)
+    // to avoid per-frame preview renders during continuous drag.
+    // Slider release: trigger a full preview update.
+    // Spin box change: sync the slider and trigger a preview if enabled.
+    // -------------------------------------------------------------------------
+
+    connect(m_stretchSlider, &QSlider::valueChanged, [this](int val)
+    {
+        const double dval = val / 10.0;
         m_stretchSpin->blockSignals(true);
         m_stretchSpin->setValue(dval);
         m_stretchSpin->blockSignals(false);
         m_stretch = static_cast<float>(dval);
-        updateClippingStatsOnly();  // Live clipping stats, no preview
+        updateClippingStatsOnly();
     });
-    // Slider release: trigger preview
-    connect(m_stretchSlider, &QSlider::sliderReleased, this, &ArcsinhStretchDialog::updatePreview);
-    
-    // Spin change: sync slider and trigger preview
-    connect(m_stretchSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double val){
+
+    connect(m_stretchSlider, &QSlider::sliderReleased,
+            this, &ArcsinhStretchDialog::updatePreview);
+
+    connect(m_stretchSpin,
+            QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            [this](double val)
+    {
         m_stretchSlider->blockSignals(true);
         m_stretchSlider->setValue(static_cast<int>(val * 10));
         m_stretchSlider->blockSignals(false);
         m_stretch = static_cast<float>(val);
-        if (m_previewCheck->isChecked()) updatePreview();
+        if (m_previewCheck->isChecked())
+            updatePreview();
     });
-    
-    // Black point slider drag: update spin and clipping stats ONLY (no preview to avoid lag)
-    connect(m_blackPointSlider, &QSlider::valueChanged, [this](int val){
-        double dval = val / 100000.0;
+
+    connect(m_blackPointSlider, &QSlider::valueChanged, [this](int val)
+    {
+        const double dval = val / 100000.0;
         m_blackPointSpin->blockSignals(true);
         m_blackPointSpin->setValue(dval);
         m_blackPointSpin->blockSignals(false);
         m_blackPoint = static_cast<float>(dval);
-        updateClippingStatsOnly();  // Live clipping stats, no preview
+        updateClippingStatsOnly();
     });
-    // Black point slider release: trigger preview
-    connect(m_blackPointSlider, &QSlider::sliderReleased, this, &ArcsinhStretchDialog::updatePreview);
-    
-    // Black point spin change
-    connect(m_blackPointSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ArcsinhStretchDialog::onBlackPointChanged);
-    
-    connect(m_humanLuminanceCheck, &QCheckBox::toggled, this, &ArcsinhStretchDialog::onHumanLuminanceToggled);
-    connect(m_previewCheck, &QCheckBox::toggled, this, &ArcsinhStretchDialog::onPreviewToggled);
-    
-    connect(resetBtn, &QPushButton::clicked, this, &ArcsinhStretchDialog::onReset);
-    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-    connect(applyBtn, &QPushButton::clicked, this, &ArcsinhStretchDialog::onApply);
+
+    connect(m_blackPointSlider, &QSlider::sliderReleased,
+            this, &ArcsinhStretchDialog::updatePreview);
+
+    connect(m_blackPointSpin,
+            QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &ArcsinhStretchDialog::onBlackPointChanged);
+
+    connect(m_humanLuminanceCheck, &QCheckBox::toggled,
+            this, &ArcsinhStretchDialog::onHumanLuminanceToggled);
+
+    connect(m_previewCheck, &QCheckBox::toggled,
+            this, &ArcsinhStretchDialog::onPreviewToggled);
 }
 
-void ArcsinhStretchDialog::onStretchChanged(int value) {
-    double dval = value / 10.0;
+// =============================================================================
+// Private slots
+// =============================================================================
+
+void ArcsinhStretchDialog::onStretchChanged(int value)
+{
+    const double dval = value / 10.0;
     m_stretchSpin->blockSignals(true);
     m_stretchSpin->setValue(dval);
     m_stretchSpin->blockSignals(false);
     m_stretch = static_cast<float>(dval);
 }
 
-void ArcsinhStretchDialog::onBlackPointChanged(double value) {
+void ArcsinhStretchDialog::onBlackPointChanged(double value)
+{
     m_blackPointSlider->blockSignals(true);
     m_blackPointSlider->setValue(static_cast<int>(value * 100000));
     m_blackPointSlider->blockSignals(false);
     m_blackPoint = static_cast<float>(value);
-    if (m_previewCheck->isChecked()) updatePreview();
-}
 
-void ArcsinhStretchDialog::onHumanLuminanceToggled(bool checked) {
-    m_humanLuminance = checked;
-    if (m_previewCheck->isChecked()) updatePreview();
-}
-
-void ArcsinhStretchDialog::onPreviewToggled(bool checked) {
-    if (checked) {
+    if (m_previewCheck->isChecked())
         updatePreview();
-    } else {
-        // Restore original
-        // Restore original
-        if (m_viewer && m_originalBuffer.isValid()) {
+}
+
+void ArcsinhStretchDialog::onHumanLuminanceToggled(bool checked)
+{
+    m_humanLuminance = checked;
+    if (m_previewCheck->isChecked())
+        updatePreview();
+}
+
+void ArcsinhStretchDialog::onPreviewToggled(bool checked)
+{
+    if (checked)
+    {
+        updatePreview();
+    }
+    else
+    {
+        // Restore the original image when preview is switched off.
+        if (m_viewer && m_originalBuffer.isValid())
             m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-        }
+
         m_lowClipLabel->setText(tr("Low: 0.00%"));
         m_highClipLabel->setText(tr("High: 0.00%"));
     }
 }
 
-void ArcsinhStretchDialog::onReset() {
+void ArcsinhStretchDialog::onReset()
+{
     m_stretchSlider->setValue(0);
     m_stretchSpin->setValue(0);
     m_blackPointSlider->setValue(0);
     m_blackPointSpin->setValue(0);
     m_humanLuminanceCheck->setChecked(true);
-    
-    m_stretch = 0.0f;
-    m_blackPoint = 0.0f;
+
+    m_stretch        = 0.0f;
+    m_blackPoint     = 0.0f;
     m_humanLuminance = true;
-    
-    if (m_viewer && m_originalBuffer.isValid()) {
+
+    if (m_viewer && m_originalBuffer.isValid())
         m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
-    }
+
     m_lowClipLabel->setText(tr("Low: 0.00%"));
     m_highClipLabel->setText(tr("High: 0.00%"));
 }
 
-void ArcsinhStretchDialog::onApply() {
-    if (m_viewer && m_originalBuffer.isValid()) {
-        // 1. Restore the viewer to the CLEAN state (if preview was active)
-        // This is safe even if preview was off. 
-        m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
+void ArcsinhStretchDialog::onApply()
+{
+    if (!m_viewer || !m_originalBuffer.isValid())
+        return;
 
-        // 2. Save the CLEAN state to undo stack
-        m_viewer->pushUndo(tr("Arcsinh Stretch"));
+    // Step 1: Restore the viewer to the unmodified state so that pushUndo
+    //         captures the correct baseline (not the preview result).
+    m_viewer->setBuffer(m_originalBuffer, m_viewer->windowTitle(), true);
 
-        // 3. Apply to actual buffer
-        ImageBuffer buf = m_originalBuffer;
-        buf.applyArcSinh(m_stretch, m_blackPoint, m_humanLuminance);
-        
-        // 4. Set the final buffer
-        m_viewer->setBuffer(buf, m_viewer->windowTitle(), true);
-        if (auto mw = getCallbacks()) {
-            mw->logMessage(tr("Arcsinh Stretch applied."), 1);
-        }
-        m_applied = true;
-    }
+    // Step 2: Push an undo snapshot of the clean state.
+    m_viewer->pushUndo(tr("Arcsinh Stretch"));
+
+    // Step 3: Compute the stretched result from the original data.
+    ImageBuffer result = m_originalBuffer;
+    result.applyArcSinh(m_stretch, m_blackPoint, m_humanLuminance);
+
+    // Step 4: Commit the result to the viewer.
+    m_viewer->setBuffer(result, m_viewer->windowTitle(), true);
+
+    if (auto* mw = getCallbacks())
+        mw->logMessage(tr("Arcsinh Stretch applied."), 1);
+
+    m_applied = true;
     accept();
 }
 
-void ArcsinhStretchDialog::updatePreview() {
-    if (!m_viewer || !m_previewCheck->isChecked() || !m_originalBuffer.isValid()) return;
-    
-    ImageBuffer buf = m_originalBuffer;
-    buf.applyArcSinh(m_stretch, m_blackPoint, m_humanLuminance);
-    m_viewer->setBuffer(buf, m_viewer->windowTitle(), true);
-    
-    // Update clipping stats
-    updateClippingStats(buf);
+// =============================================================================
+// Private helpers - preview and statistics
+// =============================================================================
+
+void ArcsinhStretchDialog::updatePreview()
+{
+    if (!m_viewer || !m_previewCheck->isChecked() || !m_originalBuffer.isValid())
+        return;
+
+    ImageBuffer preview = m_originalBuffer;
+    preview.applyArcSinh(m_stretch, m_blackPoint, m_humanLuminance);
+    m_viewer->setBuffer(preview, m_viewer->windowTitle(), true);
+
+    updateClippingStats(preview);
 }
 
-void ArcsinhStretchDialog::updateClippingStats(const ImageBuffer& buffer) {
-    long lowClip = 0, highClip = 0;
+void ArcsinhStretchDialog::updateClippingStats(const ImageBuffer& buffer)
+{
+    long lowClip  = 0;
+    long highClip = 0;
     buffer.computeClippingStats(lowClip, highClip);
-    long total = static_cast<long>(buffer.width()) * buffer.height() * buffer.channels();
-    
-    if (total > 0) {
-        float lowPct = (100.0f * lowClip) / total;
-        float highPct = (100.0f * highClip) / total;
-        m_lowClipLabel->setText(tr("Low: %1%").arg(lowPct, 0, 'f', 4));
+
+    const long total = static_cast<long>(buffer.width()) *
+                       buffer.height() *
+                       buffer.channels();
+
+    if (total > 0)
+    {
+        const float lowPct  = (100.0f * lowClip)  / total;
+        const float highPct = (100.0f * highClip) / total;
+        m_lowClipLabel->setText(tr("Low: %1%").arg(lowPct,  0, 'f', 4));
         m_highClipLabel->setText(tr("High: %1%").arg(highPct, 0, 'f', 4));
     }
 }
 
-void ArcsinhStretchDialog::updateClippingStatsOnly() {
-    // Calculate clipping stats WITHOUT updating preview (to avoid lag during drag)
-    if (!m_originalBuffer.isValid()) return;
-    
-    // Create temporary buffer to compute clipping
+void ArcsinhStretchDialog::updateClippingStatsOnly()
+{
+    // Compute statistics on a temporary buffer without updating the viewer,
+    // providing live feedback during slider drag with minimal overhead.
+    if (!m_originalBuffer.isValid())
+        return;
+
     ImageBuffer temp = m_originalBuffer;
     temp.applyArcSinh(m_stretch, m_blackPoint, m_humanLuminance);
-    
-    // Update labels only
     updateClippingStats(temp);
 }

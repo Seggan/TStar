@@ -1,96 +1,148 @@
 #include "ApplyMaskDialog.h"
+
+#include <QGroupBox>
 #include <QImage>
 #include <QPixmap>
-#include <QDialogButtonBox>
-#include <QGroupBox>
 #include <QPushButton>
-#include <opencv2/opencv.hpp>
+
+#include <algorithm>
+
+// =============================================================================
+// Constructor
+// =============================================================================
 
 ApplyMaskDialog::ApplyMaskDialog(int targetWidth, int targetHeight, QWidget* parent)
-    : DialogBase(parent, tr("Apply Mask"), 450, 400), m_targetWidth(targetWidth), m_targetHeight(targetHeight)
+    : DialogBase(parent, tr("Apply Mask"), 450, 400)
+    , m_targetWidth(targetWidth)
+    , m_targetHeight(targetHeight)
 {
     resize(600, 400);
 
     QHBoxLayout* mainLayout = new QHBoxLayout(this);
 
-    // Left: List
+    // -------------------------------------------------------------------------
+    // Left panel: mask selection list
+    // -------------------------------------------------------------------------
     QVBoxLayout* listLayout = new QVBoxLayout();
     listLayout->addWidget(new QLabel(tr("Available Masks:")));
+
     m_listWidget = new QListWidget();
-    connect(m_listWidget, &QListWidget::itemSelectionChanged, this, &ApplyMaskDialog::onSelectionChanged);
+    connect(m_listWidget, &QListWidget::itemSelectionChanged,
+            this, &ApplyMaskDialog::onSelectionChanged);
     listLayout->addWidget(m_listWidget);
+
     mainLayout->addLayout(listLayout, 1);
 
-    // Right: Preview
+    // -------------------------------------------------------------------------
+    // Right panel: preview and action buttons
+    // -------------------------------------------------------------------------
     QVBoxLayout* previewLayout = new QVBoxLayout();
-    QGroupBox* previewGroup = new QGroupBox(tr("Preview"));
-    QVBoxLayout* groupLayout = new QVBoxLayout(previewGroup);
-    m_previewLabel = new QLabel(tr("Select a mask to see preview"));
+
+    QGroupBox*   previewGroup  = new QGroupBox(tr("Preview"));
+    QVBoxLayout* groupLayout   = new QVBoxLayout(previewGroup);
+
+    m_previewLabel = new QLabel(tr("Select a mask to preview"));
     m_previewLabel->setAlignment(Qt::AlignCenter);
     m_previewLabel->setMinimumSize(256, 256);
-    m_previewLabel->setStyleSheet("background-color: #1a1a1a; border: 1px solid #444;");
+    m_previewLabel->setStyleSheet(
+        "background-color: #1a1a1a; border: 1px solid #444;");
     groupLayout->addWidget(m_previewLabel);
+
     previewLayout->addWidget(previewGroup, 1);
 
-    QHBoxLayout* btnLayout = new QHBoxLayout();
-    btnLayout->addStretch();
-    QPushButton* cancelBtn = new QPushButton(tr("Cancel"));
-    QPushButton* okBtn = new QPushButton(tr("OK"));
+    QHBoxLayout* btnLayout  = new QHBoxLayout();
+    QPushButton* cancelBtn  = new QPushButton(tr("Cancel"));
+    QPushButton* okBtn      = new QPushButton(tr("OK"));
     okBtn->setDefault(true);
+
+    btnLayout->addStretch();
     btnLayout->addWidget(cancelBtn);
     btnLayout->addWidget(okBtn);
+
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    connect(okBtn,     &QPushButton::clicked, this, &QDialog::accept);
+
     previewLayout->addLayout(btnLayout);
 
     mainLayout->addLayout(previewLayout, 1);
 
-    if (parentWidget()) {
+    // Centre the dialog over its parent window if one is present.
+    if (parentWidget())
         move(parentWidget()->window()->geometry().center() - rect().center());
-    }
 }
 
-void ApplyMaskDialog::addAvailableMask(const QString& name, const MaskLayer& mask, bool isView) {
-    QString displayName = isView ? tr("[View] %1").arg(name) : tr("[Saved] %1").arg(name);
+// =============================================================================
+// Public interface
+// =============================================================================
+
+void ApplyMaskDialog::addAvailableMask(const QString& name,
+                                       const MaskLayer& mask,
+                                       bool isView)
+{
+    const QString displayName = isView
+        ? tr("[View] %1").arg(name)
+        : tr("[Saved] %1").arg(name);
+
     m_availableMasks[displayName] = mask;
     m_listWidget->addItem(displayName);
 }
 
-MaskLayer ApplyMaskDialog::getSelectedMask() const {
+MaskLayer ApplyMaskDialog::getSelectedMask() const
+{
     return m_selectedMask;
 }
 
-void ApplyMaskDialog::onSelectionChanged() {
-    QListWidgetItem* item = m_listWidget->currentItem();
-    if (!item) return;
+// =============================================================================
+// Private slots
+// =============================================================================
 
-    QString name = item->text();
-    if (m_availableMasks.contains(name)) {
+void ApplyMaskDialog::onSelectionChanged()
+{
+    QListWidgetItem* item = m_listWidget->currentItem();
+    if (!item)
+        return;
+
+    const QString name = item->text();
+
+    if (m_availableMasks.contains(name))
+    {
         m_selectedMask = m_availableMasks[name];
         updatePreview(m_selectedMask);
     }
 }
 
-void ApplyMaskDialog::updatePreview(const MaskLayer& mask) {
-    if (!mask.isValid()) {
-        m_previewLabel->setText(tr("Invalid Mask Data"));
+// =============================================================================
+// Private helpers
+// =============================================================================
+
+void ApplyMaskDialog::updatePreview(const MaskLayer& mask)
+{
+    if (!mask.isValid())
+    {
+        m_previewLabel->setText(tr("Invalid mask data"));
         return;
     }
 
-    int w = mask.width;
-    int h = mask.height;
-    
-    // Create grayscale QImage from mask data
+    const int w = mask.width;
+    const int h = mask.height;
+
+    // Convert the floating-point mask data to an 8-bit grayscale QImage.
     QImage img(w, h, QImage::Format_Grayscale8);
-    for (int y = 0; y < h; ++y) {
+
+    for (int y = 0; y < h; ++y)
+    {
         uchar* line = img.scanLine(y);
-        for (int x = 0; x < w; ++x) {
-            float val = mask.data[y * w + x];
-            line[x] = static_cast<uchar>(std::clamp(val * 255.0f, 0.0f, 255.0f));
+        for (int x = 0; x < w; ++x)
+        {
+            const float val = mask.data[y * w + x];
+            line[x] = static_cast<uchar>(
+                std::clamp(val * 255.0f, 0.0f, 255.0f));
         }
     }
 
-    // Scale to fit preview label
-    QPixmap pix = QPixmap::fromImage(img);
-    m_previewLabel->setPixmap(pix.scaled(m_previewLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    const QPixmap pix = QPixmap::fromImage(img);
+    m_previewLabel->setPixmap(
+        pix.scaled(m_previewLabel->size(),
+                   Qt::KeepAspectRatio,
+                   Qt::SmoothTransformation));
 }

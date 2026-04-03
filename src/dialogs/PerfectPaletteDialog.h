@@ -1,6 +1,17 @@
 #ifndef PERFECTPALETTEDIALOG_H
 #define PERFECTPALETTEDIALOG_H
 
+/**
+ * @file PerfectPaletteDialog.h
+ * @brief Narrowband palette composition dialog.
+ *
+ * Allows loading Ha, OIII, and SII narrowband channels, selecting from
+ * predefined palette mappings (SHO, HOO, Foraxx, etc.), adjusting per-channel
+ * intensities, and applying optional auto-stretch before compositing.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
+
 #include <DialogBase.h>
 #include <QComboBox>
 #include <QSlider>
@@ -9,18 +20,21 @@
 #include <QGridLayout>
 #include <QScrollArea>
 #include <QCheckBox>
-#include "../ImageBuffer.h"
-#include "../algos/PerfectPaletteRunner.h"
 #include <QPointer>
 
-class MainWindowCallbacks;
+#include "../ImageBuffer.h"
+#include "../algos/PerfectPaletteRunner.h"
+
 class MainWindowCallbacks;
 class ImageViewer;
 
 class PerfectPaletteDialog : public DialogBase {
     Q_OBJECT
+
 public:
     explicit PerfectPaletteDialog(QWidget* parent = nullptr);
+
+    /** @brief Set the target viewer for channel loading context. */
     void setViewer(ImageViewer* v);
 
 private slots:
@@ -34,35 +48,48 @@ private slots:
 private:
     void createUI();
     void updateThumbnails();
-    
-    MainWindowCallbacks* m_mainWin;
-    QPointer<ImageViewer> m_viewer;
-    PerfectPaletteRunner m_runner;
-    
-    // Loaded Channels
+
+    // -- Core references --
+    MainWindowCallbacks*    m_mainWin = nullptr;
+    QPointer<ImageViewer>   m_viewer;
+    PerfectPaletteRunner    m_runner;
+
+    // -- Full-resolution channel buffers --
     ImageBuffer m_ha, m_oiii, m_sii;
-    // Downscaled versions for fast preview
-    ImageBuffer m_previewHa, m_previewOiii, m_previewSii; 
-    QLabel *m_lblHa, *m_lblOiii, *m_lblSii;
-    
-    // UI Elements
-    QScrollArea* m_scrollArea;
-    QGridLayout* m_gridPalettes;
-    QLabel* m_lblPreview;
-    
-    QSlider *m_sliderHa, *m_sliderOiii, *m_sliderSii;
-    QLabel *m_lblValHa, *m_lblValOiii, *m_lblValSii;
-    
-    // Stretch Controls
-    QCheckBox* m_chkAutoStretch;
-    QSlider* m_sliderStretch;
-    QLabel* m_lblStretchVal;
-    
+
+    // -- Downscaled preview buffers for responsive UI --
+    ImageBuffer m_previewHa, m_previewOiii, m_previewSii;
+
+    // -- Channel status labels --
+    QLabel* m_lblHa   = nullptr;
+    QLabel* m_lblOiii = nullptr;
+    QLabel* m_lblSii  = nullptr;
+
+    // -- Preview and palette grid --
+    QScrollArea*  m_scrollArea    = nullptr;
+    QGridLayout*  m_gridPalettes  = nullptr;
+    QLabel*       m_lblPreview    = nullptr;
+
+    // -- Intensity sliders and value labels --
+    QSlider* m_sliderHa   = nullptr;
+    QSlider* m_sliderOiii = nullptr;
+    QSlider* m_sliderSii  = nullptr;
+    QLabel*  m_lblValHa   = nullptr;
+    QLabel*  m_lblValOiii = nullptr;
+    QLabel*  m_lblValSii  = nullptr;
+
+    // -- Stretch controls --
+    QCheckBox* m_chkAutoStretch  = nullptr;
+    QSlider*   m_sliderStretch   = nullptr;
+    QLabel*    m_lblStretchVal   = nullptr;
+
+    // -- Palette selection state --
     QString m_selectedPalette;
-    
+
+    /** @brief Associates a palette button with its name for toggle management. */
     struct PaletteThumb {
-        QPushButton* btn;
-        QString name;
+        QPushButton* btn  = nullptr;
+        QString      name;
     };
     QList<PaletteThumb> m_thumbs;
 };

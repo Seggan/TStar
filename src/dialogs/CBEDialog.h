@@ -1,10 +1,20 @@
 #ifndef CBEDIALOG_H
 #define CBEDIALOG_H
 
+// =============================================================================
+// CBEDialog.h
+//
+// Catalog Background Extraction (CBE) dialog. Downloads a reference sky
+// survey image via HiPS, aligns it to the target using WCS reprojection,
+// and extracts the large-scale background gradient for subtraction.
+// =============================================================================
+
 #include "DialogBase.h"
 #include "../ImageBuffer.h"
 #include "../astrometry/HiPSClient.h"
+
 #include <QPointer>
+#include <atomic>
 
 class ImageViewer;
 class QComboBox;
@@ -15,39 +25,52 @@ class QProgressDialog;
 
 class CBEDialog : public DialogBase {
     Q_OBJECT
+
 public:
-    explicit CBEDialog(QWidget* parent, ImageViewer* viewer, const ImageBuffer& buffer);
+    explicit CBEDialog(QWidget* parent, ImageViewer* viewer,
+                       const ImageBuffer& buffer);
     ~CBEDialog();
+
+    /** Update the active viewer reference. */
     void setViewer(ImageViewer* viewer);
 
 signals:
+    /** Emitted with the corrected image buffer after successful extraction. */
     void applyResult(const ImageBuffer& result);
+
+    /** Emitted with progress/status messages during processing. */
     void progressMsg(const QString& msg);
 
 protected:
-    void closeEvent(class QCloseEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private slots:
     void onApply();
     void onHiPSImageReady(const ImageBuffer& refImg);
     void onHiPSError(const QString& err);
+    void onCancel();
 
 private:
+    // --- Core references ---
     QPointer<ImageViewer> m_viewer;
-    ImageBuffer m_originalBuffer;
-    HiPSClient* m_hipsClient = nullptr;
+    ImageBuffer           m_originalBuffer;
+    HiPSClient*           m_hipsClient = nullptr;
 
-    QComboBox*  m_comboSurvey;
-    QSpinBox*   m_spinScale;
-    QCheckBox*  m_checkProtectStars;
-    QCheckBox*  m_checkGradientMap;
+    // --- UI widgets ---
+    QComboBox*   m_comboSurvey;
+    QSpinBox*    m_spinScale;
+    QCheckBox*   m_checkProtectStars;
+    QCheckBox*   m_checkGradientMap;
     QPushButton* m_btnApply;
+    QPushButton* m_btnCancel;
 
-    // State tracked across onApply() → onHiPSImageReady()
-    int  m_targetWidth    = 0;   // full-resolution target width (pixels)
-    int  m_targetHeight   = 0;   // full-resolution target height (pixels)
-    bool m_parityFlipped  = false; // reference needs horizontal flip before extraction
-    double m_paddingFactor = 2.0; // download larger area to allow rotation without clipping
+    // --- Processing state ---
+    std::atomic<bool> m_cancelFlag{false};
+    int    m_targetWidth   = 0;       // Full-resolution target dimensions
+    int    m_targetHeight  = 0;
+    bool   m_parityFlipped = false;   // Whether reference needs horizontal flip
+    double m_paddingFactor = 2.0;     // Download area padding for rotation margin
+
     QProgressDialog* m_busyDialog = nullptr;
 };
 

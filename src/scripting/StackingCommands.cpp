@@ -1,3 +1,9 @@
+/**
+ * @file StackingCommands.cpp
+ * @brief Implementation of all stacking and preprocessing script commands.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
 
 #include "StackingCommands.h"
 #include "../io/FitsWrapper.h"
@@ -6,529 +12,531 @@
 #include "../io/TiffIO.h"
 #include "../background/BackgroundExtraction.h"
 #include "../preprocessing/Debayer.h"
+#include "../core/ResourceManager.h"
+
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
+
 #include <QApplication>
 #include <QCoreApplication>
 #include <QProcess>
 #include <QDateTime>
-#ifdef HAVE_LIBRAW
-#include <libraw/libraw.h>
-#endif
 #include <QFuture>
 #include <QtConcurrent>
 #include <QAtomicInt>
 #include <QSemaphore>
-#include <mutex>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QDirIterator>
 #include <QSettings>
 #include <QRegularExpression>
-#include "../core/ResourceManager.h"
+
+#include <mutex>
+
+#ifdef HAVE_LIBRAW
+#include <libraw/libraw.h>
+#endif
 
 namespace Scripting {
 
+// ============================================================================
 // Static member initialization
-std::unique_ptr<Stacking::ImageSequence> StackingCommands::s_sequence;
-std::unique_ptr<ImageBuffer> StackingCommands::s_currentImage;
-QString StackingCommands::s_currentFilename;
-Preprocessing::PreprocessingEngine StackingCommands::s_preprocessor;
-QString StackingCommands::s_workingDir;
-ScriptRunner* StackingCommands::s_runner = nullptr;
+// ============================================================================
 
-//=============================================================================
-// REGISTRATION
-//=============================================================================
+std::unique_ptr<Stacking::ImageSequence>  StackingCommands::s_sequence;
+std::unique_ptr<ImageBuffer>              StackingCommands::s_currentImage;
+QString                                   StackingCommands::s_currentFilename;
+Preprocessing::PreprocessingEngine        StackingCommands::s_preprocessor;
+QString                                   StackingCommands::s_workingDir;
+ScriptRunner*                             StackingCommands::s_runner = nullptr;
 
-void StackingCommands::initCurrentImage(const ImageBuffer& image) {
+// ============================================================================
+// Command registration
+// ============================================================================
+
+void StackingCommands::initCurrentImage(const ImageBuffer& image)
+{
     s_currentImage = std::make_unique<ImageBuffer>(image);
-    s_currentFilename.clear();  // unknown filename – will be set by an explicit save/load
+    s_currentFilename.clear();
 }
 
-void StackingCommands::registerCommands(ScriptRunner& runner) {
-    s_runner = &runner;
+void StackingCommands::registerCommands(ScriptRunner& runner)
+{
+    s_runner     = &runner;
     s_workingDir = runner.workingDirectory();
-    
+
     QVector<CommandDef> commands = {
-        // Directory commands
-        CommandDef("cd", 1, 1, 
+
+        // -- Directory -------------------------------------------------------
+        CommandDef("cd", 1, 1,
             "cd <path>",
             "Change working directory",
             cmdCd),
-        
-        // File commands
+
+        // -- File I/O --------------------------------------------------------
         CommandDef("load", 1, 1,
             "load <filename>",
             "Load an image file",
             cmdLoad),
-            
         CommandDef("save", 1, 1,
             "save <filename> [--32b] [--16b]",
             "Save current image",
             cmdSave),
-            
         CommandDef("close", 0, 0,
             "close",
             "Close current image",
             cmdClose),
-        
-        // Stacking commands
+
+        // -- Stacking --------------------------------------------------------
         CommandDef("stack", 1, 8,
-            "stack <sequence_prefix> [method] [rejection] [sigma_low] [sigma_high] [--out=<name>]",
+            "stack <prefix> [method] [rejection] [sigma_lo] [sigma_hi] [--out=<name>]",
             "Stack a sequence of images",
             cmdStack),
-
-         CommandDef("rgbcomp", 3, 2,
+        CommandDef("rgbcomp", 3, 2,
             "rgbcomp <r_file> <g_file> <b_file> [-out=<filename>]",
-            "Combine 3 monochrome images into RGB",
+            "Combine three monochrome images into an RGB composite",
             cmdRGBComp),
-
         CommandDef("linear_match", 2, 0,
             "linear_match <ref_file> <target_file>",
-            "Normalize target to match reference statistics",
+            "Normalize target to match reference image statistics",
             cmdLinearMatch),
-            
         CommandDef("pm", 1, 1,
             "pm <expression>",
-            "Execute PixelMath expression",
+            "Evaluate a PixelMath expression",
             cmdPixelMath),
-            
         CommandDef("starnet", 0, 0,
-             "starnet [--nostarmask] [--stride=<val>]",
-             "Run StarNet++ on current image",
-             cmdStarNet),
-            
+            "starnet [--nostarmask] [--stride=<val>]",
+            "Run StarNet++ star removal on the current image",
+            cmdStarNet),
         CommandDef("calibrate", 1, 1,
-            "calibrate <sequence_prefix> [--bias=<file>] [--dark=<file>] [--flat=<file>]",
-            "Calibrate images with master frames",
+            "calibrate <prefix> [--bias=<file>] [--dark=<file>] [--flat=<file>]",
+            "Calibrate images with master bias, dark, and flat frames",
             cmdCalibrate),
-            
         CommandDef("register", 1, 1,
-            "register <sequence_prefix> [--drizzle] [--norotation]",
-            "Register (align) images",
+            "register <prefix> [--drizzle] [--norotation]",
+            "Register (align) images in a sequence",
             cmdRegister),
-            
         CommandDef("convert", 1, 3,
             "convert <prefix> [--out=<dir>] [--debayer]",
-            "Convert files to FITS sequence (CFA by default)",
+            "Convert source files to a FITS sequence (CFA by default)",
             cmdConvert),
-            
         CommandDef("link", 1, 2,
             "link <prefix> [--out=<directory>]",
-            "Create symbolic links for a sequence (alias to convert)",
-             cmdConvert), 
+            "Create symbolic links for a sequence (alias for convert)",
+            cmdConvert),
 
-        // Master frame commands
+        // -- Master frames ---------------------------------------------------
         CommandDef("setmaster", 2, 2,
             "setmaster <type> <filename>",
             "Set a master calibration frame (bias, dark, flat)",
             cmdSetMaster),
-            
-        // Processing commands
+
+        // -- Processing ------------------------------------------------------
         CommandDef("background", 0, 1,
             "background [sequence] [--degree=<n>]",
-            "Perform background extraction on current image or sequence",
+            "Perform background extraction on the current image or sequence",
             cmdBackground),
-             
         CommandDef("seqsubsky", 1, 2,
-             "seqsubsky <sequence> <degree>",
-             "Perform background extraction (alias)",
-             cmdBackground),
-
+            "seqsubsky <sequence> <degree>",
+            "Perform background extraction (alias for background)",
+            cmdBackground),
         CommandDef("debayer", 0, 1,
-            "debayer [sequence_prefix] [--pattern=<RGGB|BGGR|GBRG|GRBG>] [--algo=<bilinear|vng|superpixel>]",
-            "Debayer current image or a sequence of images",
+            "debayer [prefix] [--pattern=<RGGB|BGGR|GBRG|GRBG>] "
+            "[--algo=<bilinear|vng|superpixel>]",
+            "Debayer the current image or a sequence of images",
             cmdDebayer),
-            
+
+        // -- CFA Extraction --------------------------------------------------
         CommandDef("seqextract_Ha", 1, 1,
             "seqextract_Ha <prefix> [--upscale]",
-            "Extract Ha from CFA sequence",
+            "Extract Ha channel from a CFA sequence",
+            cmdSeqExtract),
+        CommandDef("seqextract_HaOIII", 1, 1,
+            "seqextract_HaOIII <prefix> [--upscale]",
+            "Extract Ha and OIII channels from a CFA sequence",
             cmdSeqExtract),
 
-        CommandDef("seqextract_HaOIII", 1, 1,
-             "seqextract_HaOIII <prefix> [--upscale]",
-             "Extract Ha and OIII from CFA sequence",
-             cmdSeqExtract),
-
+        // -- Geometry --------------------------------------------------------
         CommandDef("mirrorx", 0, 0,
             "mirrorx [-bottomup]",
-            "Flip image horizontally (or vertically with flag)",
+            "Flip image horizontally (or vertically with -bottomup)",
             cmdMirror),
-            
-        // Phase 5: Project Commands
-        CommandDef("newproject", 1, 1,
-            "newproject <path>",
-            "Create a new stacking project with directory structure",
-            cmdNewProject),
-            
-        CommandDef("convertall", 1, 1,
-            "convertall <pattern> [--out=<dir>]",
-            "Batch convert RAW files to FITS in lights/ directory",
-            cmdConvertAll),
-            
-        CommandDef("autostack", 1, 1,
-            "autostack <project_path>",
-            "Run full pipeline: calibrate, register, stack",
-            cmdAutoStack),
-
-        CommandDef("seqapplyreg", 1, 1,
-            "seqapplyreg <sequencename> [--prefix=] [--framing=min|max|ref]",
-            "Apply registration transforms to a sequence",
-            cmdSeqApplyReg),
-
         CommandDef("mirrory", 0, 0,
             "mirrory",
             "Flip image vertically (alias for mirrorx -bottomup)",
             cmdMirror),
-
         CommandDef("rotate", 1, 1,
             "rotate <angle>",
-            "Rotate current image by angle (degrees)",
+            "Rotate the current image by the specified angle in degrees",
             cmdRotate),
-
         CommandDef("resample", 1, 1,
             "resample <factor|width=...|height=...>",
-            "Resample (resize) current image",
+            "Resample (resize) the current image",
             cmdResample),
-
-        CommandDef("update_key", 2, 3,
-            "update_key <key> <value> [comment]",
-            "Update FITS header keyword",
-            cmdUpdateKey),
-
         CommandDef("crop", 0, 4,
             "crop [x y width height]",
-            "Crop current image to selection or specified box",
+            "Crop the current image to the specified region",
             cmdCrop),
 
+        // -- Project / Pipeline ----------------------------------------------
+        CommandDef("newproject", 1, 1,
+            "newproject <path>",
+            "Create a new stacking project with the standard directory layout",
+            cmdNewProject),
+        CommandDef("convertall", 1, 1,
+            "convertall <pattern> [--out=<dir>]",
+            "Batch-convert RAW files to FITS in the lights directory",
+            cmdConvertAll),
+        CommandDef("autostack", 1, 1,
+            "autostack <project_path>",
+            "Run the full pipeline: calibrate, register, stack",
+            cmdAutoStack),
+        CommandDef("seqapplyreg", 1, 1,
+            "seqapplyreg <name> [--prefix=] [--framing=min|max|ref]",
+            "Apply stored registration transforms to a sequence",
+            cmdSeqApplyReg),
+
+        // -- Metadata --------------------------------------------------------
+        CommandDef("update_key", 2, 3,
+            "update_key <key> <value> [comment]",
+            "Update a FITS header keyword in the current image",
+            cmdUpdateKey),
         CommandDef("stat", 0, 0,
             "stat",
-            "Log image statistics (min, max, mean, etc.)",
+            "Log basic image statistics (min, max, mean)",
             cmdStat),
 
+        // -- Pixel-level operations ------------------------------------------
         CommandDef("thresh", 2, 2,
             "thresh <lo> <hi>",
             "Apply low and high thresholding",
             cmdThreshold),
-
         CommandDef("threshlo", 1, 1,
             "threshlo <value>",
-            "Apply lower threshold (values below set to 0)",
+            "Clamp pixels below the threshold to zero",
             cmdThreshold),
-
         CommandDef("threshhi", 1, 1,
             "threshhi <value>",
-            "Apply upper threshold (values above set to 1)",
+            "Clamp pixels above the threshold to one",
             cmdThreshold),
-
         CommandDef("offset", 1, 1,
             "offset <value>",
-            "Add offset value to all pixels",
+            "Add a constant offset to all pixels",
             cmdMath),
-
         CommandDef("fmul", 1, 1,
             "fmul <factor>",
-            "Multiply all pixels by factor",
+            "Multiply all pixels by a constant factor",
             cmdMath),
-
         CommandDef("neg", 0, 0,
             "neg",
-            "Invert image (negative)",
+            "Invert the image (compute the negative)",
             cmdMath),
     };
-    
+
     runner.registerCommands(commands);
 }
 
-//=============================================================================
-// PATH RESOLUTION
-//=============================================================================
+// ============================================================================
+// Path resolution
+// ============================================================================
 
-QString StackingCommands::resolvePath(const QString& path) {
-    if (QDir::isAbsolutePath(path)) {
+QString StackingCommands::resolvePath(const QString& path)
+{
+    if (QDir::isAbsolutePath(path))
         return path;
-    }
     return QDir(s_workingDir).absoluteFilePath(path);
 }
 
-//=============================================================================
-// CD COMMAND
-//=============================================================================
+// ============================================================================
+// cd -- Change working directory
+// ============================================================================
 
-bool StackingCommands::cmdCd(const ScriptCommand& cmd) {
+bool StackingCommands::cmdCd(const ScriptCommand& cmd)
+{
     QString path = resolvePath(cmd.args[0]);
-    
+
     QDir dir(path);
     if (!dir.exists()) {
         QString msg = QString("Directory not found: %1").arg(path);
-        if (s_runner) {
+        if (s_runner)
             s_runner->setError(msg, cmd.lineNumber);
-        }
         return false;
     }
-    
+
     s_workingDir = dir.absolutePath();
+
     if (s_runner) {
         s_runner->setWorkingDirectory(s_workingDir);
-        s_runner->logMessage(QString("Changed working directory to: %1").arg(s_workingDir), "neutral");
+        s_runner->logMessage(
+            QString("Changed working directory to: %1").arg(s_workingDir),
+            "neutral");
     }
-    
+
     return true;
 }
 
-//=============================================================================
-// LOAD/SAVE/CLOSE
-//=============================================================================
+// ============================================================================
+// load -- Load an image file
+// ============================================================================
 
-bool StackingCommands::cmdLoad(const ScriptCommand& cmd) {
+bool StackingCommands::cmdLoad(const ScriptCommand& cmd)
+{
     QString path = resolvePath(cmd.args[0]);
-    
+
     s_currentImage = std::make_unique<ImageBuffer>();
     if (!Stacking::FitsIO::read(path, *s_currentImage)) {
         s_currentImage.reset();
         return false;
     }
-    
-    // Track the basename so that starnet can derive its output filename correctly
+
+    // Store the basename so downstream commands (e.g. starnet) can derive
+    // output filenames consistently.
     s_currentFilename = QFileInfo(path).fileName();
-    
-    // Signal that an image has been loaded so the UI can display it
+
+    // Notify the UI that a new image is available for display.
     if (s_runner) {
         QString title = QFileInfo(path).fileName();
         emit s_runner->imageLoaded(title);
     }
-    
+
     return true;
 }
 
-bool StackingCommands::cmdSave(const ScriptCommand& cmd) {
+// ============================================================================
+// save -- Save current image
+// ============================================================================
+
+bool StackingCommands::cmdSave(const ScriptCommand& cmd)
+{
     if (!s_currentImage || !s_currentImage->isValid()) {
         if (s_runner)
             s_runner->logMessage(QObject::tr("save: no image loaded"), "red");
         return false;
     }
-    
+
+    // Determine output path from positional argument or option.
     QString path;
     if (cmd.args.size() > 0) {
         path = resolvePath(cmd.args[0]);
     } else {
         path = cmd.option("out", cmd.option("output", ""));
         if (path.isEmpty()) {
-             if (s_runner) s_runner->logMessage(QObject::tr("save: no filename specified (use positional arg or -out=...)"), "red");
-             return false;
+            if (s_runner)
+                s_runner->logMessage(
+                    QObject::tr("save: no filename specified "
+                                "(use positional arg or -out=...)"),
+                    "red");
+            return false;
         }
         path = resolvePath(path);
     }
-    
-    int bits = cmd.hasOption("32b") ? 32 : (cmd.hasOption("16b") ? 16 : 32);
-    
-    QString error;
+
+    // Select output bit depth.
+    int bits = cmd.hasOption("32b") ? 32
+             : cmd.hasOption("16b") ? 16
+             : 32;
+
     if (!Stacking::FitsIO::write(path, *s_currentImage, bits)) {
-        if (s_runner) s_runner->logMessage(QObject::tr("save: failed to write %1").arg(path), "red");
+        if (s_runner)
+            s_runner->logMessage(
+                QObject::tr("save: failed to write %1").arg(path), "red");
         return false;
     }
 
-    // Track the basename so subsequent commands can reference the saved file
     s_currentFilename = QFileInfo(path).fileName();
 
-    // BUG FIX: Auto-append .fit extension if missing
+    // Ensure the file has a FITS extension.
     QString ext = QFileInfo(path).suffix().toLower();
-    if (ext != "fit" && ext != "fits" && ext != "fts") {
+    if (ext != "fit" && ext != "fits" && ext != "fts")
         path += ".fit";
-        // Re-write if name changed (actually better to just ensure path is correct BEFORE writing)
-    }
 
     return true;
 }
 
-bool StackingCommands::cmdClose(const ScriptCommand& cmd) {
+// ============================================================================
+// close -- Release the current image and sequence
+// ============================================================================
+
+bool StackingCommands::cmdClose(const ScriptCommand& cmd)
+{
     Q_UNUSED(cmd);
     s_currentImage.reset();
     s_sequence.reset();
     return true;
 }
 
-//=============================================================================
-// STACK COMMAND
-//=============================================================================
+// ============================================================================
+// Stacking parameter parsers
+// ============================================================================
 
-Stacking::Method StackingCommands::parseMethod(const QString& str) {
+Stacking::Method StackingCommands::parseMethod(const QString& str)
+{
     QString s = str.toLower();
-    if (s == "sum") return Stacking::Method::Sum;
+    if (s == "sum")    return Stacking::Method::Sum;
     if (s == "median") return Stacking::Method::Median;
-    if (s == "max") return Stacking::Method::Max;
-    if (s == "min") return Stacking::Method::Min;
-    return Stacking::Method::Mean;  // Default
+    if (s == "max")    return Stacking::Method::Max;
+    if (s == "min")    return Stacking::Method::Min;
+    return Stacking::Method::Mean;
 }
 
-Stacking::Rejection StackingCommands::parseRejection(const QString& str) {
+Stacking::Rejection StackingCommands::parseRejection(const QString& str)
+{
     QString s = str.toLower();
-    if (s == "none") return Stacking::Rejection::None;
-    if (s == "percentile" || s == "perc") return Stacking::Rejection::Percentile;
-    if (s == "sigma") return Stacking::Rejection::Sigma;
-    if (s == "mad") return Stacking::Rejection::MAD;
-    if (s == "sigmedian") return Stacking::Rejection::SigmaMedian;
-    if (s == "winsor" || s == "winsorized") return Stacking::Rejection::Winsorized;
-    if (s == "linear" || s == "linfit") return Stacking::Rejection::LinearFit;
-    if (s == "gesdt") return Stacking::Rejection::GESDT;
-    return Stacking::Rejection::Winsorized;  // Default
+    if (s == "none")                           return Stacking::Rejection::None;
+    if (s == "percentile" || s == "perc")      return Stacking::Rejection::Percentile;
+    if (s == "sigma")                          return Stacking::Rejection::Sigma;
+    if (s == "mad")                            return Stacking::Rejection::MAD;
+    if (s == "sigmedian")                      return Stacking::Rejection::SigmaMedian;
+    if (s == "winsor" || s == "winsorized")    return Stacking::Rejection::Winsorized;
+    if (s == "linear" || s == "linfit")        return Stacking::Rejection::LinearFit;
+    if (s == "gesdt")                          return Stacking::Rejection::GESDT;
+    return Stacking::Rejection::Winsorized;
 }
 
-Stacking::NormalizationMethod StackingCommands::parseNormalization(const QString& str) {
+Stacking::NormalizationMethod StackingCommands::parseNormalization(
+    const QString& str)
+{
     QString s = str.toLower();
-    if (s == "none" || s == "nonorm") return Stacking::NormalizationMethod::None;
+    if (s == "none" || s == "nonorm")  return Stacking::NormalizationMethod::None;
     if (s == "add" || s == "additive") return Stacking::NormalizationMethod::Additive;
-    if (s == "mul" || s == "multiplicative") return Stacking::NormalizationMethod::Multiplicative;
-    if (s == "addscale") return Stacking::NormalizationMethod::AdditiveScaling;
-    if (s == "mulscale") return Stacking::NormalizationMethod::MultiplicativeScaling;
-    return Stacking::NormalizationMethod::AdditiveScaling;  // Default
+    if (s == "mul" || s == "multiplicative")
+                                       return Stacking::NormalizationMethod::Multiplicative;
+    if (s == "addscale")               return Stacking::NormalizationMethod::AdditiveScaling;
+    if (s == "mulscale")               return Stacking::NormalizationMethod::MultiplicativeScaling;
+    return Stacking::NormalizationMethod::AdditiveScaling;
 }
 
-Stacking::WeightingType StackingCommands::parseWeighting(const QString& str) {
+Stacking::WeightingType StackingCommands::parseWeighting(const QString& str)
+{
     QString s = str.toLower();
-    if (s == "none") return Stacking::WeightingType::None;
-    if (s == "noise") return Stacking::WeightingType::Noise;
-    if (s == "fwhm" || s == "wfwhm") return Stacking::WeightingType::WeightedFWHM;
-    if (s == "stars") return Stacking::WeightingType::StarCount;
-    if (s == "quality") return Stacking::WeightingType::Quality;
+    if (s == "none")                     return Stacking::WeightingType::None;
+    if (s == "noise")                    return Stacking::WeightingType::Noise;
+    if (s == "fwhm" || s == "wfwhm")    return Stacking::WeightingType::WeightedFWHM;
+    if (s == "stars")                    return Stacking::WeightingType::StarCount;
+    if (s == "quality")                  return Stacking::WeightingType::Quality;
     return Stacking::WeightingType::None;
 }
 
+// ============================================================================
+// stack -- Stack a sequence of images
+// ============================================================================
 
-bool StackingCommands::cmdStack(const ScriptCommand& cmd) {
+bool StackingCommands::cmdStack(const ScriptCommand& cmd)
+{
     QString prefix = cmd.args[0];
-    
-    // Find files matching prefix
+
+    // -- Discover matching files ---------------------------------------------
     QDir dir(s_workingDir);
     QStringList filters;
     filters << prefix + "*.fit" << prefix + "*.fits" << prefix + "*.fts";
-    
+
     QStringList files = dir.entryList(filters, QDir::Files, QDir::Name);
-    
-    if (files.isEmpty()) {
+    if (files.isEmpty())
         return false;
-    }
-    
-    // Convert to full paths
+
     QStringList fullPaths;
-    for (const QString& f : files) {
+    for (const QString& f : files)
         fullPaths << dir.absoluteFilePath(f);
-    }
-    
-    // Check if we can reuse the existing sequence (preserves registration info)
+
+    // -- Reuse existing sequence if it matches (preserves registration) ------
     bool reuseSequence = false;
-    
     if (s_sequence && s_sequence->count() == fullPaths.size()) {
         QString seqFile = QFileInfo(s_sequence->image(0).filePath).fileName();
         QString reqFile = QFileInfo(fullPaths[0]).fileName();
-        
-        if (seqFile == reqFile) {
-             reuseSequence = true;
-        }
+        if (seqFile == reqFile)
+            reuseSequence = true;
     }
-    
+
     if (!reuseSequence) {
-        // Create sequence
         s_sequence = std::make_unique<Stacking::ImageSequence>();
         if (!s_sequence->loadFromFiles(fullPaths)) {
             s_sequence.reset();
             return false;
         }
     }
-    
-    // Parse parameters
+
+    // -- Parse stacking parameters -------------------------------------------
     Stacking::StackingParams params;
-    params.method = parseMethod(cmd.option("method", "mean"));
-    params.rejection = parseRejection(cmd.option("rejection", "winsorized"));
+    params.method       = parseMethod(cmd.option("method", "mean"));
+    params.rejection    = parseRejection(cmd.option("rejection", "winsorized"));
     params.normalization = parseNormalization(cmd.option("norm", "addscale"));
-    params.weighting = parseWeighting(cmd.option("weighting", "noise"));
-    
-    // Parse rejection sigmas (rej low high), or positional arguments 3 and 4
+    params.weighting    = parseWeighting(cmd.option("weighting", "noise"));
+
+    // Rejection sigma thresholds.
     if (cmd.hasOption("rej")) {
-        QString rejVal = cmd.option("rej");
+        QString    rejVal = cmd.option("rej");
         QStringList parts = rejVal.split(' ');
         if (parts.size() >= 2) {
-            params.sigmaLow = parts[0].toFloat();
+            params.sigmaLow  = parts[0].toFloat();
             params.sigmaHigh = parts[1].toFloat();
         } else if (parts.size() == 1) {
             params.sigmaLow = params.sigmaHigh = parts[0].toFloat();
         }
     } else if (cmd.args.size() >= 4) {
-        params.sigmaLow = cmd.args[2].toFloat();
+        params.sigmaLow  = cmd.args[2].toFloat();
         params.sigmaHigh = cmd.args[3].toFloat();
     } else {
         params.sigmaLow = params.sigmaHigh = 3.0f;
     }
-    
-    // Positional method/rejection
-    if (cmd.args.size() >= 2) params.method = parseMethod(cmd.args[1]);
-    if (cmd.args.size() >= 3) params.rejection = parseRejection(cmd.args[2]);
-    
-    // Output options
-    params.force32Bit = cmd.hasOption("32b") || cmd.hasOption("32bits");
-    params.outputNormalization = cmd.hasOption("output_norm");
-    // Default RGB Equalization to FALSE
-    params.equalizeRGB = cmd.hasOption("rgb_equal");
-    
-    if (s_runner) {
-         if (params.equalizeRGB) {
-             s_runner->logMessage("RGB Equalization: ENABLED (Neutralizes color cast)", "orange");
-         } else {
-             s_runner->logMessage("RGB Equalization: DISABLED (Preserves camera color cast)", "green");
-         }
-    }
-    
-    // Drizzle options
-    params.drizzle = cmd.hasOption("drizzle");
-    params.drizzleFast = cmd.hasOption("fast_drizzle") || cmd.hasOption("fast");
-    if (cmd.hasOption("scale")) {
-        params.drizzleScale = cmd.option("scale").toDouble();
-    }
-    if (cmd.hasOption("pixfrac")) {
-        params.drizzlePixFrac = cmd.option("pixfrac").toDouble();
-    }
-    
-    // Advanced options
-    if (cmd.hasOption("feather")) {
-        params.featherDistance = cmd.option("feather").toInt();
-    }
-    
-    // Output filename
-    QString output = cmd.option("out", cmd.option("output", prefix + "_stacked.fit"));
-    params.outputFilename = resolvePath(output);
 
-    // BUG FIX: Auto-append .fit extension if missing
+    // Positional overrides for method and rejection.
+    if (cmd.args.size() >= 2)
+        params.method    = parseMethod(cmd.args[1]);
+    if (cmd.args.size() >= 3)
+        params.rejection = parseRejection(cmd.args[2]);
+
+    // Output and processing options.
+    params.force32Bit           = cmd.hasOption("32b") || cmd.hasOption("32bits");
+    params.outputNormalization  = cmd.hasOption("output_norm");
+    params.equalizeRGB          = cmd.hasOption("rgb_equal");
+
+    if (s_runner) {
+        if (params.equalizeRGB)
+            s_runner->logMessage(
+                "RGB Equalization: ENABLED (Neutralizes color cast)", "orange");
+        else
+            s_runner->logMessage(
+                "RGB Equalization: DISABLED (Preserves camera color cast)", "green");
+    }
+
+    // Drizzle options.
+    params.drizzle     = cmd.hasOption("drizzle");
+    params.drizzleFast = cmd.hasOption("fast_drizzle") || cmd.hasOption("fast");
+    if (cmd.hasOption("scale"))
+        params.drizzleScale = cmd.option("scale").toDouble();
+    if (cmd.hasOption("pixfrac"))
+        params.drizzlePixFrac = cmd.option("pixfrac").toDouble();
+
+    // Feathering.
+    if (cmd.hasOption("feather"))
+        params.featherDistance = cmd.option("feather").toInt();
+
+    // Output filename (ensure .fit extension).
+    QString output = cmd.option("out",
+                       cmd.option("output", prefix + "_stacked.fit"));
+    params.outputFilename = resolvePath(output);
     {
         QString ext = QFileInfo(params.outputFilename).suffix().toLower();
-        if (ext != "fit" && ext != "fits" && ext != "fts") {
+        if (ext != "fit" && ext != "fits" && ext != "fts")
             params.outputFilename += ".fit";
-        }
     }
 
     params.maximizeFraming = cmd.hasOption("maximize");
-    
-    // Reuse Logic Applied Above
-    // If not reusing, we would have loaded it.
-    // If reusing, s_sequence is already set.
-    
-    if (!s_sequence || s_sequence->count() == 0) {
-         return false;
-    }
-    
-    // Execute stacking
+
+    if (!s_sequence || s_sequence->count() == 0)
+        return false;
+
+    // -- Execute the stacking engine -----------------------------------------
     Stacking::StackingArgs args;
-    args.params = params;
+    args.params   = params;
     args.sequence = s_sequence.get();
-    
-    // Wire up callbacks for real-time feedback and cancellation
+
     if (s_runner) {
         args.cancelCheck = []() {
             return s_runner && s_runner->isCancelled();
         };
-        // Use direct logging callback to avoid signal overhead in tight loops
         args.logCallback = [](const QString& msg, const QString& color) {
             if (s_runner) s_runner->logMessageDirect(msg, color);
         };
@@ -536,562 +544,558 @@ bool StackingCommands::cmdStack(const ScriptCommand& cmd) {
             if (s_runner) s_runner->progressChanged(msg, pct);
         };
     }
-    
+
     Stacking::StackingEngine engine;
     auto result = engine.execute(args);
-    
+
     if (result != Stacking::StackResult::OK) {
-        if (result == Stacking::StackResult::CancelledError) {
-            if (s_runner) s_runner->logMessage(QObject::tr("Stacking cancelled"), "salmon");
-        }
+        if (result == Stacking::StackResult::CancelledError && s_runner)
+            s_runner->logMessage(
+                QObject::tr("Stacking cancelled"), "salmon");
         return false;
     }
 
-    // BUG FIX: Transfer FITS headers from reference light to result
+    // -- Transfer FITS headers from the reference frame to the output --------
     if (args.result.isValid() && s_sequence && s_sequence->count() > 0) {
         int refIdx = args.params.refImageIndex;
-        if (refIdx < 0 || refIdx >= s_sequence->count()) refIdx = 0;
+        if (refIdx < 0 || refIdx >= s_sequence->count())
+            refIdx = 0;
 
         const auto& refMeta = s_sequence->image(refIdx).metadata;
-        auto& outMeta = args.result.metadata();
+        auto&       outMeta = args.result.metadata();
 
         static const QStringList skipKeys = {
-            "SIMPLE","BITPIX","NAXIS","NAXIS1","NAXIS2","NAXIS3",
-            "EXTEND","BZERO","BSCALE","END","HISTORY"
+            "SIMPLE", "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "NAXIS3",
+            "EXTEND", "BZERO",  "BSCALE", "END",   "HISTORY"
         };
 
         for (const auto& card : refMeta.rawHeaders) {
-            if (!skipKeys.contains(card.key.toUpper())) {
+            if (!skipKeys.contains(card.key.toUpper()))
                 outMeta.rawHeaders.push_back(card);
-            }
         }
-        // Sync WCS if present
+
         args.result.syncWcsToHeaders();
     }
-    
-    // Save result - Force 32-bit float for stacking output
-    if (!Stacking::FitsIO::write(params.outputFilename, args.result, 32)) {
+
+    // -- Write the stacked result (always 32-bit float) ----------------------
+    if (!Stacking::FitsIO::write(params.outputFilename, args.result, 32))
         return false;
-    }
-    
-    // Set as current image
+
     s_currentImage = std::make_unique<ImageBuffer>(std::move(args.result));
-    
     return true;
 }
 
-//=============================================================================
-// CALIBRATE COMMAND
-//=============================================================================
+// ============================================================================
+// calibrate -- Calibrate images with master frames
+// ============================================================================
 
-bool StackingCommands::cmdCalibrate(const ScriptCommand& cmd) {
+bool StackingCommands::cmdCalibrate(const ScriptCommand& cmd)
+{
     QString prefix = cmd.args[0];
-    
-    // Find files matching prefix
+
+    // Discover matching files.
     QDir dir(s_workingDir);
     QStringList filters;
     filters << prefix + "*.fit" << prefix + "*.fits" << prefix + "*.fts";
-    
+
     QStringList files = dir.entryList(filters, QDir::Files, QDir::Name);
-    
-    if (files.isEmpty()) {
+    if (files.isEmpty())
         return false;
-    }
-    
-    // Convert to full paths
+
     QStringList fullPaths;
-    for (const QString& f : files) {
+    for (const QString& f : files)
         fullPaths << dir.absoluteFilePath(f);
-    }
-    
-    // Set up preprocessing parameters
+
+    // -- Configure preprocessing parameters ----------------------------------
     Preprocessing::PreprocessParams params;
-    
+
     if (cmd.hasOption("bias")) {
         params.masterBias = resolvePath(cmd.option("bias"));
-        params.useBias = true;
+        params.useBias    = true;
     }
     if (cmd.hasOption("dark")) {
         params.masterDark = resolvePath(cmd.option("dark"));
-        params.useDark = true;
+        params.useDark    = true;
     }
     if (cmd.hasOption("flat")) {
         params.masterFlat = resolvePath(cmd.option("flat"));
-        params.useFlat = true;
+        params.useFlat    = true;
     }
-    
-    // Dark optimization
-    params.darkOptim.enabled = cmd.hasOption("dark_optimize") || cmd.hasOption("cc");
-    
-    // Debayer
+
+    // Dark optimization.
+    params.darkOptim.enabled =
+        cmd.hasOption("dark_optimize") || cmd.hasOption("cc");
+
+    // Optional debayering during calibration.
     if (cmd.hasOption("debayer")) {
         params.debayer = true;
         QString pattern = cmd.option("cfa", "AUTO").toUpper();
-        if (pattern.isEmpty()) pattern = "AUTO"; // Handle empty flag
-        if (pattern == "AUTO") params.bayerPattern = Preprocessing::BayerPattern::Auto;
+        if (pattern.isEmpty()) pattern = "AUTO";
+
+        if      (pattern == "AUTO") params.bayerPattern = Preprocessing::BayerPattern::Auto;
         else if (pattern == "RGGB") params.bayerPattern = Preprocessing::BayerPattern::RGGB;
         else if (pattern == "BGGR") params.bayerPattern = Preprocessing::BayerPattern::BGGR;
         else if (pattern == "GBRG") params.bayerPattern = Preprocessing::BayerPattern::GBRG;
         else if (pattern == "GRBG") params.bayerPattern = Preprocessing::BayerPattern::GRBG;
     }
-    
-    // CFA equalization
+
+    // CFA channel equalization.
     params.cfaEqualize.enabled = cmd.hasOption("equalize_cfa");
-    
-    // Cosmetic correction
+
+    // Sigma-based cosmetic correction.
     if (cmd.hasOption("cc")) {
-        params.cosmetic.type = Preprocessing::CosmeticType::Sigma;
+        params.cosmetic.type      = Preprocessing::CosmeticType::Sigma;
         params.cosmetic.coldSigma = 3.0f;
-        params.cosmetic.hotSigma = 3.0f;
+        params.cosmetic.hotSigma  = 3.0f;
     }
-    
-    // Output prefix
+
     params.outputPrefix = "pp_";
-    params.outputDir = s_workingDir;
-    
-    // Run preprocessing
+    params.outputDir    = s_workingDir;
+
     s_preprocessor.setParams(params);
-    
-    // Progress callback for calibration 
+
+    // Progress callback.
     auto progressCallback = [](const QString& msg, double) {
-        if (s_runner) {
-            // Use direct logging to avoid signal/slot overhead in tight loop
+        if (s_runner)
             s_runner->logMessageDirect(msg, "neutral");
-        }
     };
-    
-    int processed = s_preprocessor.preprocessBatch(fullPaths, s_workingDir, progressCallback);
-    
+
+    int processed = s_preprocessor.preprocessBatch(
+        fullPaths, s_workingDir, progressCallback);
+
     return processed == fullPaths.size();
 }
 
-//=============================================================================
-// REGISTER COMMAND
-//=============================================================================
+// ============================================================================
+// register -- Register (align) images
+// ============================================================================
 
-bool StackingCommands::cmdRegister(const ScriptCommand& cmd) {
+bool StackingCommands::cmdRegister(const ScriptCommand& cmd)
+{
     QString prefix = cmd.args[0];
-    
-    // Find files matching prefix
+
+    // Discover matching files (need at least 2 for registration).
     QDir dir(s_workingDir);
     QStringList filters;
     filters << prefix + "*.fit" << prefix + "*.fits" << prefix + "*.fts";
-    
+
     QStringList files = dir.entryList(filters, QDir::Files, QDir::Name);
-    
-    if (files.size() < 2) {
-        return false;  // Need at least 2 images
-    }
-    
-    // Convert to full paths
+    if (files.size() < 2)
+        return false;
+
     QStringList fullPaths;
-    for (const QString& f : files) {
+    for (const QString& f : files)
         fullPaths << dir.absoluteFilePath(f);
-    }
-    
-    // Create sequence
+
+    // Create a fresh sequence.
     s_sequence = std::make_unique<Stacking::ImageSequence>();
     if (!s_sequence->loadFromFiles(fullPaths)) {
         s_sequence.reset();
         return false;
     }
-    
-    // Set up registration parameters
+
+    // Configure registration parameters.
     Stacking::RegistrationParams params;
     params.allowRotation = !cmd.hasOption("norotation");
-    params.drizzle = cmd.hasOption("drizzle");
-    
-    if (cmd.hasOption("sigma")) {
+    params.drizzle       = cmd.hasOption("drizzle");
+
+    if (cmd.hasOption("sigma"))
         params.detectionThreshold = cmd.option("sigma").toFloat();
-    }
-    if (cmd.hasOption("maxstars")) {
+    if (cmd.hasOption("maxstars"))
         params.maxStars = cmd.option("maxstars").toInt();
-    }
-    
-    // Run registration
+
+    // Run registration.
     Stacking::RegistrationEngine engine;
     engine.setParams(params);
-    
-    // Connect logs and progress
+
     if (s_runner) {
-        QObject::connect(&engine, &Stacking::RegistrationEngine::logMessage, [](const QString& msg, const QString& color) {
-            if (s_runner) s_runner->logMessage(msg, color);
-        });
-        QObject::connect(&engine, &Stacking::RegistrationEngine::progressChanged, [](const QString& msg, double pct) {
-            if (s_runner) s_runner->progressChanged(msg, pct);
-        });
-        
-        // Wire up cancellation
-        QObject::connect(s_runner, &Scripting::ScriptRunner::cancelRequested, &engine, &Stacking::RegistrationEngine::cancel);
+        QObject::connect(
+            &engine, &Stacking::RegistrationEngine::logMessage,
+            [](const QString& msg, const QString& color) {
+                if (s_runner) s_runner->logMessage(msg, color);
+            });
+        QObject::connect(
+            &engine, &Stacking::RegistrationEngine::progressChanged,
+            [](const QString& msg, double pct) {
+                if (s_runner) s_runner->progressChanged(msg, pct);
+            });
+        QObject::connect(
+            s_runner, &Scripting::ScriptRunner::cancelRequested,
+            &engine,  &Stacking::RegistrationEngine::cancel);
     }
-    
+
     int successCount = engine.registerSequence(*s_sequence, -1);
-    
-    return successCount >= static_cast<int>(files.size() * 0.8);  // 80% success threshold
+
+    // Consider registration successful if at least 80 % of frames aligned.
+    return successCount >= static_cast<int>(files.size() * 0.8);
 }
 
-//=============================================================================
-// SETMASTER COMMAND
-//=============================================================================
+// ============================================================================
+// setmaster -- Set a master calibration frame
+// ============================================================================
 
-bool StackingCommands::cmdSetMaster(const ScriptCommand& cmd) {
+bool StackingCommands::cmdSetMaster(const ScriptCommand& cmd)
+{
     QString type = cmd.args[0].toLower();
     QString path = resolvePath(cmd.args[1]);
-    
+
     Preprocessing::MasterType masterType;
-    if (type == "bias" || type == "offset") {
-        masterType = Preprocessing::MasterType::Bias;
-    } else if (type == "dark") {
-        masterType = Preprocessing::MasterType::Dark;
-    } else if (type == "flat") {
-        masterType = Preprocessing::MasterType::Flat;
-    } else if (type == "darkflat") {
-        masterType = Preprocessing::MasterType::DarkFlat;
-    } else {
-        return false;
-    }
-    
+    if      (type == "bias" || type == "offset") masterType = Preprocessing::MasterType::Bias;
+    else if (type == "dark")                     masterType = Preprocessing::MasterType::Dark;
+    else if (type == "flat")                     masterType = Preprocessing::MasterType::Flat;
+    else if (type == "darkflat")                 masterType = Preprocessing::MasterType::DarkFlat;
+    else                                         return false;
+
     return s_preprocessor.masters().load(masterType, path);
 }
 
-//=============================================================================
-// DEBAYER COMMAND
-//=============================================================================
+// ============================================================================
+// debayer -- Debayer the current image or a sequence
+// ============================================================================
 
-bool StackingCommands::cmdDebayer(const ScriptCommand& cmd) {
+bool StackingCommands::cmdDebayer(const ScriptCommand& cmd)
+{
     Preprocessing::PreprocessParams params;
     params.debayer = true;
-    
+
+    // Parse Bayer pattern.
     QString pattern = cmd.option("pattern", "AUTO").toUpper();
-    if (pattern.isEmpty()) pattern = "AUTO"; // Handle empty flag
-    
-    if (pattern == "AUTO") params.bayerPattern = Preprocessing::BayerPattern::Auto;
+    if (pattern.isEmpty()) pattern = "AUTO";
+
+    if      (pattern == "AUTO") params.bayerPattern = Preprocessing::BayerPattern::Auto;
     else if (pattern == "RGGB") params.bayerPattern = Preprocessing::BayerPattern::RGGB;
     else if (pattern == "BGGR") params.bayerPattern = Preprocessing::BayerPattern::BGGR;
     else if (pattern == "GBRG") params.bayerPattern = Preprocessing::BayerPattern::GBRG;
     else if (pattern == "GRBG") params.bayerPattern = Preprocessing::BayerPattern::GRBG;
-    
+
+    // Parse debayer algorithm.
     QString algo = cmd.option("algo", "vng").toLower();
-    if (algo == "bilinear") params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::Bilinear;
-    else if (algo == "vng") params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::VNG;
+    if      (algo == "bilinear")   params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::Bilinear;
+    else if (algo == "vng")        params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::VNG;
     else if (algo == "superpixel") params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::SuperPixel;
-    else if (algo == "rcd") params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::RCD;
-    else if (algo == "ahd") params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::AHD;
-    
-    // BATCH MODE CHECK
+    else if (algo == "rcd")        params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::RCD;
+    else if (algo == "ahd")        params.debayerAlgorithm = Preprocessing::DebayerAlgorithm::AHD;
+
+    // -- Batch mode: prefix argument provided --------------------------------
     if (!cmd.args.isEmpty()) {
         QString prefix = cmd.args[0];
         QDir dir(s_workingDir);
         QStringList filters;
         filters << prefix + "*.fit" << prefix + "*.fits" << prefix + "*.fts";
         QStringList files = dir.entryList(filters, QDir::Files, QDir::Name);
-        
+
         if (files.isEmpty()) {
-            if (s_runner) s_runner->logMessage("Debayer: No files found matching " + prefix, "salmon");
+            if (s_runner)
+                s_runner->logMessage(
+                    "Debayer: No files found matching " + prefix, "salmon");
             return false;
         }
-        
+
         QStringList fullPaths;
-        for (const QString& f : files) fullPaths << dir.absoluteFilePath(f);
-        
+        for (const QString& f : files)
+            fullPaths << dir.absoluteFilePath(f);
+
         params.outputPrefix = "deb_";
-        params.outputDir = s_workingDir;
-        
+        params.outputDir    = s_workingDir;
+
         s_preprocessor.setParams(params);
-        int processed = s_preprocessor.preprocessBatch(fullPaths, s_workingDir);
+        int processed = s_preprocessor.preprocessBatch(
+            fullPaths, s_workingDir);
         return processed > 0;
     }
 
-    // SINGLE IMAGE MODE
-    if (!s_currentImage || !s_currentImage->isValid()) {
+    // -- Single image mode ---------------------------------------------------
+    if (!s_currentImage || !s_currentImage->isValid())
         return false;
-    }
-    
+
     s_preprocessor.setParams(params);
-    
+
     ImageBuffer output;
-    if (!s_preprocessor.preprocessImage(*s_currentImage, output)) {
+    if (!s_preprocessor.preprocessImage(*s_currentImage, output))
         return false;
-    }
-    
+
     *s_currentImage = std::move(output);
     return true;
 }
 
+// ============================================================================
+// background -- Background extraction
+// ============================================================================
 
-//=============================================================================
-// BACKGROUND EXTRACTION COMMAND
-//=============================================================================
-
-bool StackingCommands::cmdBackground(const ScriptCommand& cmd) {
+bool StackingCommands::cmdBackground(const ScriptCommand& cmd)
+{
     if (!s_currentImage || !s_currentImage->isValid()) {
-        if (s_runner) s_runner->setVariable("error", "No image loaded");
+        if (s_runner)
+            s_runner->setVariable("error", "No image loaded");
         return false;
     }
-    
-    int degree = cmd.option("degree", "1").toInt();
+
+    int   degree    = cmd.option("degree",    "1").toInt();
     float tolerance = cmd.option("tolerance", "3.0").toFloat();
     float smoothing = cmd.option("smoothing", "0.0").toFloat();
-    
-    bool division = cmd.hasOption("div") || cmd.hasOption("division");
-    
-    // Create extractor
+    bool  division  = cmd.hasOption("div") || cmd.hasOption("division");
+
     Background::BackgroundExtractor extractor;
     extractor.setParameters(degree, tolerance, smoothing);
-    
-    // Generate grid (auto)
     extractor.generateGrid(*s_currentImage);
-    
-    // Compute model
+
     if (!extractor.computeModel()) {
-        if (s_runner) s_runner->setVariable("error", "Failed to compute background model");
+        if (s_runner)
+            s_runner->setVariable("error",
+                "Failed to compute background model");
         return false;
     }
-    
-    // Apply correction
+
     ImageBuffer result;
-    if (!extractor.apply(*s_currentImage, result, 
-        division ? Background::CorrectionType::Division : Background::CorrectionType::Subtraction)) {
+    auto corrType = division
+        ? Background::CorrectionType::Division
+        : Background::CorrectionType::Subtraction;
+
+    if (!extractor.apply(*s_currentImage, result, corrType))
         return false;
-    }
-    
+
     *s_currentImage = std::move(result);
     return true;
 }
 
-//=============================================================================
-// SEQ EXTRACT COMMAND
-//=============================================================================
+// ============================================================================
+// seqextract_Ha / seqextract_HaOIII -- Extract narrowband from CFA
+// ============================================================================
 
-bool StackingCommands::cmdSeqExtract(const ScriptCommand& cmd) {
-    if (cmd.name != "seqextract_Ha" && cmd.name != "seqextract_HaOIII") return false;
-    
-    QString prefix = cmd.args[0];
-    bool splitOIII = (cmd.name == "seqextract_HaOIII");
-    
-    // Find files matching prefix
+bool StackingCommands::cmdSeqExtract(const ScriptCommand& cmd)
+{
+    if (cmd.name != "seqextract_Ha" && cmd.name != "seqextract_HaOIII")
+        return false;
+
+    QString prefix    = cmd.args[0];
+    bool    splitOIII = (cmd.name == "seqextract_HaOIII");
+
     QDir dir(s_workingDir);
     QStringList filters;
     filters << prefix + "*.fit" << prefix + "*.fits" << prefix + "*.fts";
     QStringList files = dir.entryList(filters, QDir::Files, QDir::Name);
-    
-    if (files.isEmpty()) return false;
-    
-    // CFA Pattern (Default RGGB)
+    if (files.isEmpty())
+        return false;
+
     QString patternStr = cmd.option("pattern", "RGGB").toUpper();
-    
-    // Processing loop
+
     for (const QString& f : files) {
-        QString inPath = dir.absoluteFilePath(f);
+        QString     inPath = dir.absoluteFilePath(f);
         ImageBuffer buf;
-        if (!Stacking::FitsIO::read(inPath, buf)) continue;
-        
-        if (buf.channels() != 1) continue; // CFA must be single channel
-        
-        int w = buf.width();
-        int h = buf.height();
-        int hw = w/2;
-        int hh = h/2;
-        
-        // Extract Ha (Red)
-        ImageBuffer ha(hw, hh, 1);
-        float* haData = ha.data().data();
+        if (!Stacking::FitsIO::read(inPath, buf))
+            continue;
+
+        // CFA data must be single-channel.
+        if (buf.channels() != 1)
+            continue;
+
+        const int w  = buf.width();
+        const int h  = buf.height();
+        const int hw = w / 2;
+        const int hh = h / 2;
+
         const float* inData = buf.data().data();
-        
-        // Set offsets based on pattern
+
+        // Determine sub-pixel offsets for each color site.
         int rX = 0, rY = 0;
         int g1X = 1, g1Y = 0;
         int g2X = 0, g2Y = 1;
         int bX = 1, bY = 1;
-        
-        if (patternStr == "BGGR") { rX=1; rY=1; g1X=0; g1Y=1; g2X=1; g2Y=0; bX=0; bY=0; }
+
+        if      (patternStr == "BGGR") { rX=1; rY=1; g1X=0; g1Y=1; g2X=1; g2Y=0; bX=0; bY=0; }
         else if (patternStr == "GBRG") { rX=0; rY=1; g1X=0; g1Y=0; g2X=1; g2Y=1; bX=1; bY=0; }
         else if (patternStr == "GRBG") { rX=1; rY=0; g1X=0; g1Y=0; g2X=1; g2Y=1; bX=0; bY=1; }
-        
-        for(int y=0; y<hh; ++y) {
-            for(int x=0; x<hw; ++x) {
-                haData[y*hw + x] = inData[(y*2 + rY)*w + (x*2 + rX)]; 
-            }
-        }
-        
-        // Save Ha
+
+        // -- Extract Ha (Red channel) ----------------------------------------
+        ImageBuffer ha(hw, hh, 1);
+        float* haData = ha.data().data();
+
+        for (int y = 0; y < hh; ++y)
+            for (int x = 0; x < hw; ++x)
+                haData[y * hw + x] =
+                    inData[(y * 2 + rY) * w + (x * 2 + rX)];
+
         QString haName = "Ha_" + f;
         Stacking::FitsIO::write(dir.absoluteFilePath(haName), ha, 16);
-        
-        // Extract OIII (Av of G1, G2 and B)
+
+        // -- Extract OIII (average of G1, G2, B) -----------------------------
         if (splitOIII) {
-             ImageBuffer oiii(hw, hh, 1);
-             float* o3Data = oiii.data().data();
-             
-             for(int y=0; y<hh; ++y) {
-                for(int x=0; x<hw; ++x) {
-                    float g1 = inData[(y*2 + g1Y)*w + (x*2 + g1X)];
-                    float g2 = inData[(y*2 + g2Y)*w + (x*2 + g2X)];
-                    float b  = inData[(y*2 + bY)*w + (x*2 + bX)];
-                    o3Data[y*hw + x] = (g1 + g2 + b) / 3.0f; 
+            ImageBuffer oiii(hw, hh, 1);
+            float* o3Data = oiii.data().data();
+
+            for (int y = 0; y < hh; ++y) {
+                for (int x = 0; x < hw; ++x) {
+                    float g1 = inData[(y * 2 + g1Y) * w + (x * 2 + g1X)];
+                    float g2 = inData[(y * 2 + g2Y) * w + (x * 2 + g2X)];
+                    float b  = inData[(y * 2 + bY)  * w + (x * 2 + bX)];
+                    o3Data[y * hw + x] = (g1 + g2 + b) / 3.0f;
                 }
-             }
-             QString o3Name = "OIII_" + f;
-             Stacking::FitsIO::write(dir.absoluteFilePath(o3Name), oiii, 16);
+            }
+
+            QString o3Name = "OIII_" + f;
+            Stacking::FitsIO::write(
+                dir.absoluteFilePath(o3Name), oiii, 16);
         }
     }
-    
+
     return true;
 }
 
-//=============================================================================
-// MIRROR COMMAND
-//=============================================================================
+// ============================================================================
+// mirrorx / mirrory -- Flip image
+// ============================================================================
 
-bool StackingCommands::cmdMirror(const ScriptCommand& cmd) {
-    if (!s_currentImage || !s_currentImage->isValid()) return false;
-    
+bool StackingCommands::cmdMirror(const ScriptCommand& cmd)
+{
+    if (!s_currentImage || !s_currentImage->isValid())
+        return false;
+
     bool bottomUp = cmd.hasOption("bottomup");
-    
-    // In-place flip
-    int w = s_currentImage->width();
-    int h = s_currentImage->height();
-    int c = s_currentImage->channels();
+
+    const int w = s_currentImage->width();
+    const int h = s_currentImage->height();
+    const int c = s_currentImage->channels();
     float* data = s_currentImage->data().data();
-    
+
     if (bottomUp) {
-        // Vertical flip (rows)
+        // Vertical flip: swap rows from top and bottom towards the center.
         std::vector<float> rowBuffer(w * c);
-        for(int y=0; y<h/2; ++y) {
-            float* topRow = data + static_cast<size_t>(y) * w * c;
+        for (int y = 0; y < h / 2; ++y) {
+            float* topRow = data + static_cast<size_t>(y)         * w * c;
             float* botRow = data + static_cast<size_t>(h - 1 - y) * w * c;
-            
+
             std::memcpy(rowBuffer.data(), topRow, w * c * sizeof(float));
             std::memcpy(topRow, botRow, w * c * sizeof(float));
             std::memcpy(botRow, rowBuffer.data(), w * c * sizeof(float));
         }
     } else {
-        for(int y=0; y<h; ++y) {
-             for(int x=0; x<w/2; ++x) {
-                 for(int ch=0; ch<c; ++ch) {
-                     size_t idx1 = (static_cast<size_t>(y) * w + x) * c + ch;
-                     size_t idx2 = (static_cast<size_t>(y) * w + (w - 1 - x)) * c + ch;
-                     std::swap(data[idx1], data[idx2]);
-                 }
-             }
+        // Horizontal flip: swap columns left-to-right within each row.
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w / 2; ++x) {
+                for (int ch = 0; ch < c; ++ch) {
+                    size_t idx1 = (static_cast<size_t>(y) * w + x) * c + ch;
+                    size_t idx2 = (static_cast<size_t>(y) * w + (w - 1 - x)) * c + ch;
+                    std::swap(data[idx1], data[idx2]);
+                }
+            }
         }
     }
-    
+
     return true;
 }
 
-//=============================================================================
-// RGB COMP COMMAND
-//=============================================================================
+// ============================================================================
+// rgbcomp -- Combine three monochrome images into an RGB composite
+// ============================================================================
 
-bool StackingCommands::cmdRGBComp(const ScriptCommand& cmd) {
-    if (cmd.args.size() < 3) return false;
-    
+bool StackingCommands::cmdRGBComp(const ScriptCommand& cmd)
+{
+    if (cmd.args.size() < 3)
+        return false;
+
     QString rPath = resolvePath(cmd.args[0]);
     QString gPath = resolvePath(cmd.args[1]);
     QString bPath = resolvePath(cmd.args[2]);
-    
-    // Load images
+
     ImageBuffer rImg, gImg, bImg;
-    if (!Stacking::FitsIO::read(rPath, rImg) || 
-        !Stacking::FitsIO::read(gPath, gImg) || 
-        !Stacking::FitsIO::read(bPath, bImg)) {
+    if (!Stacking::FitsIO::read(rPath, rImg) ||
+        !Stacking::FitsIO::read(gPath, gImg) ||
+        !Stacking::FitsIO::read(bPath, bImg))
         return false;
-    }
-    
-    // Check dimensions
-    if (rImg.width() != gImg.width() || rImg.width() != bImg.width() ||
+
+    // Verify dimensions match.
+    if (rImg.width()  != gImg.width()  || rImg.width()  != bImg.width() ||
         rImg.height() != gImg.height() || rImg.height() != bImg.height()) {
-        if (s_runner) s_runner->setVariable("error", "Image dimensions do not match");
+        if (s_runner)
+            s_runner->setVariable("error", "Image dimensions do not match");
         return false;
     }
-    
-    // Create RGB
+
+    // Construct an interleaved RGB image with planar channel layout.
+    const int size = rImg.width() * rImg.height();
     ImageBuffer rgb(rImg.width(), rImg.height(), 3);
     float* data = rgb.data().data();
-    int size = rImg.width() * rImg.height();
-    
-    // Copy channels
-    // Assuming inputs are mono (1 channel) or taking first channel
-    // TStar ImageBuffer storage is planar: All R, then All G, etc.
-    std::memcpy(data, rImg.data().data(), size * sizeof(float));
-    std::memcpy(data + size, gImg.data().data(), size * sizeof(float));
-    std::memcpy(data + size * 2, bImg.data().data(), size * sizeof(float));
-    
-    // Save
+
+    std::memcpy(data,              rImg.data().data(), size * sizeof(float));
+    std::memcpy(data + size,       gImg.data().data(), size * sizeof(float));
+    std::memcpy(data + size * 2,   bImg.data().data(), size * sizeof(float));
+
     QString outName = cmd.option("out", "rgb_composition.fit");
     return Stacking::FitsIO::write(resolvePath(outName), rgb, 32);
 }
 
-//=============================================================================
-// LINEAR MATCH COMMAND
-//=============================================================================
+// ============================================================================
+// linear_match -- Normalize target image to match reference statistics
+// ============================================================================
 
-bool StackingCommands::cmdLinearMatch(const ScriptCommand& cmd) {
+bool StackingCommands::cmdLinearMatch(const ScriptCommand& cmd)
+{
     QString refPath = resolvePath(cmd.args[0]);
     QString tgtPath = resolvePath(cmd.args[1]);
-    
+
     ImageBuffer refImg, tgtImg;
-    if (!Stacking::FitsIO::read(refPath, refImg) || !Stacking::FitsIO::read(tgtPath, tgtImg)) {
+    if (!Stacking::FitsIO::read(refPath, refImg) ||
+        !Stacking::FitsIO::read(tgtPath, tgtImg))
         return false;
-    }
-    
-    // Compute stats using Statistics module
-    // We need Median and MAD (Mean Absolute Deviation)
-    // For simplicity, let's just do it on the first channel if mono
-    
-    int sizeRef = refImg.width() * refImg.height();
-    int sizeTgt = tgtImg.width() * tgtImg.height();
-    
+
+    const int sizeRef = refImg.width() * refImg.height();
+    const int sizeTgt = tgtImg.width() * tgtImg.height();
+
     Stacking::Statistics stats;
-    
-    // Ref stats
-    std::vector<float> refPixels(refImg.data().begin(), refImg.data().begin() + sizeRef);
+
+    // Compute median and MAD for the first channel of each image.
+    std::vector<float> refPixels(
+        refImg.data().begin(), refImg.data().begin() + sizeRef);
     double refMedian = stats.median(refPixels);
-    double refMad = stats.mad(refPixels, refMedian);
-    
-    // Tgt stats
-    std::vector<float> tgtPixels(tgtImg.data().begin(), tgtImg.data().begin() + sizeTgt);
+    double refMad    = stats.mad(refPixels, refMedian);
+
+    std::vector<float> tgtPixels(
+        tgtImg.data().begin(), tgtImg.data().begin() + sizeTgt);
     double tgtMedian = stats.median(tgtPixels);
-    double tgtMad = stats.mad(tgtPixels, tgtMedian);
-    
-    if (tgtMad == 0.0) tgtMad = 1.0; // Avoid div by zero
-    
-    // Transform
-    double scale = refMad / tgtMad;
+    double tgtMad    = stats.mad(tgtPixels, tgtMedian);
+
+    if (tgtMad == 0.0)
+        tgtMad = 1.0; // Guard against division by zero.
+
+    // Apply linear transform: pixel = pixel * scale + offset.
+    double scale  = refMad / tgtMad;
     double offset = refMedian - (tgtMedian * scale);
-    
-    for (float& val : tgtImg.data()) {
+
+    for (float& val : tgtImg.data())
         val = static_cast<float>(val * scale + offset);
-    }
-    
+
     QString outPath = cmd.option("out", tgtPath);
     return Stacking::FitsIO::write(resolvePath(outPath), tgtImg, 32);
 }
 
-//=============================================================================
-// PIXELMATH COMMAND
-//=============================================================================
+// ============================================================================
+// pm -- Evaluate a PixelMath expression
+// ============================================================================
 
-bool StackingCommands::cmdPixelMath(const ScriptCommand& cmd) {
-    if (!s_currentImage || !s_currentImage->isValid()) return false;
+bool StackingCommands::cmdPixelMath(const ScriptCommand& cmd)
+{
+    if (!s_currentImage || !s_currentImage->isValid())
+        return false;
 
     QString expression = cmd.args[0];
+
+    // Strip surrounding quotes if present.
     if (expression.startsWith("\"") && expression.endsWith("\""))
         expression = expression.mid(1, expression.length() - 2);
 
     Stacking::PixelMath pm;
 
-    // Pre-load all $varName$ variables referenced in the expression.
-    // Variables are resolved as file paths relative to the working directory,
-    // with an implicit ".fit" extension appended if the bare path does not exist.
-    // Images are owned by loadedVars and remain valid for the duration of evaluate().
+    // Pre-load all $varName$ image references found in the expression.
+    // Each variable is resolved as a file path relative to the working
+    // directory, with an implicit ".fit" extension appended if the bare
+    // path does not exist on disk.
     QMap<QString, std::shared_ptr<ImageBuffer>> loadedVars;
-
     int pos = 0;
+
     while ((pos = expression.indexOf('$', pos)) != -1) {
         const int end = expression.indexOf('$', pos + 1);
-        if (end == -1) break;
+        if (end == -1)
+            break;
 
         const QString varName = expression.mid(pos + 1, end - pos - 1);
         if (!varName.isEmpty() && !loadedVars.contains(varName)) {
@@ -1102,14 +1106,17 @@ bool StackingCommands::cmdPixelMath(const ScriptCommand& cmd) {
             auto img = std::make_shared<ImageBuffer>();
             if (Stacking::FitsIO::read(path, *img)) {
                 loadedVars[varName] = img;
-                // Register under both the bare name and the $name$ form so that
-                // either tokenizer convention used by PixelMath is satisfied.
+                // Register under both bare and $-delimited names so that
+                // either tokenizer convention is satisfied.
                 pm.setVariable(varName, img.get());
                 pm.setVariable("$" + varName + "$", img.get());
             } else {
                 if (s_runner)
-                    s_runner->logMessage(QString("PixelMath: could not load variable '%1' from '%2'")
-                                             .arg(varName, path), "orange");
+                    s_runner->logMessage(
+                        QString("PixelMath: could not load variable "
+                                "'%1' from '%2'")
+                            .arg(varName, path),
+                        "orange");
             }
         }
         pos = end + 1;
@@ -1122,39 +1129,38 @@ bool StackingCommands::cmdPixelMath(const ScriptCommand& cmd) {
     }
 
     if (s_runner)
-        s_runner->logMessage(QString("PixelMath error: %1").arg(pm.lastError()), "red");
+        s_runner->logMessage(
+            QString("PixelMath error: %1").arg(pm.lastError()), "red");
     return false;
 }
 
+// ============================================================================
+// starnet -- Run StarNet++ star removal
+// ============================================================================
 
-
-//=============================================================================
-// STARNET COMMAND
-//=============================================================================
-#include <QProcess>
-
-bool StackingCommands::cmdStarNet(const ScriptCommand& cmd) {
+bool StackingCommands::cmdStarNet(const ScriptCommand& cmd)
+{
     if (!s_currentImage || !s_currentImage->isValid()) {
         if (s_runner)
-            s_runner->logMessage(QObject::tr("StarNet: no image loaded"), "red");
+            s_runner->logMessage(
+                QObject::tr("StarNet: no image loaded"), "red");
         return false;
     }
 
-    // Get StarNet executable path from application settings
+    // -- Locate the StarNet executable ---------------------------------------
     QSettings settings("TStar", "TStar");
     QString starnetExe = settings.value("paths/starnet").toString();
+
     if (starnetExe.isEmpty() || !QFileInfo::exists(starnetExe)) {
         if (s_runner)
             s_runner->logMessage(
                 QObject::tr("StarNet executable not configured or not found. "
-                            "Please set it in Settings \u2192 StarNet Executable."), "red");
+                            "Please set it in Settings \u2192 StarNet Executable."),
+                "red");
         return false;
     }
 
-    // Derive the stem (filename without extension) from the tracked current image filename.
-    //   starnet_{stem}.tif   - 16-bit TIFF fed to StarNet
-    //   starless_{stem}.tif  - starless TIFF produced by StarNet
-    //   starless_{stem}.fit  - starless image saved as FITS (resolved by $starless_X$ in pm)
+    // -- Derive file names from the current image stem -----------------------
     QString stem = s_currentFilename.isEmpty()
         ? QStringLiteral("image")
         : QFileInfo(s_currentFilename).completeBaseName();
@@ -1163,92 +1169,94 @@ bool StackingCommands::cmdStarNet(const ScriptCommand& cmd) {
     QString outputTif = resolvePath("starless_" + stem + ".tif");
     QString outputFit = resolvePath("starless_" + stem + ".fit");
 
-    // Save current image as a 16-bit TIFF – StarNet only accepts TIFF input
+    // -- Write a 16-bit TIFF for StarNet input -------------------------------
     if (!Stacking::TiffIO::write(inputTif, *s_currentImage, 16)) {
         if (s_runner)
             s_runner->logMessage(
-                QObject::tr("StarNet: failed to write input TIFF: %1").arg(inputTif), "red");
+                QObject::tr("StarNet: failed to write input TIFF: %1")
+                    .arg(inputTif),
+                "red");
         return false;
     }
+
     if (s_runner)
         s_runner->logMessage(
-            QObject::tr("StarNet: input TIFF saved: %1").arg(inputTif), "neutral");
+            QObject::tr("StarNet: input TIFF saved: %1").arg(inputTif),
+            "neutral");
 
-    // Change to StarNet's own directory so it can locate its weight files
+    // -- Switch to StarNet's directory so it can find weight files ------------
     QString starnetDir  = QFileInfo(starnetExe).absolutePath();
     QString previousDir = QDir::currentPath();
     QDir::setCurrent(starnetDir);
 
-    // Build process arguments. StarNet v2-torch uses -i and -o flags,
-    // while v1 and standard v2.0 use positional arguments.
-    // Default to positional args; only use -i/-o if explicitly torch version.
+    // -- Build command-line arguments ----------------------------------------
     QStringList args;
-    bool isTorchFormat = false;
-    
-    // Detect if this is PyTorch-based TORCH version (newer reimplementation)
-    // Standard v2.0 uses positional args, so only torch format if explicitly marked
-    if (starnetExe.contains("torch", Qt::CaseInsensitive)) {
-        isTorchFormat = true;
-    }
-    
+    bool isTorchFormat = starnetExe.contains("torch", Qt::CaseInsensitive);
+
     if (isTorchFormat) {
-        args << QLatin1String("-i") << inputTif;
-        args << QLatin1String("-o") << outputTif;
+        args << QLatin1String("-i") << inputTif
+             << QLatin1String("-o") << outputTif;
     } else {
-        // Standard v1/v2: positional arguments
+        // Standard v1/v2: positional arguments.
         args << inputTif << outputTif;
     }
-    
+
     if (cmd.hasOption("stride"))
         args << cmd.option("stride");
 
     if (s_runner)
         s_runner->logMessage(
-            QObject::tr("StarNet: starting %1 %2").arg(starnetExe, args.join(" ")), "neutral");
+            QObject::tr("StarNet: starting %1 %2")
+                .arg(starnetExe, args.join(" ")),
+            "neutral");
 
+    // -- Launch the process --------------------------------------------------
     QProcess process;
     process.start(starnetExe, args);
+
     if (!process.waitForStarted(5000)) {
         QDir::setCurrent(previousDir);
         if (s_runner)
             s_runner->logMessage(
-                QObject::tr("StarNet: failed to start – check executable path and permissions."), "red");
+                QObject::tr("StarNet: failed to start -- check executable "
+                            "path and permissions."),
+                "red");
         QFile::remove(inputTif);
         return false;
     }
 
-    // Wait for completion, polling stdout every 200 ms for real-time progress.
-    // StarNet emits progress as space-separated tokens on one line, e.g.:
-    //   "Reading input image... Done! ... 8% finished 16% finished ..."
-    // We accumulate tokens and emit a log entry on each "% finished" pair.
-    QString accumulatedOut;  // unprocessed stdout text
+    // -- Poll stdout for real-time progress ----------------------------------
+    // StarNet emits progress as "N% finished" token pairs on stdout.
+    QString accumulatedOut;
+
     auto flushAccumulated = [&]() {
-        // Split into tokens and emit each recognised status phrase
-        // We keep a pending token in case a pair is split across chunks.
-        QStringList tokens = accumulatedOut.split(QRegularExpression("[\\s]+"),
-                                                   Qt::SkipEmptyParts);
-        QString pending;
+        QStringList tokens = accumulatedOut.split(
+            QRegularExpression("[\\s]+"), Qt::SkipEmptyParts);
+
         for (int ti = 0; ti < tokens.size(); ++ti) {
             const QString& tok = tokens[ti];
-            // "N% finished" pair
+
             if (tok.endsWith('%') && ti + 1 < tokens.size() &&
-                tokens[ti + 1].compare("finished", Qt::CaseInsensitive) == 0) {
-                QString pct = tok.left(tok.size() - 1); // strip '%'
+                tokens[ti + 1].compare("finished",
+                                       Qt::CaseInsensitive) == 0) {
+                QString pct = tok.left(tok.size() - 1);
                 bool ok;
                 int pctVal = pct.toInt(&ok);
                 if (ok && s_runner) {
                     s_runner->logMessage(
-                        QObject::tr("StarNet: %1% completed").arg(pct), "neutral");
+                        QObject::tr("StarNet: %1% completed").arg(pct),
+                        "neutral");
                     s_runner->progressChanged(
-                        QObject::tr("StarNet processing..."), pctVal / 100.0);
+                        QObject::tr("StarNet processing..."),
+                        pctVal / 100.0);
                 }
-                ++ti; // skip "finished"
+                ++ti; // Skip the "finished" token.
             } else if (tok.compare("Done!", Qt::CaseInsensitive) == 0 ||
-                       tok.compare("Done", Qt::CaseInsensitive) == 0) {
+                       tok.compare("Done",  Qt::CaseInsensitive) == 0) {
                 if (s_runner)
-                    s_runner->logMessage(QObject::tr("StarNet: Done!"), "neutral");
+                    s_runner->logMessage(
+                        QObject::tr("StarNet: Done!"), "neutral");
             }
-            // "Reading", "Restoring", "Total" lines are informational – skip verbose
         }
         accumulatedOut.clear();
     };
@@ -1271,102 +1279,104 @@ bool StackingCommands::cmdStarNet(const ScriptCommand& cmd) {
         }
     }
 
-    // Flush any leftover stdout after process ends
+    // Flush any remaining output after the process exits.
     accumulatedOut += QString::fromUtf8(process.readAllStandardOutput());
     flushAccumulated();
 
     QDir::setCurrent(previousDir);
 
-    // Ignore tensorflow info messages in stderr (not errors)
-    QString stdErr = QString::fromUtf8(process.readAllStandardError()).trimmed();
+    // Log non-trivial stderr (ignore TensorFlow informational messages).
+    QString stdErr = QString::fromUtf8(
+        process.readAllStandardError()).trimmed();
     if (!stdErr.isEmpty() && !stdErr.startsWith("2") && s_runner)
-        s_runner->logMessage(QObject::tr("StarNet: %1").arg(stdErr), "orange");
+        s_runner->logMessage(
+            QObject::tr("StarNet: %1").arg(stdErr), "orange");
 
-    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+    // Check exit status.
+    if (process.exitStatus() != QProcess::NormalExit ||
+        process.exitCode() != 0) {
         if (s_runner)
             s_runner->logMessage(
-                QObject::tr("StarNet: process exit code: %1").arg(process.exitCode()),
+                QObject::tr("StarNet: process exit code: %1")
+                    .arg(process.exitCode()),
                 "red");
         QFile::remove(inputTif);
         return false;
     }
 
-    // Verify StarNet produced the expected output TIFF.
-    // If file doesn't exist, list what files are in the directory for debugging.
+    // -- Verify the output TIFF exists ---------------------------------------
     if (!QFileInfo::exists(outputTif)) {
         if (s_runner) {
             QString outputDir = QFileInfo(outputTif).absolutePath();
-            QDir dir(outputDir);
-            QStringList tifFiles = dir.entryList({"*.tif", "*.tiff"}, QDir::Files);
-            QString filesMsg = tifFiles.isEmpty() 
+            QDir tifDir(outputDir);
+            QStringList tifFiles =
+                tifDir.entryList({"*.tif", "*.tiff"}, QDir::Files);
+            QString filesMsg = tifFiles.isEmpty()
                 ? QObject::tr("(no .tif files found)")
                 : QObject::tr("Found: %1").arg(tifFiles.join(", "));
-            
             s_runner->logMessage(
-                QObject::tr("StarNet: output TIFF not found: %1\n%2").arg(outputTif, filesMsg),
+                QObject::tr("StarNet: output TIFF not found: %1\n%2")
+                    .arg(outputTif, filesMsg),
                 "red");
         }
         QFile::remove(inputTif);
         return false;
     }
 
-    // Read the starless TIFF via OpenCV (handles any compression incl. LZW)
-    if (!QFileInfo::exists(outputTif)) {
-        if (s_runner)
-            s_runner->logMessage(
-                QObject::tr("StarNet: output TIFF not found: %1").arg(outputTif), "red");
-        QFile::remove(inputTif);
-        return false;
-    }
+    // -- Read the starless TIFF via OpenCV -----------------------------------
+    cv::Mat mat = cv::imread(
+        outputTif.toStdString(),
+        cv::IMREAD_UNCHANGED | cv::IMREAD_ANYCOLOR | cv::IMREAD_ANYDEPTH);
 
-    cv::Mat mat = cv::imread(outputTif.toStdString(),
-                             cv::IMREAD_UNCHANGED | cv::IMREAD_ANYCOLOR | cv::IMREAD_ANYDEPTH);
     if (mat.empty()) {
         if (s_runner)
             s_runner->logMessage(
-                QObject::tr("StarNet: OpenCV failed to read output TIFF: %1").arg(outputTif), "red");
+                QObject::tr("StarNet: OpenCV failed to read output TIFF: %1")
+                    .arg(outputTif),
+                "red");
         QFile::remove(inputTif);
         QFile::remove(outputTif);
         return false;
     }
 
-    // Convert cv::Mat (BGR, 16-bit uint) → float32 RGB ImageBuffer
-    int w = mat.cols, h = mat.rows;
-    int cvCh = mat.channels();
-    std::vector<float> floatData(w * h * cvCh);
+    // -- Convert cv::Mat to float32 RGB ImageBuffer --------------------------
+    const int w    = mat.cols;
+    const int h    = mat.rows;
+    const int cvCh = mat.channels();
 
-    bool is16bit = (mat.depth() == CV_16U);
-    bool is8bit  = (mat.depth() == CV_8U);
-    float scale  = is16bit ? (1.0f / 65535.0f) : (is8bit ? (1.0f / 255.0f) : 1.0f);
+    std::vector<float> floatData(w * h * cvCh);
+    bool  is16bit = (mat.depth() == CV_16U);
+    bool  is8bit  = (mat.depth() == CV_8U);
+    float scale   = is16bit ? (1.0f / 65535.0f)
+                  : is8bit  ? (1.0f / 255.0f)
+                  : 1.0f;
 
     for (int r = 0; r < h; ++r) {
         for (int c = 0; c < w; ++c) {
             int dstBase = (r * w + c) * cvCh;
+
             if (cvCh == 3) {
                 if (is16bit) {
                     cv::Vec3w px = mat.at<cv::Vec3w>(r, c);
-                    floatData[dstBase + 0] = px[2] * scale; // R (BGR→RGB)
-                    floatData[dstBase + 1] = px[1] * scale; // G
-                    floatData[dstBase + 2] = px[0] * scale; // B
+                    floatData[dstBase + 0] = px[2] * scale; // BGR -> RGB
+                    floatData[dstBase + 1] = px[1] * scale;
+                    floatData[dstBase + 2] = px[0] * scale;
                 } else if (is8bit) {
                     cv::Vec3b px = mat.at<cv::Vec3b>(r, c);
                     floatData[dstBase + 0] = px[2] * scale;
                     floatData[dstBase + 1] = px[1] * scale;
                     floatData[dstBase + 2] = px[0] * scale;
-                } else { // float
+                } else {
                     cv::Vec3f px = mat.at<cv::Vec3f>(r, c);
                     floatData[dstBase + 0] = px[2];
                     floatData[dstBase + 1] = px[1];
                     floatData[dstBase + 2] = px[0];
                 }
-            } else { // mono
-                if (is16bit) {
-                    floatData[dstBase] = mat.at<quint16>(r, c) * scale;
-                } else if (is8bit) {
-                    floatData[dstBase] = mat.at<quint8>(r, c) * scale;
-                } else {
-                    floatData[dstBase] = mat.at<float>(r, c);
-                }
+            } else {
+                // Monochrome.
+                if      (is16bit) floatData[dstBase] = mat.at<quint16>(r, c) * scale;
+                else if (is8bit)  floatData[dstBase] = mat.at<quint8>(r, c)  * scale;
+                else              floatData[dstBase] = mat.at<float>(r, c);
             }
         }
     }
@@ -1377,377 +1387,458 @@ bool StackingCommands::cmdStarNet(const ScriptCommand& cmd) {
     if (!starless.isValid()) {
         if (s_runner)
             s_runner->logMessage(
-                QObject::tr("StarNet: loaded TIFF produced invalid buffer."), "red");
+                QObject::tr("StarNet: loaded TIFF produced invalid buffer."),
+                "red");
         QFile::remove(inputTif);
         QFile::remove(outputTif);
         return false;
     }
 
-    // Save as 32-bit FITS so $starless_{stem}$ resolves correctly in pm
+    // -- Save as 32-bit FITS for subsequent PixelMath references -------------
     if (!Stacking::FitsIO::write(outputFit, starless, 32)) {
         if (s_runner)
             s_runner->logMessage(
-                QObject::tr("StarNet: could not save starless FITS: %1").arg(outputFit), "orange");
+                QObject::tr("StarNet: could not save starless FITS: %1")
+                    .arg(outputFit),
+                "orange");
     } else {
         if (s_runner)
             s_runner->logMessage(
-                QObject::tr("StarNet: starless FITS saved: %1").arg(outputFit), "green");
+                QObject::tr("StarNet: starless FITS saved: %1")
+                    .arg(outputFit),
+                "green");
     }
 
-    // Clean up temp TIFFs
+    // -- Clean up temporary TIFF files ---------------------------------------
     QFile::remove(inputTif);
     QFile::remove(outputTif);
 
-    // Update current image state for subsequent commands
+    // Update the current image state for subsequent commands.
     s_currentFilename = QFileInfo(outputFit).fileName();
     *s_currentImage   = std::move(starless);
 
     return true;
 }
 
-//=============================================================================
-// NEWPROJECT COMMAND
-//=============================================================================
+// ============================================================================
+// newproject -- Create a new stacking project
+// ============================================================================
 
-bool StackingCommands::cmdNewProject(const ScriptCommand& cmd) {
+bool StackingCommands::cmdNewProject(const ScriptCommand& cmd)
+{
     QString path = resolvePath(cmd.args[0]);
-    
+
     Stacking::StackingProject project;
     if (!project.create(path)) {
-        if (s_runner) {
-            s_runner->setVariable("error", "Failed to create project at: " + path);
-        }
+        if (s_runner)
+            s_runner->setVariable("error",
+                "Failed to create project at: " + path);
         return false;
     }
-    
+
     if (s_runner) {
         s_runner->setVariable("project", path);
-        s_runner->setVariable("biases", project.biasDir());
-        s_runner->setVariable("darks", project.darkDir());
-        s_runner->setVariable("flats", project.flatDir());
-        s_runner->setVariable("lights", project.lightDir());
+        s_runner->setVariable("biases",  project.biasDir());
+        s_runner->setVariable("darks",   project.darkDir());
+        s_runner->setVariable("flats",   project.flatDir());
+        s_runner->setVariable("lights",  project.lightDir());
         s_runner->setVariable("process", project.processDir());
-        s_runner->setVariable("output", project.outputDir());
-        
-        emit s_runner->logMessage(QObject::tr("Project created: %1").arg(path), "green");
+        s_runner->setVariable("output",  project.outputDir());
+
+        emit s_runner->logMessage(
+            QObject::tr("Project created: %1").arg(path), "green");
     }
-    
+
     return true;
 }
 
-//=============================================================================
-// CONVERTALL COMMAND
-//=============================================================================
+// ============================================================================
+// convertall -- Batch-convert RAW files to FITS
+// ============================================================================
 
-bool StackingCommands::cmdConvertAll(const ScriptCommand& cmd) {
+bool StackingCommands::cmdConvertAll(const ScriptCommand& cmd)
+{
     QString pattern = cmd.args[0];
-    QString outDir = cmd.hasOption("out") ? resolvePath(cmd.option("out")) : s_workingDir;
-    
+    QString outDir  = cmd.hasOption("out")
+        ? resolvePath(cmd.option("out"))
+        : s_workingDir;
+
     QDir dir(s_workingDir);
-    
-    // Common RAW extensions
+
+    // Supported RAW and TIFF extensions.
     QStringList rawFilters;
-    rawFilters << "*.cr2" << "*.CR2" << "*.nef" << "*.NEF" 
+    rawFilters << "*.cr2" << "*.CR2" << "*.nef" << "*.NEF"
                << "*.arw" << "*.ARW" << "*.dng" << "*.DNG"
                << "*.orf" << "*.ORF" << "*.rw2" << "*.RW2"
-               << "*.raf" << "*.RAF" << "*.pef" << "*.PEF";
-    
-    // Also include TIFF files
-    rawFilters << "*.tif" << "*.TIF" << "*.tiff" << "*.TIFF";
-    
+               << "*.raf" << "*.RAF" << "*.pef" << "*.PEF"
+               << "*.tif" << "*.TIF" << "*.tiff" << "*.TIFF";
+
     QStringList files;
-    
-    // If pattern is a wildcard
+
     if (pattern.contains("*")) {
-        files = dir.entryList(QStringList() << pattern, QDir::Files, QDir::Name);
+        files = dir.entryList(QStringList() << pattern,
+                              QDir::Files, QDir::Name);
     } else {
-        // Match pattern as prefix
-        for (const QString& filter : rawFilters) {
-            files += dir.entryList(QStringList() << pattern + filter.mid(1), QDir::Files, QDir::Name);
-        }
-        // Also try exact pattern matching
-        if (files.isEmpty()) {
+        // Treat pattern as a filename prefix.
+        for (const QString& filter : rawFilters)
+            files += dir.entryList(
+                QStringList() << pattern + filter.mid(1),
+                QDir::Files, QDir::Name);
+
+        if (files.isEmpty())
             files = dir.entryList(rawFilters, QDir::Files, QDir::Name);
-        }
     }
-    
+
     if (files.isEmpty()) {
-        if (s_runner) s_runner->setVariable("error", "No files found matching: " + pattern);
+        if (s_runner)
+            s_runner->setVariable("error",
+                "No files found matching: " + pattern);
         return false;
     }
-    
-    // Create the convert command for each file
+
     int converted = 0;
     for (const QString& file : files) {
         ScriptCommand convertCmd;
         convertCmd.name = "convert";
         convertCmd.args << file;
-        if (!outDir.isEmpty()) {
+        if (!outDir.isEmpty())
             convertCmd.options["out"] = outDir;
-        }
-        
-        if (cmdConvert(convertCmd)) {
+
+        if (cmdConvert(convertCmd))
             converted++;
-        }
     }
-    
+
     if (s_runner) {
-        emit s_runner->logMessage(QObject::tr("Converted %1 of %2 files").arg(converted).arg(files.size()), 
-                                  converted == files.size() ? "green" : "orange");
+        emit s_runner->logMessage(
+            QObject::tr("Converted %1 of %2 files")
+                .arg(converted).arg(files.size()),
+            converted == files.size() ? "green" : "orange");
     }
-    
+
     return converted > 0;
 }
 
-//=============================================================================
-// AUTOSTACK COMMAND
-//=============================================================================
+// ============================================================================
+// autostack -- Full pipeline: calibrate, register, stack
+// ============================================================================
 
-bool StackingCommands::cmdAutoStack(const ScriptCommand& cmd) {
+bool StackingCommands::cmdAutoStack(const ScriptCommand& cmd)
+{
     QString projectPath = resolvePath(cmd.args[0]);
-    
-    // Load or detect project
+
+    // -- Load or create the project ------------------------------------------
     Stacking::StackingProject project;
-    QString projectFile = Stacking::StackingProject::findProjectFile(projectPath);
-    
+    QString projectFile =
+        Stacking::StackingProject::findProjectFile(projectPath);
+
     if (!projectFile.isEmpty()) {
         if (!project.load(projectFile)) {
-            if (s_runner) s_runner->setVariable("error", "Failed to load project: " + projectPath);
+            if (s_runner)
+                s_runner->setVariable("error",
+                    "Failed to load project: " + projectPath);
             return false;
         }
     } else {
-        // Try to create from directory
         if (!project.create(projectPath)) {
-            if (s_runner) s_runner->setVariable("error", "Invalid project directory: " + projectPath);
+            if (s_runner)
+                s_runner->setVariable("error",
+                    "Invalid project directory: " + projectPath);
             return false;
         }
     }
-    
-    if (s_runner) {
-        emit s_runner->logMessage(QObject::tr("Starting pipeline for: %1").arg(project.name()), "cyan");
-    }
-    
-    // Step 1: Find and load light frames
+
+    if (s_runner)
+        emit s_runner->logMessage(
+            QObject::tr("Starting pipeline for: %1").arg(project.name()),
+            "cyan");
+
+    // -- Step 1: Discover light frames ---------------------------------------
     QDir lightDir(project.lightDir());
-    QStringList lightFiles = lightDir.entryList(QStringList() << "*.fit" << "*.fits" << "*.FIT" << "*.FITS", 
-                                                 QDir::Files, QDir::Name);
-    
+    QStringList lightFiles = lightDir.entryList(
+        QStringList() << "*.fit" << "*.fits" << "*.FIT" << "*.FITS",
+        QDir::Files, QDir::Name);
+
     if (lightFiles.isEmpty()) {
-        if (s_runner) s_runner->setVariable("error", "No light frames found in: " + project.lightDir());
+        if (s_runner)
+            s_runner->setVariable("error",
+                "No light frames found in: " + project.lightDir());
         return false;
     }
-    
-    if (s_runner) {
-        emit s_runner->logMessage(QObject::tr("Found %1 light frames").arg(lightFiles.size()), "white");
-    }
-    
-    // Step 2: Calibrate (if masters exist)
+
+    if (s_runner)
+        emit s_runner->logMessage(
+            QObject::tr("Found %1 light frames").arg(lightFiles.size()),
+            "white");
+
+    // -- Step 2: Calibrate (if master frames are available) -------------------
     s_workingDir = project.lightDir();
-    
-    if (!project.masterBias().isEmpty() || !project.masterDark().isEmpty() || !project.masterFlat().isEmpty()) {
+
+    if (!project.masterBias().isEmpty() ||
+        !project.masterDark().isEmpty() ||
+        !project.masterFlat().isEmpty()) {
+
         ScriptCommand calibrateCmd;
         calibrateCmd.name = "calibrate";
         calibrateCmd.args << "*.fit";
-        
-        if (!project.masterBias().isEmpty()) {
+
+        if (!project.masterBias().isEmpty())
             calibrateCmd.options["bias"] = project.masterBias();
-        }
-        if (!project.masterDark().isEmpty()) {
+        if (!project.masterDark().isEmpty())
             calibrateCmd.options["dark"] = project.masterDark();
-        }
-        if (!project.masterFlat().isEmpty()) {
+        if (!project.masterFlat().isEmpty())
             calibrateCmd.options["flat"] = project.masterFlat();
-        }
-        
-        if (s_runner) emit s_runner->logMessage(QObject::tr("Calibrating frames..."), "white");
+
+        if (s_runner)
+            emit s_runner->logMessage(
+                QObject::tr("Calibrating frames..."), "white");
         cmdCalibrate(calibrateCmd);
     }
-    
-    // Check for CFA and Debayer if needed
-    QString registerPattern = "pp_*.fit";
-    QString stackPattern = "r_*.fit";
-    
-    QDir procDir(project.processDir());
-    QStringList ppFiles = procDir.entryList(QStringList() << "pp_*.fit", QDir::Files);
-    
-    if (!ppFiles.isEmpty()) {
-        QString firstFile = procDir.absoluteFilePath(ppFiles.first());
-        ImageBuffer checkBuf;
-        if (Stacking::FitsIO::readHeader(firstFile, checkBuf)) {
-             bool isCFA = checkBuf.channels() == 1 && 
-                          (!checkBuf.metadata().bayerPattern.isEmpty() || 
-                           checkBuf.metadata().xisfProperties.contains("BayerPattern"));
 
-             if (s_runner) {
-                  QString bayerDebug = checkBuf.metadata().bayerPattern;
-                  if (bayerDebug.isEmpty()) bayerDebug = checkBuf.metadata().xisfProperties.value("BayerPattern").toString();
-                  if (bayerDebug.isEmpty()) bayerDebug = "NONE";
-                  s_runner->logMessage(QString("CFA Check - Channels: %1, Pattern: %2, Detected: %3")
-                                      .arg(checkBuf.channels()).arg(bayerDebug).arg(isCFA ? "YES" : "NO"), "yellow");
-             }
-                           
-             if (isCFA) {
-                 if (s_runner) emit s_runner->logMessage("Auto-Debayering CFA images...", "cyan");
-                 
-                 QString bayerPat = checkBuf.metadata().bayerPattern;
-                 if (bayerPat.isEmpty()) bayerPat = checkBuf.metadata().xisfProperties.value("BayerPattern").toString();
-                 
-                 Preprocessing::BayerPattern pat = Preprocessing::BayerPattern::None;
-                 if (bayerPat == "RGGB") pat = Preprocessing::BayerPattern::RGGB;
-                 else if (bayerPat == "BGGR") pat = Preprocessing::BayerPattern::BGGR;
-                 else if (bayerPat == "GBRG") pat = Preprocessing::BayerPattern::GBRG;
-                 else if (bayerPat == "GRBG") pat = Preprocessing::BayerPattern::GRBG;
-                 
-                 if (pat != Preprocessing::BayerPattern::None) {
-                     QAtomicInt dbCount(0);
-                     int maxThreads = QThread::idealThreadCount();
-                     QSemaphore throttle(maxThreads); 
-                     
-                     QtConcurrent::blockingMap(ppFiles, [&](const QString& ppFile) {
-                         throttle.acquire();
-                         struct Guard { QSemaphore& s; ~Guard() { s.release(); } } guard{throttle};
-                         
-                         QString inP = procDir.absoluteFilePath(ppFile);
-                         QString outP = procDir.absoluteFilePath("deb_" + ppFile);
-                         
-                         static thread_local ImageBuffer tBuf;
-                         
-                         if (Stacking::FitsIO::read(inP, tBuf)) {
-                             ImageBuffer colorBuf;
-                             if (Preprocessing::Debayer::vng(tBuf, colorBuf, pat)) {
-                                 colorBuf.setMetadata(tBuf.metadata()); 
-                                 Stacking::FitsIO::write(outP, colorBuf);
-                                 dbCount.fetchAndAddRelaxed(1);
-                             }
-                         }
-                     });
-                     
-                     if (s_runner) emit s_runner->logMessage(QString("Debayered %1 images").arg(dbCount.loadRelaxed()), "green");
-                     registerPattern = "deb_pp_*.fit";
-                     stackPattern = "r_deb_pp_*.fit";
-                 }
-             }
+    // -- Check for CFA data and auto-debayer if needed -----------------------
+    QString registerPattern = "pp_*.fit";
+    QString stackPattern    = "r_*.fit";
+
+    QDir procDir(project.processDir());
+    QStringList ppFiles =
+        procDir.entryList(QStringList() << "pp_*.fit", QDir::Files);
+
+    if (!ppFiles.isEmpty()) {
+        QString     firstFile = procDir.absoluteFilePath(ppFiles.first());
+        ImageBuffer checkBuf;
+
+        if (Stacking::FitsIO::readHeader(firstFile, checkBuf)) {
+            bool isCFA = checkBuf.channels() == 1 &&
+                (!checkBuf.metadata().bayerPattern.isEmpty() ||
+                 checkBuf.metadata().xisfProperties.contains("BayerPattern"));
+
+            if (s_runner) {
+                QString bayerDebug = checkBuf.metadata().bayerPattern;
+                if (bayerDebug.isEmpty())
+                    bayerDebug = checkBuf.metadata()
+                        .xisfProperties.value("BayerPattern").toString();
+                if (bayerDebug.isEmpty())
+                    bayerDebug = "NONE";
+
+                s_runner->logMessage(
+                    QString("CFA Check - Channels: %1, Pattern: %2, "
+                            "Detected: %3")
+                        .arg(checkBuf.channels())
+                        .arg(bayerDebug)
+                        .arg(isCFA ? "YES" : "NO"),
+                    "yellow");
+            }
+
+            if (isCFA) {
+                if (s_runner)
+                    emit s_runner->logMessage(
+                        "Auto-Debayering CFA images...", "cyan");
+
+                QString bayerPat = checkBuf.metadata().bayerPattern;
+                if (bayerPat.isEmpty())
+                    bayerPat = checkBuf.metadata()
+                        .xisfProperties.value("BayerPattern").toString();
+
+                Preprocessing::BayerPattern pat =
+                    Preprocessing::BayerPattern::None;
+                if      (bayerPat == "RGGB") pat = Preprocessing::BayerPattern::RGGB;
+                else if (bayerPat == "BGGR") pat = Preprocessing::BayerPattern::BGGR;
+                else if (bayerPat == "GBRG") pat = Preprocessing::BayerPattern::GBRG;
+                else if (bayerPat == "GRBG") pat = Preprocessing::BayerPattern::GRBG;
+
+                if (pat != Preprocessing::BayerPattern::None) {
+                    QAtomicInt dbCount(0);
+                    int        maxThreads = QThread::idealThreadCount();
+                    QSemaphore throttle(maxThreads);
+
+                    QtConcurrent::blockingMap(ppFiles,
+                        [&](const QString& ppFile) {
+                            throttle.acquire();
+                            struct Guard {
+                                QSemaphore& s;
+                                ~Guard() { s.release(); }
+                            } guard{throttle};
+
+                            QString inP  = procDir.absoluteFilePath(ppFile);
+                            QString outP = procDir.absoluteFilePath(
+                                "deb_" + ppFile);
+
+                            static thread_local ImageBuffer tBuf;
+
+                            if (Stacking::FitsIO::read(inP, tBuf)) {
+                                ImageBuffer colorBuf;
+                                if (Preprocessing::Debayer::vng(
+                                        tBuf, colorBuf, pat)) {
+                                    colorBuf.setMetadata(tBuf.metadata());
+                                    Stacking::FitsIO::write(outP, colorBuf);
+                                    dbCount.fetchAndAddRelaxed(1);
+                                }
+                            }
+                        });
+
+                    if (s_runner)
+                        emit s_runner->logMessage(
+                            QString("Debayered %1 images")
+                                .arg(dbCount.loadRelaxed()),
+                            "green");
+
+                    registerPattern = "deb_pp_*.fit";
+                    stackPattern    = "r_deb_pp_*.fit";
+                }
+            }
         }
     }
 
-    // Step 3: Register
-    if (s_runner) emit s_runner->logMessage(QObject::tr("Registering frames..."), "white");
-    
+    // -- Step 3: Register ----------------------------------------------------
+    if (s_runner)
+        emit s_runner->logMessage(
+            QObject::tr("Registering frames..."), "white");
+
     s_workingDir = project.processDir();
     ScriptCommand registerCmd;
     registerCmd.name = "register";
     registerCmd.args << registerPattern;
-    
+
     if (!cmdRegister(registerCmd)) {
-        // Try with original lights if no calibrated files
+        // Fallback: try raw lights if no calibrated files were found.
         s_workingDir = project.lightDir();
         registerCmd.args.clear();
         registerCmd.args << "*.fit";
         cmdRegister(registerCmd);
-        stackPattern = "r_*.fit"; // Fallback
+        stackPattern = "r_*.fit";
     }
-    
-    // Step 4: Stack
-    if (s_runner) emit s_runner->logMessage(QObject::tr("Stacking..."), "white");
-    
+
+    // -- Step 4: Stack -------------------------------------------------------
+    if (s_runner)
+        emit s_runner->logMessage(QObject::tr("Stacking..."), "white");
+
     s_workingDir = project.processDir();
     ScriptCommand stackCmd;
     stackCmd.name = "stack";
     stackCmd.args << stackPattern;
     stackCmd.options["out"] = project.stackedName();
-    
+
     if (!cmdStack(stackCmd)) {
-        // Try with registered files without pp_ prefix
         stackCmd.args.clear();
         stackCmd.args << "r_*.fit";
         cmdStack(stackCmd);
     }
-    
-    if (s_runner) {
-        emit s_runner->logMessage(QObject::tr("Pipeline complete! Output: %1").arg(project.stackedName()), "lime");
-    }
-    
+
+    if (s_runner)
+        emit s_runner->logMessage(
+            QObject::tr("Pipeline complete! Output: %1")
+                .arg(project.stackedName()),
+            "lime");
+
     return true;
 }
 
-bool StackingCommands::cmdConvert(const ScriptCommand& cmd) {
+// ============================================================================
+// convert / link -- Convert source files to a FITS sequence
+// ============================================================================
+
+bool StackingCommands::cmdConvert(const ScriptCommand& cmd)
+{
     if (cmd.args.isEmpty()) {
-        if (s_runner) s_runner->setError("Convert: Missing file type argument", cmd.lineNumber);
+        if (s_runner)
+            s_runner->setError(
+                "Convert: Missing file type argument", cmd.lineNumber);
         return false;
     }
 
-    QString type = cmd.args[0].toLower();
+    QString type       = cmd.args[0].toLower();
     QString outDirName = cmd.options.value("out", "process");
-    
+
     QDir workingDir(s_workingDir);
     if (!workingDir.exists()) {
-        if (s_runner) s_runner->setError("Convert: Working directory does not exist", cmd.lineNumber);
+        if (s_runner)
+            s_runner->setError(
+                "Convert: Working directory does not exist", cmd.lineNumber);
         return false;
     }
-    
-    // Create output directory
+
+    // Create the output directory if necessary.
     QDir outDir = workingDir;
     if (!outDir.cd(outDirName)) {
         if (!workingDir.mkdir(outDirName) || !outDir.cd(outDirName)) {
-             if (s_runner) s_runner->setError("Convert: Could not create output directory", cmd.lineNumber);
-             return false;
+            if (s_runner)
+                s_runner->setError(
+                    "Convert: Could not create output directory",
+                    cmd.lineNumber);
+            return false;
         }
     }
-    
-    // Find files matching type
+
+    // Discover files to convert (FITS + common RAW extensions).
     QStringList nameFilters;
-    nameFilters << "*.fit" << "*.fits" << "*.cr2" << "*.nef" << "*.arw" << "*.dng"; // Common RAW + FITS
-    
-    QStringList files = workingDir.entryList(nameFilters, QDir::Files | QDir::NoDotAndDotDot);
+    nameFilters << "*.fit" << "*.fits" << "*.cr2"
+                << "*.nef" << "*.arw"  << "*.dng";
+
+    QStringList files = workingDir.entryList(
+        nameFilters, QDir::Files | QDir::NoDotAndDotDot);
+
     if (files.isEmpty()) {
-         if (s_runner) s_runner->logMessage("Convert: No files found to convert.", "orange");
-         return true; // Not an error, just empty
+        if (s_runner)
+            s_runner->logMessage(
+                "Convert: No files found to convert.", "orange");
+        return true; // Empty directory is not an error.
     }
-    
-    if (s_runner) s_runner->logMessage(QString("Converting %1 files using %2 threads...").arg(files.size()).arg(ResourceManager::instance().maxThreads()), "neutral");
-    
+
+    if (s_runner)
+        s_runner->logMessage(
+            QString("Converting %1 files using %2 threads...")
+                .arg(files.size())
+                .arg(ResourceManager::instance().maxThreads()),
+            "neutral");
+
     QAtomicInt convertedCount(0);
     QAtomicInt failedCount(0);
     std::mutex logMutex;
-    
-    // Use all available threads for maximum parallelism (FITS I/O benefits from parallelism)
-    
+
     QtConcurrent::blockingMap(files, [&](const QString& file) {
-        if (s_runner && s_runner->isCancelled()) return;
+        if (s_runner && s_runner->isCancelled())
+            return;
 
         try {
             QString inputPath = workingDir.absoluteFilePath(file);
-            QString ext = QFileInfo(file).suffix().toLower();
-            
-            // Output filename: type_00001.fit
-            int currentIdx = convertedCount.fetchAndAddRelaxed(1);
-            QString outName = QString("%1_%2.fit").arg(type).arg(currentIdx + 1, 5, 10, QChar('0'));
+            QString ext       = QFileInfo(file).suffix().toLower();
+
+            // Generate a sequential output filename: type_00001.fit
+            int     currentIdx = convertedCount.fetchAndAddRelaxed(1);
+            QString outName = QString("%1_%2.fit")
+                .arg(type)
+                .arg(currentIdx + 1, 5, 10, QChar('0'));
             QString outputPath = outDir.absoluteFilePath(outName);
-            
+
             {
                 std::lock_guard<std::mutex> lock(logMutex);
-                if (s_runner) s_runner->logMessage(QString(" > %1 -> %2").arg(file, outName), "#888888");
+                if (s_runner)
+                    s_runner->logMessage(
+                        QString(" > %1 -> %2").arg(file, outName),
+                        "#888888");
             }
 
-            // Reuse buffer via thread_local to avoid frequent allocations
+            // Thread-local buffer to reduce heap churn.
             static thread_local ImageBuffer threadBuffer;
-            threadBuffer.resize(0, 0, 0); // Clear state but keep capacity
-            threadBuffer.setMetadata(ImageBuffer::Metadata()); // Clear metadata to avoid duplication
-            
+            threadBuffer.resize(0, 0, 0);
+            threadBuffer.setMetadata(ImageBuffer::Metadata());
+
             bool loaded = false;
-            
+
+            // -- FITS input --------------------------------------------------
             if (ext == "fit" || ext == "fits" || ext == "fts") {
-                // Use optimized C FITS loader (cfitsio directly, no Qt overhead)
-                loaded = IO::FitsLoaderCWrapper::loadFitsC(inputPath, threadBuffer);
-            } else if (ext == "tif" || ext == "tiff") {
+                loaded = IO::FitsLoaderCWrapper::loadFitsC(
+                    inputPath, threadBuffer);
+            }
+            // -- TIFF input --------------------------------------------------
+            else if (ext == "tif" || ext == "tiff") {
                 loaded = Stacking::TiffIO::read(inputPath, threadBuffer);
-            } else {
-                // RAW loader...
+            }
+            // -- RAW input (LibRaw) ------------------------------------------
+            else {
 #ifdef HAVE_LIBRAW
-                libraw_data_t *lr = libraw_init(0);
+                libraw_data_t* lr = libraw_init(0);
                 if (lr) {
-                    // Suppress LibRaw's default "data corrupted at X" stderr messages.
-                    // These are non-fatal decompression warnings that clutter the log.
+                    // Suppress non-fatal decompression warnings.
                     struct NoOpHandler {
 #if defined(Q_OS_LINUX)
                         static void callback(void*, const char*, const int) {}
@@ -1755,329 +1846,463 @@ bool StackingCommands::cmdConvert(const ScriptCommand& cmd) {
                         static void callback(void*, const char* const INT64) {}
 #endif
                     };
-                    libraw_set_dataerror_handler(lr, NoOpHandler::callback, nullptr);
-                    
-                    // Optimized RAW path: Only debayer if explicitly requested
+                    libraw_set_dataerror_handler(
+                        lr, NoOpHandler::callback, nullptr);
+
                     bool wantDebayer = cmd.hasOption("debayer");
-                    
-                    int openRet = libraw_open_file(lr, inputPath.toLocal8Bit().constData());
+
+                    int openRet = libraw_open_file(
+                        lr, inputPath.toLocal8Bit().constData());
+
                     if (openRet == LIBRAW_SUCCESS) {
                         int unpackRet = libraw_unpack(lr);
-                        // Accept LIBRAW_DATA_ERROR as non-fatal — the raw_image
-                        // data is still populated; only a few pixels may be affected.
-                        if (unpackRet == LIBRAW_SUCCESS || unpackRet == LIBRAW_DATA_ERROR) {
+
+                        // Accept LIBRAW_DATA_ERROR as non-fatal.
+                        if (unpackRet == LIBRAW_SUCCESS ||
+                            unpackRet == LIBRAW_DATA_ERROR) {
+
                             if (unpackRet == LIBRAW_DATA_ERROR) {
                                 std::lock_guard<std::mutex> lock(logMutex);
-                                if (s_runner) s_runner->logMessage(QString("Warning: minor data error in %1 (non-fatal, continuing)").arg(file), "orange");
+                                if (s_runner)
+                                    s_runner->logMessage(
+                                        QString("Warning: minor data error "
+                                                "in %1 (non-fatal, "
+                                                "continuing)")
+                                            .arg(file),
+                                        "orange");
                             }
+
                             if (wantDebayer) {
-                                // High quality debayering path (Slow)
-                                lr->params.output_bps = 16;
-                                lr->params.gamm[0] = 1.0; lr->params.gamm[1] = 1.0;
-                                lr->params.no_auto_bright = 1;
+                                // Full debayering path.
+                                lr->params.output_bps     = 16;
+                                lr->params.gamm[0]        = 1.0;
+                                lr->params.gamm[1]        = 1.0;
+                                lr->params.no_auto_bright  = 1;
+                                lr->params.use_camera_wb   = 0;
+                                lr->params.use_auto_wb     = 0;
+                                lr->params.user_mul[0]     = 1.0f;
+                                lr->params.user_mul[1]     = 1.0f;
+                                lr->params.user_mul[2]     = 1.0f;
+                                lr->params.user_mul[3]     = 1.0f;
+                                lr->params.user_qual       = 3;
+                                lr->params.output_color    = 0;
 
-                                lr->params.use_camera_wb = 0; 
-                                lr->params.use_auto_wb = 0;
-                                lr->params.user_mul[0] = 1.0f;
-                                lr->params.user_mul[1] = 1.0f;
-                                lr->params.user_mul[2] = 1.0f;
-                                lr->params.user_mul[3] = 1.0f;
-
-                                lr->params.user_qual = 3;
-                                lr->params.output_color = 0;
-                                
-                                if (libraw_dcraw_process(lr) == LIBRAW_SUCCESS) {
+                                if (libraw_dcraw_process(lr) ==
+                                    LIBRAW_SUCCESS) {
                                     int err = 0;
-                                    libraw_processed_image_t *image = libraw_dcraw_make_mem_image(lr, &err);
-                                    if (image && image->type == LIBRAW_IMAGE_BITMAP) {
-                                        threadBuffer.resize(image->width, image->height, image->colors);
-                                        float* dst = threadBuffer.data().data();
-                                        unsigned short* src = (unsigned short*)image->data;
-                                        size_t total = (size_t)image->width * image->height * image->colors;
+                                    libraw_processed_image_t* image =
+                                        libraw_dcraw_make_mem_image(lr, &err);
+
+                                    if (image && image->type ==
+                                                 LIBRAW_IMAGE_BITMAP) {
+                                        threadBuffer.resize(
+                                            image->width, image->height,
+                                            image->colors);
+                                        float*           dst = threadBuffer.data().data();
+                                        unsigned short*  src = (unsigned short*)image->data;
+                                        size_t total = (size_t)image->width *
+                                                       image->height *
+                                                       image->colors;
                                         #pragma omp parallel for
-                                        for(long long i=0; i<(long long)total; ++i) dst[i] = src[i] / 65535.0f;
+                                        for (long long i = 0;
+                                             i < (long long)total; ++i)
+                                            dst[i] = src[i] / 65535.0f;
+
                                         loaded = true;
                                         libraw_dcraw_clear_mem(image);
                                     }
                                 }
                             } else {
-                                // Fast CFA path (Best for Stacking)
-                                // Extract raw Bayer data WITHOUT any processing.
-                                // Calibration (bias/dark/flat) handles the rest.
-                                
-                                // Check for raw data availability
+                                // Fast CFA path: extract raw Bayer data
+                                // without any processing. Calibration
+                                // (bias/dark/flat) handles the rest.
                                 if (lr->rawdata.raw_image == nullptr &&
-                                    (lr->rawdata.color3_image || lr->rawdata.color4_image)) {
+                                    (lr->rawdata.color3_image ||
+                                     lr->rawdata.color4_image)) {
                                     std::lock_guard<std::mutex> lock(logMutex);
-                                    if (s_runner) s_runner->logMessage(QString("Cannot open %1 in CFA mode: no RAW data available").arg(file), "red");
+                                    if (s_runner)
+                                        s_runner->logMessage(
+                                            QString("Cannot open %1 in CFA "
+                                                    "mode: no RAW data "
+                                                    "available")
+                                                .arg(file),
+                                            "red");
                                     libraw_close(lr);
                                     failedCount.fetchAndAddRelaxed(1);
                                     return;
                                 }
-                                
-                                // raw_width from sizes, margins from rawdata.sizes,
-                                // visible area from sizes.iwidth/iheight
+
                                 const int raw_width = lr->sizes.raw_width;
-                                const int left = lr->rawdata.sizes.left_margin;
-                                const int top_m = lr->rawdata.sizes.top_margin;
-                                const int vw = lr->sizes.iwidth;
-                                const int vh = lr->sizes.iheight;
-                                
+                                const int left      = lr->rawdata.sizes.left_margin;
+                                const int top_m     = lr->rawdata.sizes.top_margin;
+                                const int vw        = lr->sizes.iwidth;
+                                const int vh        = lr->sizes.iheight;
+
                                 threadBuffer.resize(vw, vh, 1);
-                                float* dst = threadBuffer.data().data();
-                                
+                                float*          dst = threadBuffer.data().data();
                                 unsigned short* src = lr->rawdata.raw_image;
-                                
+
                                 if (src) {
                                     float maximum = (float)lr->color.maximum;
                                     if (maximum <= 0.0f) maximum = 65535.0f;
 
                                     unsigned int f = lr->idata.filters;
 
-                                    // Copy raw Bayer data — NO black subtraction, NO WB.
-                                    // Normalize by sensor maximum only.
+                                    // Normalize by sensor maximum only;
+                                    // no black subtraction or white balance.
                                     int offset = raw_width * top_m + left;
                                     #pragma omp parallel for
                                     for (int y = 0; y < vh; ++y) {
                                         for (int x = 0; x < vw; ++x) {
-                                            float val = (float)src[offset + x + (raw_width * y)];
+                                            float val = (float)src[
+                                                offset + x + (raw_width * y)];
                                             dst[y * vw + x] = val / maximum;
                                         }
                                     }
                                     loaded = true;
-                                    
-                                // Set CFA info in metadata
-                                threadBuffer.metadata().isMono = true;
-                                
-                                // Detect Bayer Pattern from LibRaw filters
-                                // (f already declared above from idata.filters)
-                                QString bayerPat = "RGGB";
-                                if (f == 0x94949494) bayerPat = "RGGB";
-                                else if (f == 0x16161616) bayerPat = "BGGR";
-                                else if (f == 0x61616161) bayerPat = "GRBG";
-                                else if (f == 0x49494949) bayerPat = "GBRG";
-                                
-                                // Adjust for crop/margins (Critical for correct color)
-                                // If left margin is odd, flip horizontal
-                                // If top margin is odd, flip vertical
-                                if (left % 2 != 0) {
-                                    if (bayerPat == "RGGB") bayerPat = "GRBG";
-                                    else if (bayerPat == "BGGR") bayerPat = "GBRG";
-                                    else if (bayerPat == "GRBG") bayerPat = "RGGB";
-                                    else if (bayerPat == "GBRG") bayerPat = "BGGR";
-                                }
-                                if (top_m % 2 != 0) {
-                                    if (bayerPat == "RGGB") bayerPat = "GBRG";
-                                    else if (bayerPat == "BGGR") bayerPat = "GRBG";
-                                    else if (bayerPat == "GRBG") bayerPat = "BGGR";
-                                    else if (bayerPat == "GBRG") bayerPat = "RGGB";
-                                }
-                                threadBuffer.metadata().xisfProperties["BayerPattern"] = bayerPat;
-                                threadBuffer.metadata().bayerPattern = bayerPat;
-                                threadBuffer.metadata().rawHeaders.push_back({"BAYERPAT", bayerPat, "Bayer Pattern"});
-                                threadBuffer.metadata().rawHeaders.push_back({"ROWORDER", "TOP-DOWN", "Row order of image data"});
 
-                                // Extract generic RAW metadata
-                                threadBuffer.metadata().exposure = lr->other.shutter;
-                                threadBuffer.metadata().focalLength = lr->other.focal_len;
-                                if (lr->other.timestamp > 0) {
-                                    QDateTime dt = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(lr->other.timestamp), QTimeZone::utc());
-                                    threadBuffer.metadata().dateObs = dt.toString(Qt::ISODateWithMs);
-                                    threadBuffer.metadata().rawHeaders.push_back({"DATE-OBS", threadBuffer.metadata().dateObs, "Observation date"});
-                                }
-                                if (lr->other.iso_speed > 0.0f) {
-                                    threadBuffer.metadata().rawHeaders.push_back({"ISOSPEED", QString::number(static_cast<int>(lr->other.iso_speed)), "ISO speed"});
-                                }
-                                if (lr->other.shutter > 0.0f) {
-                                    threadBuffer.metadata().rawHeaders.push_back({"EXPTIME", QString::number(lr->other.shutter, 'f', 6), "Exposure time [s]"});
-                                }
-                                if (lr->other.aperture > 0.0f) {
-                                    threadBuffer.metadata().rawHeaders.push_back({"APERTURE", QString::number(lr->other.aperture, 'f', 1), "Aperture (f-number)"});
-                                }
-                                if (lr->other.focal_len > 0.0f) {
-                                    threadBuffer.metadata().rawHeaders.push_back({"FOCALLEN", QString::number(static_cast<int>(lr->other.focal_len)), "Focal length [mm]"});
-                                }
+                                    // -- Populate CFA metadata ---------------
+                                    threadBuffer.metadata().isMono = true;
 
-                            } // closes if (src)
-                        } // closes else: CFA path
-                    } // closes if (unpackRet == LIBRAW_SUCCESS || LIBRAW_DATA_ERROR)
-                } // closes if (openRet == LIBRAW_SUCCESS)
+                                    QString bayerPat = "RGGB";
+                                    if      (f == 0x94949494) bayerPat = "RGGB";
+                                    else if (f == 0x16161616) bayerPat = "BGGR";
+                                    else if (f == 0x61616161) bayerPat = "GRBG";
+                                    else if (f == 0x49494949) bayerPat = "GBRG";
+
+                                    // Adjust pattern for crop margins.
+                                    if (left % 2 != 0) {
+                                        if      (bayerPat == "RGGB") bayerPat = "GRBG";
+                                        else if (bayerPat == "BGGR") bayerPat = "GBRG";
+                                        else if (bayerPat == "GRBG") bayerPat = "RGGB";
+                                        else if (bayerPat == "GBRG") bayerPat = "BGGR";
+                                    }
+                                    if (top_m % 2 != 0) {
+                                        if      (bayerPat == "RGGB") bayerPat = "GBRG";
+                                        else if (bayerPat == "BGGR") bayerPat = "GRBG";
+                                        else if (bayerPat == "GRBG") bayerPat = "BGGR";
+                                        else if (bayerPat == "GBRG") bayerPat = "RGGB";
+                                    }
+
+                                    auto& meta = threadBuffer.metadata();
+                                    meta.xisfProperties["BayerPattern"] = bayerPat;
+                                    meta.bayerPattern = bayerPat;
+                                    meta.rawHeaders.push_back(
+                                        {"BAYERPAT", bayerPat, "Bayer Pattern"});
+                                    meta.rawHeaders.push_back(
+                                        {"ROWORDER", "TOP-DOWN",
+                                         "Row order of image data"});
+
+                                    // Generic RAW metadata.
+                                    meta.exposure    = lr->other.shutter;
+                                    meta.focalLength = lr->other.focal_len;
+
+                                    if (lr->other.timestamp > 0) {
+                                        QDateTime dt = QDateTime::fromSecsSinceEpoch(
+                                            static_cast<qint64>(lr->other.timestamp),
+                                            QTimeZone::utc());
+                                        meta.dateObs = dt.toString(Qt::ISODateWithMs);
+                                        meta.rawHeaders.push_back(
+                                            {"DATE-OBS", meta.dateObs,
+                                             "Observation date"});
+                                    }
+                                    if (lr->other.iso_speed > 0.0f)
+                                        meta.rawHeaders.push_back(
+                                            {"ISOSPEED",
+                                             QString::number(
+                                                 static_cast<int>(lr->other.iso_speed)),
+                                             "ISO speed"});
+                                    if (lr->other.shutter > 0.0f)
+                                        meta.rawHeaders.push_back(
+                                            {"EXPTIME",
+                                             QString::number(lr->other.shutter, 'f', 6),
+                                             "Exposure time [s]"});
+                                    if (lr->other.aperture > 0.0f)
+                                        meta.rawHeaders.push_back(
+                                            {"APERTURE",
+                                             QString::number(lr->other.aperture, 'f', 1),
+                                             "Aperture (f-number)"});
+                                    if (lr->other.focal_len > 0.0f)
+                                        meta.rawHeaders.push_back(
+                                            {"FOCALLEN",
+                                             QString::number(
+                                                 static_cast<int>(lr->other.focal_len)),
+                                             "Focal length [mm]"});
+                                }
+                            }
+                        }
+                    }
                     libraw_close(lr);
-                } // closes if (lr)
-#endif
+                }
+#endif // HAVE_LIBRAW
             }
-            
+
+            // -- Write the converted file ------------------------------------
             if (loaded) {
-                // Save as FITS (32-bit float by default)
-                if (!Stacking::FitsIO::write(outputPath, threadBuffer, 32)) {
-                     failedCount.fetchAndAddRelaxed(1);
-                     std::lock_guard<std::mutex> lock(logMutex);
-                     if (s_runner) s_runner->logMessage(QString("Failed to save %1").arg(outName), "red");
+                if (!Stacking::FitsIO::write(
+                        outputPath, threadBuffer, 32)) {
+                    failedCount.fetchAndAddRelaxed(1);
+                    std::lock_guard<std::mutex> lock(logMutex);
+                    if (s_runner)
+                        s_runner->logMessage(
+                            QString("Failed to save %1").arg(outName),
+                            "red");
                 }
             } else {
-                 failedCount.fetchAndAddRelaxed(1);
-                 std::lock_guard<std::mutex> lock(logMutex);
-                 if (s_runner) s_runner->logMessage(QString("Failed to load %1").arg(file), "red");
+                failedCount.fetchAndAddRelaxed(1);
+                std::lock_guard<std::mutex> lock(logMutex);
+                if (s_runner)
+                    s_runner->logMessage(
+                        QString("Failed to load %1").arg(file), "red");
             }
-            
-            if (s_runner) s_runner->progressChanged(QString("Converting %1").arg(file), (double)convertedCount.loadRelaxed() / files.size());
+
+            if (s_runner)
+                s_runner->progressChanged(
+                    QString("Converting %1").arg(file),
+                    (double)convertedCount.loadRelaxed() / files.size());
 
         } catch (const std::exception& e) {
             failedCount.fetchAndAddRelaxed(1);
             std::lock_guard<std::mutex> lock(logMutex);
-            if (s_runner) s_runner->logMessage(QString("Exception converting %1: %2").arg(file, e.what()), "red");
+            if (s_runner)
+                s_runner->logMessage(
+                    QString("Exception converting %1: %2")
+                        .arg(file, e.what()),
+                    "red");
         } catch (...) {
             failedCount.fetchAndAddRelaxed(1);
             std::lock_guard<std::mutex> lock(logMutex);
-            if (s_runner) s_runner->logMessage(QString("Unknown exception converting %1").arg(file), "red");
+            if (s_runner)
+                s_runner->logMessage(
+                    QString("Unknown exception converting %1").arg(file),
+                    "red");
         }
     });
-    
-    if (s_runner) s_runner->logMessage(QString("Conversion complete: %1 success, %2 failed").arg(convertedCount.loadRelaxed() - failedCount.loadRelaxed()).arg(failedCount.loadRelaxed()), "green");
-    
+
+    if (s_runner)
+        s_runner->logMessage(
+            QString("Conversion complete: %1 success, %2 failed")
+                .arg(convertedCount.loadRelaxed() -
+                     failedCount.loadRelaxed())
+                .arg(failedCount.loadRelaxed()),
+            "green");
+
     return true;
 }
 
-bool StackingCommands::cmdSeqApplyReg(const ScriptCommand& cmd) {
-    if (cmd.args.isEmpty()) return false;
+// ============================================================================
+// seqapplyreg -- Apply stored registration transforms
+// ============================================================================
+
+bool StackingCommands::cmdSeqApplyReg(const ScriptCommand& cmd)
+{
+    if (cmd.args.isEmpty())
+        return false;
+
     QString prefix = cmd.args[0];
-    
-    // This requires a full registration sequence state
+
     if (!s_sequence || s_sequence->count() == 0) {
-        if (s_runner) s_runner->logMessage("seqapplyreg: No sequence loaded. Run register first.", "red");
+        if (s_runner)
+            s_runner->logMessage(
+                "seqapplyreg: No sequence loaded. Run register first.",
+                "red");
         return false;
     }
 
-    if (s_runner) s_runner->logMessage("Applying registration to sequence: " + prefix, "cyan");
-    
-    // In TStar, registration shifts are already stored in s_sequence.
-    // We just need to apply them and save the results.
+    if (s_runner)
+        s_runner->logMessage(
+            "Applying registration to sequence: " + prefix, "cyan");
+
     QString outPrefix = cmd.option("prefix", "r_");
-    
+
     Stacking::StackingParams params;
     QString framing = cmd.option("framing", "ref").toLower();
-    if (framing == "max") params.maximizeFraming = true;
-    
-    // We'll use StackingEngine to perform the "application" as it handles the interpolation
-    // But since seqapplyreg is usually for exported frames, we loop manually if needed.
-    // For now, we'll log that this is integrated into the stacking command in TStar.
-    if (s_runner) s_runner->logMessage("Note: TStar applies registration dynamically during 'stack'.", "yellow");
-    
+    if (framing == "max")
+        params.maximizeFraming = true;
+
+    // In TStar, registration transforms are applied dynamically during
+    // stacking rather than being written out as separate files.
+    if (s_runner)
+        s_runner->logMessage(
+            "Note: TStar applies registration dynamically during 'stack'.",
+            "yellow");
+
     return true;
 }
 
-bool StackingCommands::cmdRotate(const ScriptCommand& cmd) {
-    if (!s_currentImage) return false;
+// ============================================================================
+// rotate -- Rotate the current image
+// ============================================================================
+
+bool StackingCommands::cmdRotate(const ScriptCommand& cmd)
+{
+    if (!s_currentImage)
+        return false;
+
     float angle = cmd.args[0].toFloat();
-    
-    if (s_runner) s_runner->logMessage(QString("Rotating image by %1 degrees").arg(angle), "neutral");
-    
+
+    if (s_runner)
+        s_runner->logMessage(
+            QString("Rotating image by %1 degrees").arg(angle), "neutral");
+
     s_currentImage->rotate(angle);
     s_currentImage->setModified(true);
     return true;
 }
 
-bool StackingCommands::cmdResample(const ScriptCommand& cmd) {
-    if (!s_currentImage) return false;
-    
+// ============================================================================
+// resample -- Resize the current image
+// ============================================================================
+
+bool StackingCommands::cmdResample(const ScriptCommand& cmd)
+{
+    if (!s_currentImage)
+        return false;
+
     float factor = 1.0f;
-    if (cmd.args.size() > 0) factor = cmd.args[0].toFloat();
-    
-    // factor=0.5 means half size
-    int newW = s_currentImage->width() * factor;
-    int newH = s_currentImage->height() * factor;
-    
-    if (cmd.hasOption("width")) newW = cmd.option("width").toInt();
+    if (cmd.args.size() > 0)
+        factor = cmd.args[0].toFloat();
+
+    int newW = static_cast<int>(s_currentImage->width()  * factor);
+    int newH = static_cast<int>(s_currentImage->height() * factor);
+
+    if (cmd.hasOption("width"))  newW = cmd.option("width").toInt();
     if (cmd.hasOption("height")) newH = cmd.option("height").toInt();
-    
-    if (s_runner) s_runner->logMessage(QString("Resampling image to %1x%2").arg(newW).arg(newH), "neutral");
-    
-    // Implementation requires OpenCV resize usually
-    cv::Mat mat(s_currentImage->height(), s_currentImage->width(), CV_MAKETYPE(CV_32F, s_currentImage->channels()), s_currentImage->data().data());
+
+    if (s_runner)
+        s_runner->logMessage(
+            QString("Resampling image to %1x%2").arg(newW).arg(newH),
+            "neutral");
+
+    // Use Lanczos interpolation via OpenCV.
+    cv::Mat mat(
+        s_currentImage->height(), s_currentImage->width(),
+        CV_MAKETYPE(CV_32F, s_currentImage->channels()),
+        s_currentImage->data().data());
+
     cv::Mat resized;
     cv::resize(mat, resized, cv::Size(newW, newH), 0, 0, cv::INTER_LANCZOS4);
-    
+
     s_currentImage->resize(newW, newH, s_currentImage->channels());
-    std::memcpy(s_currentImage->data().data(), resized.data, (size_t)newW * newH * s_currentImage->channels() * sizeof(float));
-    
+    std::memcpy(
+        s_currentImage->data().data(), resized.data,
+        (size_t)newW * newH * s_currentImage->channels() * sizeof(float));
+
     s_currentImage->setModified(true);
     return true;
 }
 
-bool StackingCommands::cmdUpdateKey(const ScriptCommand& cmd) {
-    if (!s_currentImage) return false;
-    QString key = cmd.args[0].toUpper();
-    QString value = cmd.args[1];
-    QString comment = cmd.args.size() > 2 ? cmd.args[2] : "";
-    
+// ============================================================================
+// update_key -- Update a FITS header keyword
+// ============================================================================
+
+bool StackingCommands::cmdUpdateKey(const ScriptCommand& cmd)
+{
+    if (!s_currentImage)
+        return false;
+
+    QString key     = cmd.args[0].toUpper();
+    QString value   = cmd.args[1];
+    QString comment = (cmd.args.size() > 2) ? cmd.args[2] : "";
+
     auto& meta = s_currentImage->metadata();
-    bool found = false;
+    bool  found = false;
+
     for (auto& card : meta.rawHeaders) {
         if (card.key.toUpper() == key) {
             card.value = value;
-            if (!comment.isEmpty()) card.comment = comment;
+            if (!comment.isEmpty())
+                card.comment = comment;
             found = true;
             break;
         }
     }
-    
-    if (!found) {
+
+    if (!found)
         meta.rawHeaders.push_back({key, value, comment});
-    }
-    
-    if (s_runner) s_runner->logMessage(QString("Updated FITS header: %1 = %2").arg(key, value), "green");
+
+    if (s_runner)
+        s_runner->logMessage(
+            QString("Updated FITS header: %1 = %2").arg(key, value),
+            "green");
     return true;
 }
 
-bool StackingCommands::cmdCrop(const ScriptCommand& cmd) {
-    if (!s_currentImage) return false;
-    
-    int x, y, w, h;
-    if (cmd.args.size() >= 4) {
-        x = cmd.args[0].toInt();
-        y = cmd.args[1].toInt();
-        w = cmd.args[2].toInt();
-        h = cmd.args[3].toInt();
-    } else {
-        // Fallback or interactive crop handle (if TStar supports selection)
+// ============================================================================
+// crop -- Crop the current image
+// ============================================================================
+
+bool StackingCommands::cmdCrop(const ScriptCommand& cmd)
+{
+    if (!s_currentImage)
         return false;
-    }
-    
-    if (s_runner) s_runner->logMessage(QString("Cropping to %1,%2 size %3x%4").arg(x).arg(y).arg(w).arg(h), "neutral");
-    
+
+    if (cmd.args.size() < 4)
+        return false; // No interactive crop support; all four args required.
+
+    int x = cmd.args[0].toInt();
+    int y = cmd.args[1].toInt();
+    int w = cmd.args[2].toInt();
+    int h = cmd.args[3].toInt();
+
+    if (s_runner)
+        s_runner->logMessage(
+            QString("Cropping to %1,%2 size %3x%4")
+                .arg(x).arg(y).arg(w).arg(h),
+            "neutral");
+
     s_currentImage->crop(x, y, w, h);
     s_currentImage->setModified(true);
     return true;
 }
 
-bool StackingCommands::cmdStat(const ScriptCommand& cmd) {
+// ============================================================================
+// stat -- Log basic image statistics
+// ============================================================================
+
+bool StackingCommands::cmdStat(const ScriptCommand& cmd)
+{
     Q_UNUSED(cmd);
-    if (!s_currentImage) return false;
-    
-    float min = 1.0f, max = 0.0f, sum = 0.0f;
-    const auto& d = s_currentImage->data();
+    if (!s_currentImage)
+        return false;
+
+    float       minVal = 1.0f;
+    float       maxVal = 0.0f;
+    float       sum    = 0.0f;
+    const auto& d      = s_currentImage->data();
+
     for (float v : d) {
-        if (v < min) min = v;
-        if (v > max) max = v;
+        if (v < minVal) minVal = v;
+        if (v > maxVal) maxVal = v;
         sum += v;
     }
     float mean = sum / d.size();
-    
+
     if (s_runner) {
-        s_runner->logMessage(QString("Image Stats: Min=%1, Max=%2, Mean=%3").arg(min).arg(max).arg(mean), "white");
-        s_runner->setVariable("STAT_MIN", QString::number(min));
-        s_runner->setVariable("STAT_MAX", QString::number(max));
+        s_runner->logMessage(
+            QString("Image Stats: Min=%1, Max=%2, Mean=%3")
+                .arg(minVal).arg(maxVal).arg(mean),
+            "white");
+        s_runner->setVariable("STAT_MIN",  QString::number(minVal));
+        s_runner->setVariable("STAT_MAX",  QString::number(maxVal));
         s_runner->setVariable("STAT_MEAN", QString::number(mean));
     }
+
     return true;
 }
 
-bool StackingCommands::cmdThreshold(const ScriptCommand& cmd) {
-    if (!s_currentImage) return false;
-    
+// ============================================================================
+// thresh / threshlo / threshhi -- Pixel thresholding
+// ============================================================================
+
+bool StackingCommands::cmdThreshold(const ScriptCommand& cmd)
+{
+    if (!s_currentImage)
+        return false;
+
     float lo = 0.0f;
     float hi = 1.0f;
-    
+
     if (cmd.name == "thresh" && cmd.args.size() >= 2) {
         lo = cmd.args[0].toFloat();
         hi = cmd.args[1].toFloat();
@@ -2086,24 +2311,32 @@ bool StackingCommands::cmdThreshold(const ScriptCommand& cmd) {
     } else if (cmd.name == "threshhi") {
         hi = cmd.args[0].toFloat();
     }
-    
+
     auto& d = s_currentImage->data();
     for (float& v : d) {
         if (v < lo) v = 0.0f;
         if (v > hi) v = 1.0f;
     }
-    
+
     s_currentImage->setModified(true);
     return true;
 }
 
-bool StackingCommands::cmdMath(const ScriptCommand& cmd) {
-    if (!s_currentImage) return false;
-    
+// ============================================================================
+// offset / fmul / neg -- Simple arithmetic on all pixels
+// ============================================================================
+
+bool StackingCommands::cmdMath(const ScriptCommand& cmd)
+{
+    if (!s_currentImage)
+        return false;
+
     float val = 0.0f;
-    if (!cmd.args.isEmpty()) val = cmd.args[0].toFloat();
-    
+    if (!cmd.args.isEmpty())
+        val = cmd.args[0].toFloat();
+
     auto& d = s_currentImage->data();
+
     if (cmd.name == "offset") {
         for (float& v : d) v += val;
     } else if (cmd.name == "fmul") {
@@ -2111,7 +2344,7 @@ bool StackingCommands::cmdMath(const ScriptCommand& cmd) {
     } else if (cmd.name == "neg") {
         for (float& v : d) v = 1.0f - v;
     }
-    
+
     s_currentImage->setModified(true);
     return true;
 }

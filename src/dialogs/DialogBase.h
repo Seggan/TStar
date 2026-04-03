@@ -5,101 +5,103 @@
 #include <QIcon>
 #include <QString>
 
+class MainWindowCallbacks;
+
 /**
- * @brief Base class for all TStar dialogs with common functionality
- * 
- * Consolidates:
- * - Window title/icon setup (eliminates 30+ copy-paste setups)
- * - Standard size initialization
- * - Delete on close attribute
- * - Help/documentation integration
- * 
- * Usage:
- * @code
- * class MyDialog : public DialogBase {
- * public:
- *     MyDialog(QWidget* parent = nullptr)
- *         : DialogBase(parent, "My Dialog Title", 400, 300) {}
- * };
- * @endcode
- * 
- * This consolidates common pattern that appears in 40+ dialog files:
- * - setWindowTitle("...")
- * - setWindowIcon(QIcon(":/images/Logo.png"))
- * - resize(width, height)
- * - setAttribute(Qt::WA_DeleteOnClose)
+ * @brief Base class for all application dialogs providing common initialization.
+ *
+ * Centralizes the following boilerplate that would otherwise be duplicated
+ * across dozens of dialog subclasses:
+ *   - Window title and icon setup
+ *   - Default size initialization
+ *   - WA_DeleteOnClose attribute management
+ *   - Geometry persistence via QSettings
+ *   - Centering on parent or primary screen
+ *
+ * Subclasses override setupDialogUI() to build their own content after the
+ * base initialization has completed.
  */
 class DialogBase : public QDialog {
     Q_OBJECT
 
 public:
     /**
-     * @brief Construct a standard TStar dialog
-     * @param parent Parent widget
-     * @param title Window title (will be translated)
-     * @param defaultWidth Default window width (use 0 for auto)
-     * @param defaultHeight Default window height (use 0 for auto)
-     * @param deleteOnClose Delete dialog when closed (default: true for modeless dialogs)
-     * @param showIcon Show TStar logo icon (default: true)
+     * @brief Construct a dialog with standard application defaults.
+     * @param parent         Parent widget (may be nullptr).
+     * @param title          Window title; left empty if not needed.
+     * @param defaultWidth   Initial width in pixels (0 = keep default).
+     * @param defaultHeight  Initial height in pixels (0 = keep default).
+     * @param deleteOnClose  If true, set Qt::WA_DeleteOnClose for modeless use.
+     * @param showIcon       If true, apply the application logo icon.
      */
     explicit DialogBase(QWidget* parent = nullptr,
-                       const QString& title = QString(),
-                       int defaultWidth = 0,
-                       int defaultHeight = 0,
-                       bool deleteOnClose = false,
-                       bool showIcon = true);
-    
+                        const QString& title = QString(),
+                        int defaultWidth = 0,
+                        int defaultHeight = 0,
+                        bool deleteOnClose = false,
+                        bool showIcon = true);
+
     virtual ~DialogBase() = default;
-    
+
     /**
-     * @brief Set window properties with sensible defaults
-     * @param title Window title
-     * @param width Window width (0 = don't resize)
-     * @param height Window height (0 = don't resize)
+     * @brief Convenience setter for title and size after construction.
+     * @param title  Window title (ignored if empty).
+     * @param width  Width in pixels (0 = no change).
+     * @param height Height in pixels (0 = no change).
      */
     void setWindowProperties(const QString& title, int width = 0, int height = 0);
-    
+
     /**
-     * @brief Enable/disable standard delete-on-close behavior
-     * Useful for tool windows that should persist in memory
+     * @brief Toggle the WA_DeleteOnClose attribute at runtime.
+     *
+     * Useful for tool windows that should persist across show/hide cycles.
      */
     void setDeleteOnClose(bool enabled);
-    
+
     /**
-     * @brief Get standard icon for all dialogs
-     * @return Logo icon from resources
+     * @brief Return the shared application icon loaded from resources.
+     * @return Cached QIcon instance.
      */
     static QIcon getStandardIcon();
-    
+
     /**
-     * @brief Find and return the MainWindowCallbacks interface by traversing parents
-     * @return Pointer to the interface, or nullptr if not found
+     * @brief Walk the parent chain to find a MainWindowCallbacks interface.
+     * @return Pointer to the interface, or nullptr if none is found.
      */
-    class MainWindowCallbacks* getCallbacks();
-    
+    MainWindowCallbacks* getCallbacks();
+
 protected:
+    /** @brief Center the dialog on its parent (or screen) when first shown. */
     void showEvent(QShowEvent* event) override;
 
     /**
-     * @brief Called after window setup to allow subclasses to configure
-     * Override this instead of manual setWindowTitle/resize
+     * @brief Hook for subclasses to build their UI.
+     *
+     * Called once during initialize(), after the window properties have been
+     * set but before geometry restoration.  Override this instead of doing
+     * manual setWindowTitle / resize in the constructor.
      */
     virtual void setupDialogUI() {}
-    
+
     /**
-     * @brief Restore previous window geometry from settings
-     * @param settingsKey Key to use in QSettings (default: class name)
+     * @brief Restore previously saved window geometry from QSettings.
+     * @param settingsKey  Lookup key (defaults to the meta-object class name).
      */
     void restoreWindowGeometry(const QString& settingsKey = QString());
-    
+
     /**
-     * @brief Save window geometry to settings for next session
-     * @param settingsKey Key to use in QSettings (default: class name)
+     * @brief Persist the current window geometry to QSettings.
+     * @param settingsKey  Storage key (defaults to the meta-object class name).
      */
     void saveWindowGeometry(const QString& settingsKey = QString());
 
 private:
-    void initialize(const QString& title, int width, int height, bool deleteOnClose, bool showIcon);
+    /** @brief Shared initialization logic called from the constructor. */
+    void initialize(const QString& title,
+                    int width,
+                    int height,
+                    bool deleteOnClose,
+                    bool showIcon);
 };
 
 #endif // DIALOGBASE_H

@@ -1,16 +1,36 @@
+# =============================================================================
+# TStar - Cross-Platform CMake Build Configuration
+# =============================================================================
+#
+# Supported platforms:
+#   - Windows (MinGW-w64)
+#   - macOS   (Homebrew, Apple Silicon + Intel)
+#
+# The build system auto-detects the host platform and resolves dependency
+# paths accordingly.  Optional libraries (LibRaw, LZ4, Zstd) are detected
+# at configure time; corresponding preprocessor flags are set when found.
+#
+# =============================================================================
+
 cmake_minimum_required(VERSION 3.16)
 
 # =============================================================================
-# TStar Cross-Platform CMakeLists.txt
+# Section 1 - Version Management
 # =============================================================================
-# Supports both Windows (MinGW) and macOS (Homebrew)
-# Auto-detects platform and uses appropriate dependency paths
+# The single source of truth for the project version is changelog.txt.
+# CMake parses the first "Version X.Y.Z" line at configure time so that
+# the version string propagates to the binary, Windows resource file, and
+# macOS bundle metadata without manual synchronization.
 # =============================================================================
 
-# Read version from changelog.txt
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/changelog.txt")
+set_property(DIRECTORY APPEND PROPERTY
+    CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/changelog.txt"
+)
+
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/changelog.txt")
-    file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/changelog.txt" VERSION_LINE REGEX "^Version [0-9.]+")
+    file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/changelog.txt"
+         VERSION_LINE REGEX "^Version [0-9.]+"
+    )
     if(VERSION_LINE)
         list(GET VERSION_LINE 0 FIRST_VERSION_LINE)
         string(REGEX MATCH "[0-9.]+" TSTAR_VERSION "${FIRST_VERSION_LINE}")
@@ -21,23 +41,23 @@ else()
     set(TSTAR_VERSION "1.0.0")
 endif()
 
-# Split Version
+# Decompose semantic version into individual components.
 string(REPLACE "." ";" VERSION_LIST ${TSTAR_VERSION})
 list(GET VERSION_LIST 0 TSTAR_VERSION_MAJOR)
 list(GET VERSION_LIST 1 TSTAR_VERSION_MINOR)
 list(GET VERSION_LIST 2 TSTAR_VERSION_PATCH)
 
-if(NOT TSTAR_VERSION_MAJOR) 
-    set(TSTAR_VERSION_MAJOR 1) 
+if(NOT TSTAR_VERSION_MAJOR)
+    set(TSTAR_VERSION_MAJOR 1)
 endif()
-if(NOT TSTAR_VERSION_MINOR) 
-    set(TSTAR_VERSION_MINOR 0) 
+if(NOT TSTAR_VERSION_MINOR)
+    set(TSTAR_VERSION_MINOR 0)
 endif()
-if(NOT TSTAR_VERSION_PATCH) 
-    set(TSTAR_VERSION_PATCH 0) 
+if(NOT TSTAR_VERSION_PATCH)
+    set(TSTAR_VERSION_PATCH 0)
 endif()
 
-# Configure version.rc for Windows
+# Generate the Windows version resource from the .rc.in template.
 if(WIN32)
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/src/version.rc.in"
@@ -46,15 +66,17 @@ if(WIN32)
     )
 endif()
 
-# Generate Version.cpp source file
+# Generate Version.cpp so the version string is compiled into a single
+# translation unit, avoiding full rebuilds when only the version changes.
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/Version.cpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/Version.cpp"
     @ONLY
 )
 
-# Remove the global TSTAR_VERSION definition to prevent full recompiles
-# add_definitions(-DTSTAR_VERSION="${TSTAR_VERSION}")
+# =============================================================================
+# Section 2 - Project Declaration & Language Standards
+# =============================================================================
 
 project(TStar LANGUAGES C CXX)
 
@@ -62,18 +84,21 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # =============================================================================
-# Compiler Optimizations & Warnings
+# Section 3 - Compiler Optimizations & Warning Policy
 # =============================================================================
+
 if(MSVC)
-    # Windows MSVC (less common for TStar but support if used)
+    # MSVC: treat warnings as errors, full optimization in Release.
     add_compile_options(/W4 /WX)
     add_compile_options($<$<CONFIG:Release>:/O2>)
 else()
-    # GCC/Clang (used on both macOS and Windows with MinGW)
-    add_compile_options(-Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
-    add_compile_options(-ffast-math)  # Enable fast math for scientific computing
-    
-    # LTO Optimization (Conditional)
+    # GCC / Clang (MinGW on Windows, Apple Clang on macOS).
+    add_compile_options(
+        -Wall -Wextra -Wpedantic
+        -Wno-missing-field-initializers
+    )
+
+    # Optional Link-Time Optimization for Release builds.
     option(ENABLE_LTO "Enable Link-Time Optimization" OFF)
     if(ENABLE_LTO)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -85,24 +110,26 @@ else()
         endif()
         message(STATUS "Link-Time Optimization (LTO) enabled for Release builds")
     endif()
-    
-    # Debug-specific flags
+
+    # Debug: full symbols, no optimization.
     add_compile_options($<$<CONFIG:Debug>:-g>)
     add_compile_options($<$<CONFIG:Debug>:-O0>)
-    
-    # Enable position-independent code (required for some platforms)
+
+    # Position-independent code is required on some platforms.
     add_compile_options(-fPIC)
 endif()
 
 # =============================================================================
-# Platform-Specific Settings
+# Section 4 - Platform-Specific Settings
 # =============================================================================
+
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
     set(CMAKE_MACOSX_BUNDLE ON)
     message(STATUS "Building for macOS")
 elseif(WIN32)
-    # Disable AutoMoc predefs generation (Fixes pre-processing failures on Windows/MinGW)
+    # Disable AutoMoc predefs generation to prevent pre-processing
+    # failures with MinGW on Windows.
     set(CMAKE_AUTOMOC_COMPILER_PREDEFS OFF CACHE BOOL "" FORCE)
     message(STATUS "Building for Windows")
 elseif(LINUX)
@@ -111,13 +138,19 @@ else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
+# Enable Qt meta-object, resource, and UI compiler integration.
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # =============================================================================
-# Homebrew Detection (macOS)
+# Section 5 - Homebrew Detection (macOS only)
 # =============================================================================
+# On macOS the build system queries Homebrew for the installation prefix so
+# that all subsequent find_package / find_library calls resolve correctly
+# on both Apple Silicon (/opt/homebrew) and Intel (/usr/local) machines.
+# =============================================================================
+
 if(APPLE)
     execute_process(
         COMMAND brew --prefix
@@ -125,7 +158,7 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
+
     if(NOT HOMEBREW_PREFIX)
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
             set(HOMEBREW_PREFIX "/opt/homebrew")
@@ -133,13 +166,13 @@ if(APPLE)
             set(HOMEBREW_PREFIX "/usr/local")
         endif()
     endif()
-    
+
     message(STATUS "Homebrew prefix: ${HOMEBREW_PREFIX}")
-    
+
     list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}")
     list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}/opt/qt")
     list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}/opt/qt@6")
-    
+
     if(NOT Qt6_DIR)
         if(EXISTS "${HOMEBREW_PREFIX}/opt/qt/lib/cmake/Qt6/Qt6Config.cmake")
             set(Qt6_DIR "${HOMEBREW_PREFIX}/opt/qt/lib/cmake/Qt6" CACHE PATH "Path to Qt6")
@@ -150,13 +183,15 @@ if(APPLE)
 endif()
 
 # =============================================================================
-# Find Qt6
+# Section 6 - Required Dependencies
 # =============================================================================
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network Svg Concurrent Xml LinguistTools)
 
-# =============================================================================
-# OpenMP
-# =============================================================================
+# ---- Qt6 ----
+find_package(Qt6 REQUIRED COMPONENTS
+    Widgets Network Svg Concurrent Xml LinguistTools
+)
+
+# ---- OpenMP ----
 if(APPLE)
     execute_process(
         COMMAND brew --prefix libomp
@@ -164,15 +199,19 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
+
     if(LIBOMP_PREFIX AND EXISTS "${LIBOMP_PREFIX}")
         message(STATUS "Using Homebrew libomp from: ${LIBOMP_PREFIX}")
+
+        # Create imported targets manually because Apple Clang does not
+        # ship with built-in OpenMP support.
         add_library(OpenMP::OpenMP_CXX INTERFACE IMPORTED)
         set_target_properties(OpenMP::OpenMP_CXX PROPERTIES
             INTERFACE_COMPILE_OPTIONS "-Xpreprocessor;-fopenmp"
             INTERFACE_INCLUDE_DIRECTORIES "${LIBOMP_PREFIX}/include"
             INTERFACE_LINK_LIBRARIES "${LIBOMP_PREFIX}/lib/libomp.dylib"
         )
+
         add_library(OpenMP::OpenMP_C INTERFACE IMPORTED)
         set_target_properties(OpenMP::OpenMP_C PROPERTIES
             INTERFACE_COMPILE_OPTIONS "-Xpreprocessor;-fopenmp"
@@ -189,9 +228,7 @@ else()
     find_package(OpenMP REQUIRED)
 endif()
 
-# =============================================================================
-# GSL (GNU Scientific Library)
-# =============================================================================
+# ---- GSL (GNU Scientific Library) ----
 if(APPLE)
     execute_process(
         COMMAND brew --prefix gsl
@@ -199,18 +236,21 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
+
     if(GSL_PREFIX AND EXISTS "${GSL_PREFIX}")
         set(GSL_INCLUDE_DIRS "${GSL_PREFIX}/include")
         set(GSL_LIBRARY_DIRS "${GSL_PREFIX}/lib")
-        set(GSL_LIBRARIES "${GSL_PREFIX}/lib/libgsl.dylib" "${GSL_PREFIX}/lib/libgslcblas.dylib")
+        set(GSL_LIBRARIES
+            "${GSL_PREFIX}/lib/libgsl.dylib"
+            "${GSL_PREFIX}/lib/libgslcblas.dylib"
+        )
         message(STATUS "Using Homebrew GSL from: ${GSL_PREFIX}")
     else()
         find_package(GSL REQUIRED)
         set(GSL_LIBRARIES GSL::gsl GSL::gslcblas)
     endif()
 else()
-    # Windows: local deps
+    # Windows: resolve from local deps/ directory.
     set(GSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/gsl")
     if(EXISTS "${GSL_DIR}")
         set(GSL_INCLUDE_DIRS "${GSL_DIR}/include")
@@ -245,9 +285,7 @@ function(print_target_properties tgt)
     endforeach(prop)
 endfunction(print_target_properties)
 
-# =============================================================================
-# CFITSIO
-# =============================================================================
+# ---- CFITSIO ----
 if(APPLE)
     execute_process(
         COMMAND brew --prefix cfitsio
@@ -255,7 +293,7 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
+
     if(CFITSIO_PREFIX AND EXISTS "${CFITSIO_PREFIX}")
         set(CFITSIO_INCLUDE_DIR "${CFITSIO_PREFIX}/include")
         set(CFITSIO_LIBRARY "${CFITSIO_PREFIX}/lib/libcfitsio.dylib")
@@ -264,7 +302,7 @@ if(APPLE)
         message(FATAL_ERROR "CFITSIO not found. Install with: brew install cfitsio")
     endif()
 elseif(WIN32)
-    # Windows: local deps
+    # Windows: static library from local deps/.
     set(CFITSIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/cfitsio")
     set(CFITSIO_INCLUDE_DIR "${CFITSIO_DIR}/include")
     set(CFITSIO_LIBRARY "${CFITSIO_DIR}/lib/libcfitsio.a")
@@ -274,9 +312,7 @@ else()
     pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 endif()
 
-# =============================================================================
-# OpenCV
-# =============================================================================
+# ---- OpenCV ----
 if(APPLE)
     execute_process(
         COMMAND brew --prefix opencv
@@ -284,26 +320,37 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
+
     if(OPENCV_PREFIX AND EXISTS "${OPENCV_PREFIX}")
         set(OpenCV_DIR "${OPENCV_PREFIX}/lib/cmake/opencv4")
     endif()
-    # Explicitly exclude dnn module which depends on OpenVINO
-    # Only include modules actually used by TStar to minimize dependencies
-    find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs photo features2d calib3d)
+
+    # Import only the modules TStar actually uses to minimize transitive
+    # dependencies (notably avoids the dnn module which pulls in OpenVINO).
+    find_package(OpenCV REQUIRED COMPONENTS
+        core imgproc imgcodecs photo features2d calib3d
+    )
 elseif(WIN32)
-    # Windows: local deps
+    # Windows: resolve from local deps/.
     set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv")
-    find_package(OpenCV REQUIRED PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv" NO_DEFAULT_PATH)
+    find_package(OpenCV REQUIRED
+        PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv"
+        NO_DEFAULT_PATH
+    )
 else()
     find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs photo features2d calib3d)
 endif()
 
 # =============================================================================
-# Optional Compression Libraries (LZ4, Zstd)
+# Section 7 - Optional Dependencies
+# =============================================================================
+# These libraries extend functionality but are not required for a working
+# build.  Preprocessor defines (HAVE_LZ4, HAVE_ZSTD, HAVE_LIBRAW) are set
+# when a library is found so that source code can gate features at compile
+# time with #ifdef guards.
 # =============================================================================
 
-# LZ4
+# ---- LZ4 (fast XISF compression) ----
 if(APPLE)
     execute_process(
         COMMAND brew --prefix lz4
@@ -311,7 +358,7 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
+
     if(LZ4_PREFIX AND EXISTS "${LZ4_PREFIX}/include/lz4.h")
         set(LZ4_FOUND TRUE)
         set(LZ4_INCLUDE_DIRS "${LZ4_PREFIX}/include")
@@ -319,7 +366,6 @@ if(APPLE)
         message(STATUS "Using Homebrew LZ4 from: ${LZ4_PREFIX}")
     endif()
 elseif(WIN32)
-    # Windows: local deps in deps/lz4
     set(LZ4_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/lz4")
     if(EXISTS "${LZ4_DIR}/include/lz4.h")
         message(STATUS "Using local LZ4 from ${LZ4_DIR}")
@@ -350,7 +396,7 @@ if(NOT LZ4_FOUND)
     message(STATUS "LZ4 not found - XISF LZ4 compression will be disabled")
 endif()
 
-# Zstd
+# ---- Zstd (high-ratio XISF compression) ----
 if(APPLE)
     execute_process(
         COMMAND brew --prefix zstd
@@ -358,7 +404,7 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
+
     if(ZSTD_PREFIX AND EXISTS "${ZSTD_PREFIX}/include/zstd.h")
         set(ZSTD_FOUND TRUE)
         set(ZSTD_INCLUDE_DIRS "${ZSTD_PREFIX}/include")
@@ -366,7 +412,6 @@ if(APPLE)
         message(STATUS "Using Homebrew Zstd from: ${ZSTD_PREFIX}")
     endif()
 elseif(WIN32)
-    # Windows: local deps in deps/zstd
     set(ZSTD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/zstd")
     if(EXISTS "${ZSTD_DIR}/include/zstd.h")
         message(STATUS "Using local Zstd from ${ZSTD_DIR}")
@@ -394,7 +439,7 @@ if(NOT ZSTD_FOUND)
     message(STATUS "Zstd not found - XISF Zstd compression will be disabled")
 endif()
 
-# LibRaw
+# ---- LibRaw (camera RAW image support) ----
 if(APPLE)
     execute_process(
         COMMAND brew --prefix libraw
@@ -402,48 +447,50 @@ if(APPLE)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    
-    # Check if the prefix is valid, if not try Cellar directly
+
+    # If brew --prefix did not return a valid path, search the Cellar directly.
     if(NOT (LIBRAW_PREFIX AND EXISTS "${LIBRAW_PREFIX}"))
-        # Fallback: search in Homebrew Cellar directly
         file(GLOB LIBRAW_CELLAR_PATHS "/opt/homebrew/Cellar/libraw/*")
         if(LIBRAW_CELLAR_PATHS)
             list(GET LIBRAW_CELLAR_PATHS 0 LIBRAW_PREFIX)
         else()
-            # Try Intel Homebrew location
+            # Fallback for Intel Homebrew installations.
             file(GLOB LIBRAW_CELLAR_PATHS "/usr/local/Cellar/libraw/*")
             if(LIBRAW_CELLAR_PATHS)
                 list(GET LIBRAW_CELLAR_PATHS 0 LIBRAW_PREFIX)
             endif()
         endif()
     endif()
-    
+
     if(LIBRAW_PREFIX AND EXISTS "${LIBRAW_PREFIX}")
         set(LIBRAW_FOUND TRUE)
         set(LIBRAW_INCLUDE_DIRS "${LIBRAW_PREFIX}/include")
-        
-        # Find the actual libraw dylib file
-        find_library(LIBRAW_DYLIB NAMES libraw PATHS "${LIBRAW_PREFIX}/lib" NO_DEFAULT_PATH)
+
+        find_library(LIBRAW_DYLIB NAMES libraw
+            PATHS "${LIBRAW_PREFIX}/lib"
+            NO_DEFAULT_PATH
+        )
         if(LIBRAW_DYLIB)
             set(LIBRAW_LIBRARIES "${LIBRAW_DYLIB}")
         else()
-            # Fallback to generic name, let linker find it
+            # Let the linker resolve it by short name as a last resort.
             set(LIBRAW_LIBRARIES raw)
         endif()
-        
+
         message(STATUS "Using Homebrew LibRaw from: ${LIBRAW_PREFIX}")
-        message(STATUS "  - Include: ${LIBRAW_INCLUDE_DIRS}")
-        message(STATUS "  - Library: ${LIBRAW_LIBRARIES}")
+        message(STATUS "  Include: ${LIBRAW_INCLUDE_DIRS}")
+        message(STATUS "  Library: ${LIBRAW_LIBRARIES}")
     endif()
 elseif(WIN32)
-    # Windows: local deps
+    # Windows: check for local deps/ copy or source build.
     set(LIBRAW_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/libraw")
+
     if(EXISTS "${LIBRAW_DIR}/CMakeLists.txt")
-         message(STATUS "Building local LibRaw from source")
-         add_subdirectory(deps/libraw)
-         set(LIBRAW_FOUND TRUE)
-         set(LIBRAW_LIBRARIES libraw)
-         set(LIBRAW_INCLUDE_DIRS "${LIBRAW_DIR}")
+        message(STATUS "Building local LibRaw from source")
+        add_subdirectory(deps/libraw)
+        set(LIBRAW_FOUND TRUE)
+        set(LIBRAW_LIBRARIES libraw)
+        set(LIBRAW_INCLUDE_DIRS "${LIBRAW_DIR}")
     elseif(EXISTS "${LIBRAW_DIR}/libraw/libraw.h")
         set(LIBRAW_FOUND TRUE)
         set(LIBRAW_INCLUDE_DIRS "${LIBRAW_DIR}")
@@ -467,15 +514,22 @@ if(NOT LIBRAW_FOUND)
     message(STATUS "LibRaw not found - RAW file support will be disabled")
 endif()
 
-# Force disable AutoMoc predefs on Windows
+# Ensure AutoMoc predefs remain disabled on Windows after dependency
+# detection (some find_package calls may reset the cache variable).
 if(WIN32)
     set(CMAKE_AUTOMOC_COMPILER_PREDEFS OFF)
 endif()
 
 # =============================================================================
-# Source Files
+# Section 8 - Source File List
 # =============================================================================
+# Sources are grouped by subsystem for readability.  Headers are listed
+# alongside their corresponding implementation files so that Qt's AutoMoc
+# can discover Q_OBJECT macros.
+# =============================================================================
+
 set(TSTAR_SOURCES
+    # -- Application entry point & top-level classes --
     src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
@@ -488,8 +542,8 @@ set(TSTAR_SOURCES
     src/MainWindowCallbacks.h
     src/Icons.h
     src/resources.qrc
-    
-    # Core
+
+    # -- Core infrastructure --
     src/core/RobustStatistics.cpp
     src/core/RobustStatistics.h
     src/core/ThreadState.cpp
@@ -518,8 +572,8 @@ set(TSTAR_SOURCES
     src/core/ColorProfileManager.cpp
     src/core/ColorProfileManager.h
     ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.cpp
-    
-    # IO
+
+    # -- File I/O --
     src/io/FitsLoader.cpp
     src/io/FitsLoader.h
     src/io/FitsLoaderC.c
@@ -531,7 +585,6 @@ set(TSTAR_SOURCES
     src/io/SimpleTiffWriter.cpp
     src/io/SimpleTiffReader.cpp
     src/io/SimpleTiffReader.h
-    src/io/SimpleTiffWriter.cpp
     src/io/SimpleTiffWriter.h
     src/io/XISFReader.cpp
     src/io/XISFReader.h
@@ -546,8 +599,7 @@ set(TSTAR_SOURCES
     src/io/RawLoader.cpp
     src/io/RawLoader.h
 
-    
-    # Widgets
+    # -- Custom widgets --
     src/widgets/HistogramWidget.cpp
     src/widgets/HistogramWidget.h
     src/widgets/CustomMdiSubWindow.cpp
@@ -566,8 +618,8 @@ set(TSTAR_SOURCES
     src/widgets/SimplePlotWidget.h
     src/widgets/ResourceMonitorWidget.cpp
     src/widgets/ResourceMonitorWidget.h
-    
-    # Algorithms
+
+    # -- Processing algorithms --
     src/algos/AbeMath.cpp
     src/algos/AbeMath.h
     src/algos/GHSAlgo.cpp
@@ -597,16 +649,14 @@ set(TSTAR_SOURCES
     src/algos/RawEditorProcessor.h
     src/algos/SPCC.cpp
     src/algos/SPCC.h
-    # src/algos/Deconvolution.cpp
-    # src/algos/Deconvolution.h
-    
-    # Background
+
+    # -- Background extraction --
     src/background/BackgroundExtraction.cpp
     src/background/BackgroundExtraction.h
     src/background/CatalogGradientExtractor.cpp
     src/background/CatalogGradientExtractor.h
 
-    # Stacking
+    # -- Stacking pipeline --
     src/stacking/StackingProject.cpp
     src/stacking/StackingProject.h
     src/stacking/SequenceFile.cpp
@@ -638,21 +688,21 @@ set(TSTAR_SOURCES
     src/stacking/ImageCache.cpp
     src/stacking/ImageCache.h
     src/stacking/PixelMath.cpp
+    src/stacking/PixelMath.h
     src/stacking/Distortion.cpp
     src/stacking/Distortion.h
     src/stacking/CosmeticCorrection.cpp
     src/stacking/CosmeticCorrection.h
-    src/stacking/PixelMath.h
-    
-    # Network
+
+    # -- Network utilities --
     src/network/UpdateChecker.cpp
     src/network/UpdateChecker.h
     src/network/ModelDownloader.cpp
     src/network/ModelDownloader.h
     src/network/AstapDownloader.cpp
     src/network/AstapDownloader.h
-    
-    # Dialogs
+
+    # -- Tool dialogs --
     src/dialogs/UpdateDialog.cpp
     src/dialogs/UpdateDialog.h
     src/dialogs/DialogBase.cpp
@@ -717,8 +767,6 @@ set(TSTAR_SOURCES
     src/dialogs/SPCCDialog.h
     src/dialogs/AnnotationToolDialog.cpp
     src/dialogs/AnnotationToolDialog.h
-    # src/dialogs/DeconvolutionDialog.cpp
-    # src/dialogs/DeconvolutionDialog.h
     src/dialogs/CurvesDialog.cpp
     src/dialogs/CurvesDialog.h
     src/dialogs/HeaderViewerDialog.cpp
@@ -735,7 +783,6 @@ set(TSTAR_SOURCES
     src/dialogs/StarAnalysisDialog.h
     src/dialogs/HeaderEditorDialog.cpp
     src/dialogs/HeaderEditorDialog.h
-    src/dialogs/AboutDialog.cpp
     src/dialogs/MaskCanvas.cpp
     src/dialogs/MaskCanvas.h
     src/dialogs/MaskGenerationDialog.cpp
@@ -756,8 +803,6 @@ set(TSTAR_SOURCES
     src/dialogs/NBtoRGBStarsDialog.h
     src/dialogs/AlignChannelsDialog.cpp
     src/dialogs/AlignChannelsDialog.h
-    src/dialogs/AnnotationToolDialog.cpp
-    src/dialogs/AnnotationToolDialog.h
     src/dialogs/HelpDialog.cpp
     src/dialogs/HelpDialog.h
     src/dialogs/ClaheDialog.cpp
@@ -794,8 +839,10 @@ set(TSTAR_SOURCES
     src/dialogs/CBEDialog.h
     src/dialogs/ReferenceAlignDialog.cpp
     src/dialogs/ReferenceAlignDialog.h
-    
-    # Astrometry
+    src/dialogs/ScriptDialog.cpp
+    src/dialogs/ScriptDialog.h
+
+    # -- Astrometry --
     src/astrometry/SimbadSearcher.cpp
     src/astrometry/SimbadSearcher.h
     src/astrometry/AnnotationEngine.cpp
@@ -811,8 +858,8 @@ set(TSTAR_SOURCES
     src/astrometry/WcsSolver.h
     src/astrometry/WCSUtils.cpp
     src/astrometry/WCSUtils.h
-    
-    # Photometry
+
+    # -- Photometry --
     src/photometry/StarDetector.cpp
     src/photometry/StarDetector.h
     src/photometry/PsfFitter.cpp
@@ -824,8 +871,8 @@ set(TSTAR_SOURCES
     src/photometry/PCCResult.h
     src/photometry/AperturePhotometry.cpp
     src/photometry/AperturePhotometry.h
-    
-    # Preprocessing
+
+    # -- Preprocessing pipeline --
     src/preprocessing/PreprocessingTypes.h
     src/preprocessing/MasterFrames.cpp
     src/preprocessing/MasterFrames.h
@@ -835,13 +882,13 @@ set(TSTAR_SOURCES
     src/preprocessing/Debayer.h
     src/preprocessing/XTransDemosaic.cpp
     src/preprocessing/XTransDemosaic.h
-    
-    # Calibration
+
+    # -- Calibration --
     src/calibration/CalibrationEngine.cpp
     src/calibration/CalibrationC.c
     src/calibration/CalibrationEngine.h
 
-    # Scripting
+    # -- Scripting engine --
     src/scripting/ScriptTypes.h
     src/scripting/ScriptParser.cpp
     src/scripting/ScriptParser.h
@@ -857,34 +904,37 @@ set(TSTAR_SOURCES
     src/dialogs/ScriptDialog.h
 )
 
-# lcms2 (LittleCMS2)
+# =============================================================================
+# Section 9 - LittleCMS2 (lcms2) Color Management
+# =============================================================================
+# On macOS the system-installed library is preferred.  On Windows the library
+# is compiled from the vendored sources in deps/lcms2/.
+# =============================================================================
+
 if(APPLE)
-    # Search for lcms2 in Homebrew paths
-    find_library(LCMS2_LIBRARY NAMES lcms2 
-        PATHS 
-        /opt/homebrew/lib 
-        /usr/local/lib 
-        /usr/local/opt/little-cms2/lib
+    find_library(LCMS2_LIBRARY NAMES lcms2
+        PATHS
+            /opt/homebrew/lib
+            /usr/local/lib
+            /usr/local/opt/little-cms2/lib
     )
     if(LCMS2_LIBRARY)
         message(STATUS "Found lcms2: ${LCMS2_LIBRARY}")
         list(APPEND TSTAR_LIBS ${LCMS2_LIBRARY})
-        # Find include directory
-        find_path(LCMS2_INCLUDE_DIR NAMES lcms2.h 
-            PATHS 
-            /opt/homebrew/include 
-            /usr/local/include 
-            /usr/local/opt/little-cms2/include
+        find_path(LCMS2_INCLUDE_DIR NAMES lcms2.h
+            PATHS
+                /opt/homebrew/include
+                /usr/local/include
+                /usr/local/opt/little-cms2/include
         )
     else()
-        message(WARNING "lcms2 NOT found, falling back to local sources (NOT RECOMMENDED ON MACOS)")
+        message(WARNING "lcms2 not found; falling back to vendored sources (not recommended on macOS)")
         file(GLOB LCMS2_SOURCES "deps/lcms2/src/*.c")
         list(APPEND TSTAR_SOURCES ${LCMS2_SOURCES})
     endif()
 elseif(WIN32)
-    # Windows/Other: build from sources
-    # NOTE: Using explicit file list instead of GLOB to avoid CMake cache issues
-    # that force full rebuilds when dependencies change
+    # Explicit file list (avoids GLOB so CMake does not force reconfiguration
+    # when unrelated files appear in the directory).
     set(LCMS2_SOURCES
         deps/lcms2/src/cmsalpha.c
         deps/lcms2/src/cmscam02.c
@@ -914,10 +964,12 @@ elseif(WIN32)
         deps/lcms2/src/cmsxform.c
     )
     list(APPEND TSTAR_SOURCES ${LCMS2_SOURCES})
-    
-    # Suppress pedantic warnings for lcms2 sources (third-party)
+
+    # Suppress pedantic warnings for third-party lcms2 sources.
     if(NOT MSVC)
-        set_source_files_properties(${LCMS2_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-pedantic")
+        set_source_files_properties(${LCMS2_SOURCES}
+            PROPERTIES COMPILE_FLAGS "-Wno-pedantic"
+        )
     endif()
 else()
     find_package(PkgConfig REQUIRED)
@@ -925,38 +977,44 @@ else()
 endif()
 
 # =============================================================================
-# Create Executable
+# Section 10 - Executable Target
 # =============================================================================
+
 if(APPLE)
-    # macOS App Bundle
+    # --- macOS App Bundle ---
     set(MACOSX_BUNDLE_ICON_FILE TStar.icns)
     set(APP_ICON_MACOS "${CMAKE_CURRENT_SOURCE_DIR}/src/images/TStar.icns")
-    
+
     if(EXISTS "${APP_ICON_MACOS}")
-        set_source_files_properties(${APP_ICON_MACOS} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-        add_executable(TStar MACOSX_BUNDLE src/main.cpp ${TSTAR_SOURCES} ${APP_ICON_MACOS})
+        set_source_files_properties(${APP_ICON_MACOS}
+            PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+        )
+        add_executable(TStar MACOSX_BUNDLE
+            src/main.cpp ${TSTAR_SOURCES} ${APP_ICON_MACOS}
+        )
     else()
-        add_executable(TStar MACOSX_BUNDLE src/main.cpp ${TSTAR_SOURCES})
+        add_executable(TStar MACOSX_BUNDLE
+            src/main.cpp ${TSTAR_SOURCES}
+        )
     endif()
-    
+
     set_target_properties(TStar PROPERTIES
         MACOSX_BUNDLE_BUNDLE_NAME "TStar"
         MACOSX_BUNDLE_BUNDLE_VERSION "${TSTAR_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${TSTAR_VERSION}"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.fabiotempera.tstar"
-        # RPATH: ensure the executable finds dylibs in Contents/Frameworks/
         INSTALL_RPATH "@executable_path/../Frameworks"
         BUILD_WITH_INSTALL_RPATH TRUE
         MACOSX_RPATH TRUE
     )
-    
+
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist")
         set_target_properties(TStar PROPERTIES
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist"
         )
     endif()
 elseif(WIN32)
-    # Windows with resource file
+    # --- Windows executable with embedded version resource ---
     add_executable(TStar
         ${CMAKE_CURRENT_BINARY_DIR}/TStar.rc
         ${TSTAR_SOURCES}
@@ -967,10 +1025,11 @@ else()
 endif()
 
 # =============================================================================
-# Translations
+# Section 11 - Translations
 # =============================================================================
+
 qt_add_translations(TStar
-    TS_FILES 
+    TS_FILES
         "translations/tstar_it.ts"
         "translations/tstar_es.ts"
         "translations/tstar_fr.ts"
@@ -980,9 +1039,11 @@ qt_add_translations(TStar
 qt_add_resources(TStar "src/i18n.qrc")
 
 # =============================================================================
-# Include Directories
+# Section 12 - Include Directories
 # =============================================================================
-target_include_directories(TStar PRIVATE 
+
+target_include_directories(TStar PRIVATE
+    # Project source trees
     src
     src/astrometry
     src/photometry
@@ -994,59 +1055,67 @@ target_include_directories(TStar PRIVATE
     src/stacking
     src/preprocessing
     src/scripting
+
+    # Vendored / external headers
     deps/lcms2/include
     deps/lcms2/src
     ${LCMS2_INCLUDE_DIR}
+
+    # Library headers
     ${GSL_INCLUDE_DIRS}
     ${CFITSIO_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
 )
 
+# Conditionally add optional dependency include paths and preprocessor flags.
 if(LZ4_FOUND)
     target_include_directories(TStar PRIVATE ${LZ4_INCLUDE_DIRS})
     target_compile_definitions(TStar PRIVATE HAVE_LZ4)
 endif()
+
 if(ZSTD_FOUND)
     target_include_directories(TStar PRIVATE ${ZSTD_INCLUDE_DIRS})
     target_compile_definitions(TStar PRIVATE HAVE_ZSTD)
 endif()
+
 if(LIBRAW_FOUND AND NOT LINUX)
     target_include_directories(TStar PRIVATE ${LIBRAW_INCLUDE_DIRS})
     target_compile_definitions(TStar PRIVATE HAVE_LIBRAW)
 endif()
 
 # =============================================================================
-# Link Directories
+# Section 13 - Link Directories
 # =============================================================================
+
 target_link_directories(TStar PRIVATE
     ${GSL_LIBRARY_DIRS}
 )
 
-# Add Homebrew lib directories for macOS to find optional deps
 if(APPLE)
-    # Add standard Homebrew lib paths for linker
+    # Ensure the linker can find Homebrew-installed libraries.
     if(EXISTS "/opt/homebrew/lib")
         target_link_directories(TStar PRIVATE /opt/homebrew/lib)
     endif()
     if(EXISTS "/usr/local/lib")
         target_link_directories(TStar PRIVATE /usr/local/lib)
     endif()
-    
-    # Add specific Homebrew package lib directories if found
+
     if(LIBRAW_FOUND AND LIBRAW_PREFIX)
         target_link_directories(TStar PRIVATE "${LIBRAW_PREFIX}/lib")
     endif()
 endif()
 
 # =============================================================================
-# Link Libraries
+# Section 14 - Link Libraries
 # =============================================================================
+
 if(WIN32)
     set_property(TARGET TStar PROPERTY AUTOMOC_COMPILER_PREDEFS OFF)
 endif()
 
-target_link_libraries(TStar PRIVATE 
-    Qt6::Widgets 
+# Core libraries (always linked).
+target_link_libraries(TStar PRIVATE
+    Qt6::Widgets
     Qt6::Svg
     Qt6::Network
     Qt6::Concurrent
@@ -1065,7 +1134,7 @@ if(LINUX)
     )
 endif()
 
-# OpenMP
+# OpenMP (imported targets may not exist on all platforms).
 if(TARGET OpenMP::OpenMP_CXX)
     target_link_libraries(TStar PRIVATE OpenMP::OpenMP_CXX)
 endif()
@@ -1073,12 +1142,12 @@ if(TARGET OpenMP::OpenMP_C)
     target_link_libraries(TStar PRIVATE OpenMP::OpenMP_C)
 endif()
 
-# Platform-specific libs
+# Platform-specific system libraries.
 if(APPLE)
     find_package(ZLIB REQUIRED)
     target_link_libraries(TStar PRIVATE ZLIB::ZLIB)
 elseif(WIN32)
-    # Windows: zlib and winsock + PDH/DXGI for resource monitor
+    # Windows: zlib, Winsock, PDH (performance counters), DXGI (GPU info).
     target_link_libraries(TStar PRIVATE z ws2_32 pdh dxguid)
 elseif(LINUX)
     find_package(PkgConfig REQUIRED)
@@ -1086,15 +1155,17 @@ elseif(LINUX)
     target_link_libraries(TStar PRIVATE ${ZLIB_LIBRARIES})
 endif()
 
-# Optional compression libraries
+# Optional compression and RAW libraries.
 if(LZ4_FOUND)
     target_link_libraries(TStar PRIVATE ${LZ4_LIBRARIES})
     message(STATUS "LZ4 compression enabled for XISF")
 endif()
+
 if(ZSTD_FOUND)
     target_link_libraries(TStar PRIVATE ${ZSTD_LIBRARIES})
     message(STATUS "Zstd compression enabled for XISF")
 endif()
+
 if(LIBRAW_FOUND)
     if(LINUX)
         target_link_libraries(TStar PRIVATE PkgConfig::LIBRAW)
@@ -1105,11 +1176,19 @@ if(LIBRAW_FOUND)
 endif()
 
 # =============================================================================
-# Post-build: Copy resources
+# Section 15 - Post-Build Resource Copy
 # =============================================================================
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/src/images" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/scripts" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/data" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+# Copy runtime resources (images, scripts, data files) to the build output
+# directory so that the application can locate them during development.
+# On macOS the resources are additionally copied into the app bundle.
+# =============================================================================
+
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/src/images"
+     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
+     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/data"
+     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 
 if(APPLE)
     add_custom_command(TARGET TStar POST_BUILD
@@ -1125,6 +1204,6 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/data"
             "$<TARGET_BUNDLE_DIR:TStar>/Contents/Resources/data"
-        COMMENT "Copying resources to app bundle"
+        COMMENT "Copying resources into macOS app bundle"
     )
 endif()

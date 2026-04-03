@@ -1,2 +1,5 @@
-# Auto detect text files and perform LF normalization
+# =============================================================================
+# Git Attributes Configuration
+# =============================================================================
+# Automatically detect text files and normalize line endings to LF on commit.
 * text=auto

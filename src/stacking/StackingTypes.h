@@ -1,115 +1,124 @@
+/**
+ * @file StackingTypes.h
+ * @brief Core type definitions for the stacking subsystem.
+ *
+ * Provides enumerations (stacking method, rejection algorithm,
+ * normalization, weighting, filtering, drizzle kernel), data structures
+ * (registration transforms, quality metrics, normalization coefficients,
+ * stacking parameters), callback typedefs, compile-time constants and
+ * string conversion helpers.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
+
 #ifndef STACKING_TYPES_H
 #define STACKING_TYPES_H
 
 #include "../preprocessing/PreprocessingTypes.h"
 #include <QPointF>
+#include <QString>
+#include <cmath>
+#include <functional>
+#include <vector>
+#include <cstdint>
 
 namespace Stacking {
 
+// ============================================================================
+// Enumerations
+// ============================================================================
 
-//=============================================================================
-// ENUMERATIONS
-//=============================================================================
-
+/**
+ * @brief Stacking combination method.
+ */
 enum class Method {
-    Sum = 0,      ///< Sum all pixel values and normalize
-    Mean,         ///< Average with optional rejection
-    Median,       ///< Take median value (robust against outliers)
-    Max,          ///< Take maximum value (star trails, etc.)
-    Min           ///< Take minimum value (remove bright artifacts)
+    Sum = 0,    ///< Sum all pixel values (with post-hoc normalisation).
+    Mean,       ///< Arithmetic mean, optionally with pixel rejection.
+    Median,     ///< Pixel-wise median (robust to outliers).
+    Max,        ///< Maximum value (e.g. star trails).
+    Min         ///< Minimum value (e.g. bright-artefact removal).
 };
 
 /**
- * @brief Pixel rejection algorithm enumeration
- * 
- * These algorithms identify and exclude outlier pixels before
- * computing the final stacked value. Only applicable to Mean stacking.
+ * @brief Pixel rejection algorithm applied before mean combination.
+ *
+ * Each algorithm identifies and excludes outlier pixel values across
+ * the stack before the final combination is computed.  Only meaningful
+ * when the stacking method is Mean.
  */
 enum class Rejection {
-    None = 0,        ///< No rejection - use all pixels
-    Percentile,      ///< Reject based on percentage from median
-    Sigma,           ///< Standard sigma clipping
-    MAD,             ///< Median Absolute Deviation clipping
-    SigmaMedian,     ///< Replace rejected with median (not remove)
-    Winsorized,      ///< Winsorized sigma clipping (more robust)
-    LinearFit,       ///< Linear fit clipping
-    GESDT,           ///< Generalized Extreme Studentized Deviate Test
-    Biweight,        ///< Biweight Estimator (Robust)
-    ModifiedZScore   ///< Modified Z-Score (Robust, median based)
+    None = 0,       ///< No rejection -- use every pixel value.
+    Percentile,     ///< Reject values beyond a percentile range from the median.
+    Sigma,          ///< Standard sigma clipping.
+    MAD,            ///< Median Absolute Deviation clipping.
+    SigmaMedian,    ///< Replace rejected values with the median rather than removing them.
+    Winsorized,     ///< Winsorized sigma clipping (more robust variant).
+    LinearFit,      ///< Linear-fit clipping.
+    GESDT,          ///< Generalized Extreme Studentized Deviate Test.
+    Biweight,       ///< Biweight location/scale estimator (robust).
+    ModifiedZScore  ///< Modified Z-Score (median-based robust method).
 };
 
 /**
- * @brief Normalization type enumeration
- * 
- * Defines how images are normalized before stacking to account
- * for differences in background level and scale.
- */
-/**
- * @brief Normalization type enumeration
- * 
- * Defines how images are normalized before stacking to account
- * for differences in background level and scale.
+ * @brief Pre-combination normalisation strategy.
+ *
+ * Compensates for varying sky background levels and throughput
+ * differences between exposures.
  */
 enum class NormalizationMethod {
-    None = 0,              ///< No normalization
-    Additive,              ///< Additive normalization (matching medians)
-    Multiplicative,        ///< Multiplicative normalization (matching medians)
-    AdditiveScaling,       ///< Additive + Scaling (matching median + dispersion)
-    MultiplicativeScaling  ///< Multiplicative + Scaling
+    None = 0,               ///< No normalisation.
+    Additive,               ///< Additive offset to match medians.
+    Multiplicative,         ///< Multiplicative scaling to match medians.
+    AdditiveScaling,        ///< Additive offset + dispersion scaling.
+    MultiplicativeScaling   ///< Multiplicative factor + dispersion scaling.
 };
 
 /**
- * @brief Framing mode enumeration
- * 
- * Defines how the output frame size is determined.
+ * @brief Output frame sizing policy.
  */
 enum class FramingMode {
-    Reference,    ///< Output size matches Reference frame
-    Union,        ///< Output is union of all frames (Max size)
-    Intersection  ///< Output is intersection of all frames (Min size)
+    Reference,      ///< Match the reference frame dimensions.
+    Union,          ///< Enclose the union of all frame footprints (largest output).
+    Intersection    ///< Use only the region common to all frames (smallest output).
 };
 
 /**
- * @brief Image weighting type enumeration
- * 
- * Defines how individual images are weighted during stacking.
+ * @brief Per-image weighting strategy during combination.
  */
 enum class WeightingType {
-    None = 0,       ///< Equal weight for all images
-    StarCount,      ///< Weight by number of detected stars
-    WeightedFWHM,   ///< Weight by inverse of FWHM * roundness
-    Noise,          ///< Weight by inverse of noise level
-    Roundness,      ///< Weight by star roundness
-    Quality,        ///< Weight by computed quality metric
-    StackCount      ///< Weight by prior stack count (for stacking stacks)
+    None = 0,       ///< Equal weight for every frame.
+    StarCount,      ///< Weight proportional to detected star count.
+    WeightedFWHM,   ///< Weight inversely proportional to FWHM (sharpness).
+    Noise,          ///< Weight inversely proportional to noise level.
+    Roundness,      ///< Weight proportional to stellar roundness.
+    Quality,        ///< Weight by composite quality score.
+    StackCount      ///< Weight by prior integration depth (master-of-masters).
 };
 
 /**
- * @brief Image selection filter type
- * 
- * Defines criteria for selecting which images to include in stacking.
+ * @brief Criterion for automatic frame selection (filtering).
  */
 enum class ImageFilter {
-    All = 0,           ///< Use all images
-    Selected,          ///< Use only manually selected images
-    BestFWHM,          ///< Best N% by FWHM
-    BestWeightedFWHM,  ///< Best N% by weighted FWHM
-    BestRoundness,     ///< Best N% by roundness
-    BestBackground,    ///< Best N% by background level
-    BestStarCount,     ///< Best N% by star count
-    BestQuality        ///< Best N% by overall quality score
+    All = 0,            ///< Accept all frames.
+    Selected,           ///< Honour the existing manual selection.
+    BestFWHM,           ///< Best N% by FWHM.
+    BestWeightedFWHM,   ///< Best N% by weighted FWHM.
+    BestRoundness,      ///< Best N% by stellar roundness.
+    BestBackground,     ///< Best N% by background level.
+    BestStarCount,      ///< Best N% by detected star count.
+    BestQuality         ///< Best N% by composite quality score.
 };
 
 /**
- * @brief Filter mode (percentage or k-sigma)
+ * @brief Mode of the quality filter threshold.
  */
 enum class FilterMode {
-    Percentage = 0,  ///< Filter by percentage (e.g., best 90%)
-    KSigma           ///< Filter by k-sigma clipping
+    Percentage = 0, ///< Keep the best N percent (0-100).
+    KSigma          ///< Reject beyond k standard deviations from the mean.
 };
 
 /**
- * @brief Pixel reconstruction kernel for Drizzle
+ * @brief Reconstruction kernel for drizzle integration.
  */
 enum class DrizzleKernelType {
     Point,
@@ -118,53 +127,57 @@ enum class DrizzleKernelType {
     Lanczos
 };
 
-//=============================================================================
-// ERROR CODES
-//=============================================================================
+// ============================================================================
+// Error codes
+// ============================================================================
 
 /**
- * @brief Stacking operation result codes
+ * @brief Result codes returned by stacking operations.
  */
 enum class StackResult {
-    OK = 0,              ///< Success
-    GenericError = -1,   ///< Generic error
-    SequenceError = -2,  ///< Error reading sequence
-    CancelledError = -9, ///< Operation cancelled by user
-    AllocError = -10     ///< Memory allocation error
+    OK              =   0,  ///< Operation completed successfully.
+    GenericError    =  -1,  ///< Unspecified error.
+    SequenceError   =  -2,  ///< Error reading the image sequence.
+    CancelledError  =  -9,  ///< Operation was cancelled by the user.
+    AllocError      = -10   ///< Memory allocation failure.
 };
 
-//=============================================================================
-// STRUCTURES
-//=============================================================================
+// ============================================================================
+// Structures
+// ============================================================================
 
 /**
- * @brief Normalization coefficients for a sequence
- * 
- * Contains pre-computed normalization factors for each image and channel.
+ * @brief Pre-computed normalisation coefficients for a stacking sequence.
+ *
+ * Stores per-image (and per-channel) additive offsets, multiplicative
+ * factors, dispersion scales, and optional gradient plane coefficients.
  */
 struct NormCoefficients {
-    std::vector<double> offset;   ///< Additive offset per image
-    std::vector<double> mul;      ///< Multiplicative factor per image
-    std::vector<double> scale;    ///< Scale factor per image
-    
-    // Per-layer coefficients (for RGB)
+    std::vector<double> offset;     ///< Global additive offset per image.
+    std::vector<double> mul;        ///< Global multiplicative factor per image.
+    std::vector<double> scale;      ///< Global dispersion scale per image.
+
+    /* Per-channel (up to 3 layers for RGB) coefficients. */
     std::vector<double> poffset[3];
     std::vector<double> pmul[3];
     std::vector<double> pscale[3];
-    
-    // Gradient coefficients (Plane: z = Ax + By + C)
+
+    /* Gradient-plane coefficients (z = A*x + B*y + C) per channel. */
     std::vector<double> pgradA[3];
     std::vector<double> pgradB[3];
     std::vector<double> pgradC[3];
-    
+
     /**
-     * @brief Initialize coefficients for N images
+     * @brief Allocate and zero-initialise storage for @p nbImages frames.
+     * @param nbImages Number of images in the sequence.
+     * @param nbLayers Number of colour channels (1 or 3).
      */
-    void init(int nbImages, int nbLayers) {
+    void init(int nbImages, int nbLayers)
+    {
         offset.resize(nbImages, 0.0);
         mul.resize(nbImages, 1.0);
         scale.resize(nbImages, 1.0);
-        
+
         for (int l = 0; l < nbLayers && l < 3; ++l) {
             poffset[l].resize(nbImages, 0.0);
             pmul[l].resize(nbImages, 1.0);
@@ -175,25 +188,35 @@ struct NormCoefficients {
         }
     }
 
-    void set(int imgIndex, int layer, double slopeVal, double interceptVal) {
-        if (imgIndex < 0 || imgIndex >= (int)scale.size()) return;
+    /**
+     * @brief Store normalisation coefficients for one image and channel.
+     * @param imgIndex    Image index.
+     * @param layer       Channel index (-1 or >=3 sets the global coefficients).
+     * @param slopeVal    Scale / slope value.
+     * @param interceptVal Offset / intercept value.
+     */
+    void set(int imgIndex, int layer, double slopeVal, double interceptVal)
+    {
+        if (imgIndex < 0 || imgIndex >= static_cast<int>(scale.size())) {
+            return;
+        }
         if (layer < 0 || layer >= 3) {
-            scale[imgIndex] = slopeVal;
+            scale[imgIndex]  = slopeVal;
             offset[imgIndex] = interceptVal;
         } else {
-            pscale[layer][imgIndex] = slopeVal;
+            pscale[layer][imgIndex]  = slopeVal;
             poffset[layer][imgIndex] = interceptVal;
-            if(layer == 1) {
-                 scale[imgIndex] = slopeVal;
-                 offset[imgIndex] = interceptVal;
+            /* Promote the green channel as the global representative. */
+            if (layer == 1) {
+                scale[imgIndex]  = slopeVal;
+                offset[imgIndex] = interceptVal;
             }
         }
     }
-    
-    /**
-     * @brief Clear all coefficients
-     */
-    void clear() {
+
+    /** @brief Release all allocated storage. */
+    void clear()
+    {
         offset.clear();
         mul.clear();
         scale.clear();
@@ -209,54 +232,63 @@ struct NormCoefficients {
 };
 
 /**
- * @brief Registration data for a single image
+ * @brief Per-frame geometric registration data.
+ *
+ * Stores the translation, rotation, scale, homography matrix and
+ * optional SIP distortion polynomial for a single image relative to
+ * the reference frame.
  */
 struct RegistrationData {
-    double shiftX = 0.0;        ///< X translation
-    double shiftY = 0.0;        ///< Y translation
-    double rotation = 0.0;      ///< Rotation angle (radians)
-    
-    // Comet Data (for comet stacking)
-    double cometX = 0.0;        ///< Comet X position in this image
-    double cometY = 0.0;        ///< Comet Y position in this image
-    
-    double scaleX = 1.0;        ///< X scale factor
-    double scaleY = 1.0;        ///< Y scale factor
-    bool hasRegistration = false;
-    
-    // Homography matrix (3x3) for full transformation
+    double shiftX   = 0.0;      ///< Horizontal translation (pixels).
+    double shiftY   = 0.0;      ///< Vertical translation (pixels).
+    double rotation = 0.0;      ///< Rotation angle (radians).
+
+    /* Comet position (for comet-mode stacking). */
+    double cometX   = 0.0;      ///< Comet X coordinate in this frame.
+    double cometY   = 0.0;      ///< Comet Y coordinate in this frame.
+
+    double scaleX   = 1.0;      ///< Horizontal scale factor.
+    double scaleY   = 1.0;      ///< Vertical scale factor.
+    bool   hasRegistration = false;
+
+    /** @brief 3x3 homography matrix for the full projective transform. */
     double H[3][3] = {
         {1, 0, 0},
         {0, 1, 0},
         {0, 0, 1}
     };
 
-    // SIP Distortion Coefficients
+    /* SIP distortion polynomials (optional). */
     bool hasDistortion = false;
-    int sipOrder = 0;
-    std::vector<std::vector<double>> sipA;  // Forward X distortion
-    std::vector<std::vector<double>> sipB;  // Forward Y distortion
-    std::vector<std::vector<double>> sipAP; // Reverse X distortion
-    std::vector<std::vector<double>> sipBP; // Reverse Y distortion
-    
+    int  sipOrder      = 0;
+    std::vector<std::vector<double>> sipA;      ///< Forward X distortion coefficients.
+    std::vector<std::vector<double>> sipB;      ///< Forward Y distortion coefficients.
+    std::vector<std::vector<double>> sipAP;     ///< Reverse X distortion coefficients.
+    std::vector<std::vector<double>> sipBP;     ///< Reverse Y distortion coefficients.
+
     /**
-     * @brief Transform a point using the homography matrix
+     * @brief Apply the homography to a 2-D point.
+     * @param x Horizontal coordinate.
+     * @param y Vertical coordinate.
+     * @return Transformed point.
      */
-    QPointF transform(double x, double y) const {
-        double z = H[2][0] * x + H[2][1] * y + H[2][2];
-        double scale = (std::abs(z) > 1e-9) ? 1.0 / z : 1.0;
+    QPointF transform(double x, double y) const
+    {
+        const double z     = H[2][0] * x + H[2][1] * y + H[2][2];
+        const double scale = (std::abs(z) > 1e-9) ? 1.0 / z : 1.0;
         return QPointF(
             (H[0][0] * x + H[0][1] * y + H[0][2]) * scale,
-            (H[1][0] * x + H[1][1] * y + H[1][2]) * scale
-        );
+            (H[1][0] * x + H[1][1] * y + H[1][2]) * scale);
     }
 
     /**
-     * @brief Check if registration is simple shift only
+     * @brief Test whether the registration is a pure translation.
+     * @return true if no rotation, scaling or projective warp is present.
      */
-    bool isShiftOnly() const {
-        return hasRegistration && 
-               rotation == 0.0 && 
+    bool isShiftOnly() const
+    {
+        return hasRegistration &&
+               rotation == 0.0 &&
                scaleX == 1.0 && scaleY == 1.0 &&
                H[0][0] == 1.0 && H[0][1] == 0.0 &&
                H[1][0] == 0.0 && H[1][1] == 1.0 &&
@@ -265,223 +297,220 @@ struct RegistrationData {
 };
 
 /**
- * @brief Image quality metrics
+ * @brief Per-frame image quality metrics.
  */
 struct ImageQuality {
-    double fwhm = 0.0;           ///< Full Width at Half Maximum
-    double weightedFwhm = 0.0;   ///< FWHM weighted by roundness
-    double roundness = 0.0;      ///< Star roundness (0-1)
-    double background = 0.0;     ///< Background level
-    int starCount = 0;           ///< Number of detected stars
-    double quality = 0.0;        ///< Overall quality score
-    double noise = 0.0;          ///< Noise estimate
-    bool hasMetrics = false;
+    double fwhm         = 0.0;  ///< Average Full Width at Half Maximum (pixels).
+    double weightedFwhm = 0.0;  ///< FWHM weighted (divided) by roundness.
+    double roundness    = 0.0;  ///< Average stellar roundness (0 = elongated, 1 = circular).
+    double background   = 0.0;  ///< Median background level.
+    int    starCount    = 0;    ///< Number of detected stars.
+    double quality      = 0.0;  ///< Composite quality score.
+    double noise        = 0.0;  ///< Estimated noise sigma.
+    bool   hasMetrics   = false;
 };
 
 /**
- * @brief Rejection statistics for a stacking operation
+ * @brief Pixel rejection statistics for a completed stacking run.
  */
 struct RejectionStats {
-    int64_t totalPixels = 0;
-    int64_t lowRejected = 0;
-    int64_t highRejected = 0;
+    int64_t totalPixels   = 0;
+    int64_t lowRejected   = 0;
+    int64_t highRejected  = 0;
     int64_t totalRejected = 0;
-    
-    double rejectionPercentage() const {
+
+    /** @brief Percentage of pixels that were rejected. */
+    double rejectionPercentage() const
+    {
         return totalPixels > 0 ? (100.0 * totalRejected / totalPixels) : 0.0;
     }
 };
 
 /**
- * @brief Main stacking parameters structure
- * 
- * Contains all configuration options for a stacking operation.
+ * @brief Complete set of parameters controlling a stacking operation.
  */
 struct StackingParams {
-    // Method selection
-    Method method = Method::Mean;
-    Rejection rejection = Rejection::Winsorized;
+
+    // -- Combination method --------------------------------------------------
+    Method              method        = Method::Mean;
+    Rejection           rejection     = Rejection::Winsorized;
     NormalizationMethod normalization = NormalizationMethod::AdditiveScaling;
-    WeightingType weighting = WeightingType::None;
-    
-    // Rejection parameters
-    float sigmaLow = 3.0f;       ///< Low rejection sigma/percentile
-    float sigmaHigh = 3.0f;      ///< High rejection sigma/percentile
-    bool createRejectionMaps = false;  ///< Generate rejection maps
-    bool mergeRejectionMaps = false;   ///< Merge low/high maps
-    
-    // Normalization options
-    bool forceNormalization = false;   ///< Force recalculation
-    bool fastNormalization = false;     ///< Use fast (lite) mode
-    bool outputNormalization = true;   ///< Normalize output to [0,1]
-    bool equalizeRGB = false;           ///< Equalize RGB channels
-    
-    // Advanced options
-    bool maximizeFraming = false;      ///< Extend to include all images
-    bool upscaleAtStacking = false;    ///< 2x upscale during stacking
-    bool drizzle = false;              ///< Enable Drizzle stacking
-    double drizzleScale = 2.0;         ///< Drizzle output scale
-    double drizzlePixFrac = 0.9;       ///< Drizzle pixel fraction
-    DrizzleKernelType drizzleKernel = DrizzleKernelType::Square; ///< Drizzle kernel type
-    bool drizzleFast = false;          ///< Enable Fast Drizzle (point kernel)
-    bool force32Bit = false;           ///< Force 32-bit float output
-    int featherDistance = 0;           ///< Feather pixels for blending
-    bool overlapNormalization = false; ///< Normalize on overlap regions
-    
-    // Reference image
-    int refImageIndex = 0;             ///< Index of reference image
+    WeightingType       weighting     = WeightingType::None;
 
-    // Comet Registration
-    bool useCometMode = false;
-    double cometVx = 0.0; // Pixels per hour
-    double cometVy = 0.0;
-    QString refDate; // Reference date (ISO string) for zero shift
+    // -- Rejection parameters ------------------------------------------------
+    float sigmaLow              = 3.0f;     ///< Low-side rejection sigma / percentile.
+    float sigmaHigh             = 3.0f;     ///< High-side rejection sigma / percentile.
+    bool  createRejectionMaps   = false;    ///< Generate per-pixel rejection maps.
+    bool  mergeRejectionMaps    = false;    ///< Merge low/high maps into a single map.
 
-    // Cosmetic Correction
-    bool useCosmetic = false;          ///< Enable Cosmetic Correction
-    float cosmeticHotSigma = 3.0f;     ///< Sigma for Hot Pixels
-    float cosmeticColdSigma = 3.0f;    ///< Sigma for Cold Pixels
-    bool cosmeticIsCFA = true;         ///< Treat as CFA (preserve Bayer pattern)
-    QString cosmeticMapFile;           ///< Path to Bad Pixel Map (optional)
-    
-    // Image filtering
-    ImageFilter filter = ImageFilter::Selected;
-    FilterMode filterMode = FilterMode::Percentage;
-    double filterParameter = 100.0;    ///< Percentage or k-sigma value
-    
-    // Output
+    // -- Normalization options ------------------------------------------------
+    bool forceNormalization     = false;    ///< Force re-computation of coefficients.
+    bool fastNormalization      = false;    ///< Use the fast (lite) estimator.
+    bool outputNormalization    = true;     ///< Normalize the output to [0, 1].
+    bool equalizeRGB            = false;    ///< Equalize channel medians in the output.
+
+    // -- Advanced options -----------------------------------------------------
+    bool              maximizeFraming    = false;    ///< Extend canvas to include all frames.
+    bool              upscaleAtStacking  = false;    ///< 2x up-scale during integration.
+    bool              drizzle            = false;    ///< Enable drizzle integration.
+    double            drizzleScale       = 2.0;      ///< Drizzle output scale factor.
+    double            drizzlePixFrac     = 0.9;      ///< Drizzle drop-size fraction.
+    DrizzleKernelType drizzleKernel      = DrizzleKernelType::Square;
+    bool              drizzleFast        = false;    ///< Use point kernel for speed.
+    bool              force32Bit         = false;    ///< Force 32-bit float output.
+    int               featherDistance    = 0;        ///< Edge-feathering width (pixels).
+    bool              overlapNormalization = false;   ///< Normalise using overlap regions only.
+
+    // -- Reference frame ------------------------------------------------------
+    int refImageIndex = 0;                  ///< Index of the reference image.
+
+    // -- Comet mode -----------------------------------------------------------
+    bool    useCometMode = false;
+    double  cometVx      = 0.0;             ///< Comet velocity X (pixels / hour).
+    double  cometVy      = 0.0;             ///< Comet velocity Y (pixels / hour).
+    QString refDate;                        ///< ISO-8601 date string for zero-shift reference.
+
+    // -- Cosmetic correction --------------------------------------------------
+    bool    useCosmetic       = false;      ///< Enable hot/cold pixel correction.
+    float   cosmeticHotSigma  = 3.0f;       ///< Sigma threshold for hot pixels.
+    float   cosmeticColdSigma = 3.0f;       ///< Sigma threshold for cold pixels.
+    bool    cosmeticIsCFA     = true;        ///< Preserve Bayer pattern during correction.
+    QString cosmeticMapFile;                ///< Optional external bad-pixel map.
+
+    // -- Image filtering ------------------------------------------------------
+    ImageFilter filter          = ImageFilter::Selected;
+    FilterMode  filterMode      = FilterMode::Percentage;
+    double      filterParameter = 100.0;    ///< Percentage (0-100) or k-sigma value.
+
+    // -- Output ---------------------------------------------------------------
     QString outputFilename;
-    bool overwriteOutput = false;
-    
-    // Registration layer (for multi-channel sequence)
-    int registrationLayer = 0;  ///< Which layer has registration data
-    
-    // Debayering (On-the-fly)
-    // Note: Depends on Preprocessing types
-    bool debayer = false;
-    Preprocessing::BayerPattern bayerPattern = Preprocessing::BayerPattern::None;
-    Preprocessing::DebayerAlgorithm debayerMethod = Preprocessing::DebayerAlgorithm::VNG;
-    
-    /**
-     * @brief Check if rejection is applicable for current method
-     */
-    bool hasRejection() const {
+    bool    overwriteOutput = false;
+
+    // -- Registration layer ---------------------------------------------------
+    int registrationLayer = 0;              ///< Channel index carrying registration data.
+
+    // -- On-the-fly debayering ------------------------------------------------
+    bool                              debayer       = false;
+    Preprocessing::BayerPattern       bayerPattern  = Preprocessing::BayerPattern::None;
+    Preprocessing::DebayerAlgorithm   debayerMethod = Preprocessing::DebayerAlgorithm::VNG;
+
+    // -- Convenience predicates -----------------------------------------------
+
+    /** @brief True when the current method + rejection settings imply pixel rejection. */
+    bool hasRejection() const
+    {
         return method == Method::Mean && rejection != Rejection::None;
     }
-    
-    /**
-     * @brief Check if normalization is applicable for current method
-     */
-    bool hasNormalization() const {
+
+    /** @brief True when the current method + normalisation settings imply normalisation. */
+    bool hasNormalization() const
+    {
         return (method == Method::Mean || method == Method::Median) &&
                normalization != NormalizationMethod::None;
     }
 };
 
+// ============================================================================
+// Callback typedefs
+// ============================================================================
+
 /**
- * @brief Progress callback function type
- * 
- * Parameters: message, progress (0.0-1.0, or -1 for indeterminate)
+ * @brief Progress reporting callback.
+ *
+ * @param message  Human-readable status string.
+ * @param progress Fractional progress in [0.0, 1.0], or -1 for indeterminate.
  */
 using ProgressCallback = std::function<void(const QString&, double)>;
 
 /**
- * @brief Cancellation check function type
- * 
- * Returns true if operation should be cancelled
+ * @brief Cancellation polling callback.
+ *
+ * The stacking engine calls this periodically; returning true requests
+ * cancellation of the current operation.
  */
 using CancelCheck = std::function<bool()>;
 
 /**
- * @brief Log callback function type
- * 
- * Parameters: message, color (optional)
+ * @brief Log-message callback.
+ *
+ * @param message Human-readable log text.
+ * @param colour  Optional colour hint for the UI (e.g. "red", "green").
  */
 using LogCallback = std::function<void(const QString&, const QString&)>;
 
-//=============================================================================
-// CONSTANTS
-//=============================================================================
+// ============================================================================
+// Compile-time constants
+// ============================================================================
 
-/**
- * @brief Maximum number of images for overlap normalization warning
- */
+/** @brief Overlap normalisation is impractical above this image count. */
 constexpr int MAX_IMAGES_FOR_OVERLAP = 30;
 
-/**
- * @brief Minimum images required for rejection algorithms
- */
+/** @brief Minimum stack depth required for rejection algorithms to operate. */
 constexpr int MIN_IMAGES_FOR_REJECTION = 3;
 
-/**
- * @brief Maximum parallel blocks for memory management
- */
+/** @brief Upper limit on parallel block count (memory-management bound). */
 constexpr int MAX_PARALLEL_BLOCKS = 256;
 
-//=============================================================================
-// HELPER FUNCTIONS
-//=============================================================================
+// ============================================================================
+// String conversion helpers
+// ============================================================================
 
-/**
- * @brief Convert Method enum to string
- */
-inline QString methodToString(Method m) {
+/** @brief Human-readable name for a stacking Method. */
+inline QString methodToString(Method m)
+{
     switch (m) {
-        case Method::Sum:    return QStringLiteral("Sum");
-        case Method::Mean:   return QStringLiteral("Mean");
-        case Method::Median: return QStringLiteral("Median");
-        case Method::Max:    return QStringLiteral("Maximum");
-        case Method::Min:    return QStringLiteral("Minimum");
-        default:             return QStringLiteral("Unknown");
+    case Method::Sum:    return QStringLiteral("Sum");
+    case Method::Mean:   return QStringLiteral("Mean");
+    case Method::Median: return QStringLiteral("Median");
+    case Method::Max:    return QStringLiteral("Maximum");
+    case Method::Min:    return QStringLiteral("Minimum");
+    default:             return QStringLiteral("Unknown");
     }
 }
 
-/**
- * @brief Convert Rejection enum to string
- */
-inline QString rejectionToString(Rejection r) {
+/** @brief Human-readable name for a Rejection algorithm. */
+inline QString rejectionToString(Rejection r)
+{
     switch (r) {
-        case Rejection::None:        return QStringLiteral("None");
-        case Rejection::Percentile:  return QStringLiteral("Percentile Clipping");
-        case Rejection::Sigma:       return QStringLiteral("Sigma Clipping");
-        case Rejection::MAD:         return QStringLiteral("MAD Clipping");
-        case Rejection::SigmaMedian: return QStringLiteral("Sigma-Median Clipping");
-        case Rejection::Winsorized:  return QStringLiteral("Winsorized Sigma");
-        case Rejection::LinearFit:   return QStringLiteral("Linear Fit Clipping");
-        case Rejection::GESDT:       return QStringLiteral("Generalized ESD Test");
-        case Rejection::Biweight:    return QStringLiteral("Biweight Estimator");
-        case Rejection::ModifiedZScore: return QStringLiteral("Modified Z-Score");
-        default:                     return QStringLiteral("Unknown");
+    case Rejection::None:           return QStringLiteral("None");
+    case Rejection::Percentile:     return QStringLiteral("Percentile Clipping");
+    case Rejection::Sigma:          return QStringLiteral("Sigma Clipping");
+    case Rejection::MAD:            return QStringLiteral("MAD Clipping");
+    case Rejection::SigmaMedian:    return QStringLiteral("Sigma-Median Clipping");
+    case Rejection::Winsorized:     return QStringLiteral("Winsorized Sigma");
+    case Rejection::LinearFit:      return QStringLiteral("Linear Fit Clipping");
+    case Rejection::GESDT:          return QStringLiteral("Generalized ESD Test");
+    case Rejection::Biweight:       return QStringLiteral("Biweight Estimator");
+    case Rejection::ModifiedZScore: return QStringLiteral("Modified Z-Score");
+    default:                        return QStringLiteral("Unknown");
     }
 }
 
-/**
- * @brief Convert Normalization enum to string
- */
-inline QString normalizationToString(NormalizationMethod n) {
+/** @brief Human-readable name for a NormalizationMethod. */
+inline QString normalizationToString(NormalizationMethod n)
+{
     switch (n) {
-        case NormalizationMethod::None:                  return QStringLiteral("None");
-        case NormalizationMethod::Additive:              return QStringLiteral("Additive");
-        case NormalizationMethod::Multiplicative:        return QStringLiteral("Multiplicative");
-        case NormalizationMethod::AdditiveScaling:       return QStringLiteral("Additive + Scaling");
-        case NormalizationMethod::MultiplicativeScaling: return QStringLiteral("Multiplicative + Scaling");
-        default:                                         return QStringLiteral("Unknown");
+    case NormalizationMethod::None:                   return QStringLiteral("None");
+    case NormalizationMethod::Additive:               return QStringLiteral("Additive");
+    case NormalizationMethod::Multiplicative:         return QStringLiteral("Multiplicative");
+    case NormalizationMethod::AdditiveScaling:        return QStringLiteral("Additive + Scaling");
+    case NormalizationMethod::MultiplicativeScaling:  return QStringLiteral("Multiplicative + Scaling");
+    default:                                          return QStringLiteral("Unknown");
     }
 }
 
-/**
- * @brief Convert Weighting enum to string
- */
-inline QString weightingToString(WeightingType w) {
+/** @brief Human-readable name for a WeightingType. */
+inline QString weightingToString(WeightingType w)
+{
     switch (w) {
-        case WeightingType::None:        return QStringLiteral("None");
-        case WeightingType::StarCount:   return QStringLiteral("Star Count");
-        case WeightingType::WeightedFWHM:return QStringLiteral("Weighted FWHM");
-        case WeightingType::Noise:       return QStringLiteral("Noise");
-        case WeightingType::Roundness:   return QStringLiteral("Roundness");
-        case WeightingType::Quality:     return QStringLiteral("Quality");
-        case WeightingType::StackCount:  return QStringLiteral("Stack Count");
-        default:                     return QStringLiteral("Unknown");
+    case WeightingType::None:         return QStringLiteral("None");
+    case WeightingType::StarCount:    return QStringLiteral("Star Count");
+    case WeightingType::WeightedFWHM: return QStringLiteral("Weighted FWHM");
+    case WeightingType::Noise:        return QStringLiteral("Noise");
+    case WeightingType::Roundness:    return QStringLiteral("Roundness");
+    case WeightingType::Quality:      return QStringLiteral("Quality");
+    case WeightingType::StackCount:   return QStringLiteral("Stack Count");
+    default:                          return QStringLiteral("Unknown");
     }
 }
 

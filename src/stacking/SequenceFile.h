@@ -1,118 +1,154 @@
 #ifndef SEQUENCE_FILE_H
 #define SEQUENCE_FILE_H
 
+/**
+ * @file SequenceFile.h
+ * @brief Persistent sequence file format (.tseq) for image stacking.
+ *
+ * A SequenceFile stores an ordered list of images together with per-frame
+ * metadata (selection state, calibration/registration status, quality metrics,
+ * and homography registration data).  The file is serialised as JSON.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
+
 #include <QString>
 #include <QVector>
 #include <QJsonObject>
+
 #include "StackingTypes.h"
 
 namespace Stacking {
 
 /**
- * @brief Persistent sequence file format (.tseq)
- * 
- * Stores sequence metadata, image list, calibration/registration status,
- * and quality metrics for each frame.
+ * @brief Manages a sequence of images for calibration or stacking.
+ *
+ * Provides methods for loading/saving from JSON, filtering by quality,
+ * and managing per-image selection and registration state.
  */
 class SequenceFile {
 public:
+    // ---- Per-image entry ---------------------------------------------------
+
     /**
-     * @brief Per-image entry in sequence
+     * @brief Metadata for a single image within the sequence.
      */
     struct ImageEntry {
         QString filename;
-        bool selected = true;
-        bool calibrated = false;
-        bool registered = false;
-        
+        bool    selected   = true;
+        bool    calibrated = false;
+        bool    registered = false;
+
         // Quality metrics
-        double fwhm = 0.0;
-        double roundness = 0.0;
-        double background = 0.0;
-        int starsDetected = 0;
-        
-        // Registration data (if registered)
+        double fwhm          = 0.0;
+        double roundness      = 0.0;
+        double background     = 0.0;
+        int    starsDetected  = 0;
+
+        // Registration data (populated after alignment)
         RegistrationData regData;
-        
+
+        /** @brief Serialise this entry to a JSON object. */
         QJsonObject toJson() const;
+
+        /** @brief Deserialise an entry from a JSON object. */
         static ImageEntry fromJson(const QJsonObject& obj);
     };
-    
+
+    // ---- Sequence type -----------------------------------------------------
+
+    /**
+     * @brief Classification of the frame type contained in this sequence.
+     */
     enum class SequenceType {
         Lights,
         Biases,
         Darks,
         Flats
     };
-    
+
+    // ---- Construction ------------------------------------------------------
+
     SequenceFile();
     ~SequenceFile() = default;
-    
-    // File I/O
+
+    // ---- File I/O ----------------------------------------------------------
+
+    /** @brief Load a sequence from a .tseq JSON file. */
     bool load(const QString& path);
+
+    /** @brief Save the sequence to the specified path. */
     bool save(const QString& path) const;
-    bool save() const;  // Save to loaded path
-    
-    // Image Management
+
+    /** @brief Save to the path from which the sequence was last loaded. */
+    bool save() const;
+
+    // ---- Image management --------------------------------------------------
+
     void addImage(const QString& filename);
     void addImages(const QStringList& filenames);
     void removeImage(int index);
     void clear();
-    
-    int count() const { return m_images.size(); }
+
+    int count()         const { return m_images.size(); }
     int selectedCount() const;
-    
-    ImageEntry& image(int index) { return m_images[index]; }
+
+    ImageEntry&       image(int index)       { return m_images[index]; }
     const ImageEntry& image(int index) const { return m_images[index]; }
-    QVector<ImageEntry>& images() { return m_images; }
+
+    QVector<ImageEntry>&       images()       { return m_images; }
     const QVector<ImageEntry>& images() const { return m_images; }
-    
-    // Selection
+
+    // ---- Selection ---------------------------------------------------------
+
     void selectAll();
     void selectNone();
     void toggleSelection(int index);
     void setSelected(int index, bool selected);
-    
-    // Reference Image
-    int referenceIndex() const { return m_referenceIndex; }
+
+    // ---- Reference image ---------------------------------------------------
+
+    int  referenceIndex() const { return m_referenceIndex; }
     void setReferenceIndex(int index);
-    
-    // Sequence Properties
-    SequenceType type() const { return m_type; }
-    void setType(SequenceType type) { m_type = type; }
-    
-    QString basePath() const { return m_basePath; }
-    void setBasePath(const QString& path) { m_basePath = path; }
-    
-    // Registration Settings
-    bool useDrizzle() const { return m_useDrizzle; }
-    void setUseDrizzle(bool use) { m_useDrizzle = use; }
-    
-    // Status
-    bool isValid() const { return !m_images.isEmpty(); }
+
+    // ---- Sequence properties -----------------------------------------------
+
+    SequenceType type() const             { return m_type; }
+    void         setType(SequenceType t)  { m_type = t; }
+
+    QString basePath() const                     { return m_basePath; }
+    void    setBasePath(const QString& path)     { m_basePath = path; }
+
+    bool useDrizzle() const        { return m_useDrizzle; }
+    void setUseDrizzle(bool use)   { m_useDrizzle = use; }
+
+    // ---- Status ------------------------------------------------------------
+
+    bool    isValid()  const { return !m_images.isEmpty(); }
     QString filePath() const { return m_filePath; }
-    
-    // Quality Filtering
+
+    // ---- Quality filtering -------------------------------------------------
+
     void filterByFWHM(double maxFWHM);
     void filterByRoundness(double minRoundness);
     void filterByStars(int minStars);
     void filterBestPercent(double percent);
-    
-    // Serialization
+
+    // ---- Serialisation helpers ----------------------------------------------
+
     QJsonObject toJson() const;
     bool fromJson(const QJsonObject& obj);
-    
-    // Static helpers
-    static QString typeToString(SequenceType type);
+
+    static QString      typeToString(SequenceType type);
     static SequenceType typeFromString(const QString& str);
-    
+
 private:
     QVector<ImageEntry> m_images;
-    SequenceType m_type = SequenceType::Lights;
-    QString m_basePath;
-    QString m_filePath;
-    int m_referenceIndex = 0;
-    bool m_useDrizzle = false;
+    SequenceType        m_type           = SequenceType::Lights;
+    QString             m_basePath;
+    QString             m_filePath;
+    int                 m_referenceIndex = 0;
+    bool                m_useDrizzle     = false;
 };
 
 } // namespace Stacking

@@ -1,32 +1,50 @@
 #pragma once
 
+// ============================================================================
+// ColorProfileManager.h
+// ICC color profile representation and application-wide workspace management.
+// Uses LittleCMS (lcms2) for profile creation and pixel-level transforms.
+// ============================================================================
+
 #include <QString>
 #include <QByteArray>
 #include <QObject>
 #include <QMutex>
 #include <memory>
 
-// Forward declarations
 class ImageBuffer;
 
 namespace core {
 
+// ----------------------------------------------------------------------------
+// Enumerations
+// ----------------------------------------------------------------------------
+
+/** Standard ICC color profiles supported natively. */
 enum class StandardProfile {
     sRGB,
     AdobeRGB,
     ProPhotoRGB,
     LinearRGB,
-    Custom
+    Custom          ///< User-supplied ICC profile from file or embedded data
 };
 
+/** Policy for automatic color profile conversion on image load. */
 enum class AutoConversionMode {
-    Never,      // Never ask, don't convert
-    Ask,        // Ask user for each mismatch
-    Always      // Auto-convert without asking
+    Never,          ///< Never convert; leave data as-is
+    Ask,            ///< Prompt the user on each mismatch
+    Always          ///< Automatically convert to workspace profile
 };
+
+// ----------------------------------------------------------------------------
+// ColorProfile
+// ----------------------------------------------------------------------------
 
 /**
- * @brief Represents a Color Profile (ICC) for images or workspace.
+ * @brief Encapsulates an ICC color profile (standard or custom).
+ *
+ * Instances can be constructed from a StandardProfile enum, an ICC file path,
+ * or raw ICC data bytes (e.g. embedded in a TIFF or PNG).
  */
 class ColorProfile {
 public:
@@ -35,26 +53,33 @@ public:
     explicit ColorProfile(const QString& iccFilePath);
     explicit ColorProfile(const QByteArray& iccData);
 
-    bool isValid() const;
-    StandardProfile type() const;
-    QString name() const;
-    QByteArray iccData() const;
+    bool            isValid() const;
+    StandardProfile type()    const;
+    QString         name()    const;
+    QByteArray      iccData() const;
 
     bool operator==(const ColorProfile& other) const;
     bool operator!=(const ColorProfile& other) const;
 
 private:
     StandardProfile m_type;
-    QString m_name;
-    QByteArray m_iccData;
-    bool m_valid;
-    
+    QString         m_name;
+    QByteArray      m_iccData;
+    bool            m_valid;
+
     void loadStandardProfile(StandardProfile type);
 };
 
+// ----------------------------------------------------------------------------
+// ColorProfileManager (Singleton)
+// ----------------------------------------------------------------------------
+
 /**
- * @brief Manages Application Workspace color profiles and conversions.
- * Implements the Singleton pattern.
+ * @brief Manages the application workspace color profile and performs
+ *        ICC-based color space conversions.
+ *
+ * Thread-safe singleton. Persists workspace preference and auto-conversion
+ * mode via QSettings.
  */
 class ColorProfileManager : public QObject {
     Q_OBJECT
@@ -62,26 +87,34 @@ class ColorProfileManager : public QObject {
 public:
     static ColorProfileManager& instance();
 
-    // Workspace management
-    void setWorkspaceProfile(const ColorProfile& profile);
+    // -- Workspace profile management -----------------------------------------
+    void         setWorkspaceProfile(const ColorProfile& profile);
     ColorProfile workspaceProfile() const;
-    
-    // Auto-conversion preference  
-    void setAutoConversionMode(AutoConversionMode mode);
+
+    // -- Auto-conversion preference -------------------------------------------
+    void               setAutoConversionMode(AutoConversionMode mode);
     AutoConversionMode autoConversionMode() const;
 
-    // Reload settings from QSettings
+    /** Reload workspace profile and auto-conversion mode from QSettings. */
     void syncSettings();
 
-    // Image operations & Validation
-    bool isMismatch(const ColorProfile& imageProfile) const;
-    bool convertToWorkspace(ImageBuffer& buffer, const ColorProfile& sourceProfile);
-    bool convertProfile(ImageBuffer& buffer, const ColorProfile& sourceProfile, const ColorProfile& targetProfile);
+    // -- Image operations -----------------------------------------------------
 
-    /**
-     * @brief Asynchronous version of convertProfile. Returns a Task that can be submitted to TaskManager.
-     */
-    void convertProfileAsync(ImageBuffer& buffer, const ColorProfile& sourceProfile, const ColorProfile& targetProfile);
+    /** Check whether the image profile differs from the workspace profile. */
+    bool isMismatch(const ColorProfile& imageProfile) const;
+
+    /** Convert the buffer from sourceProfile to the current workspace profile. */
+    bool convertToWorkspace(ImageBuffer& buffer, const ColorProfile& sourceProfile);
+
+    /** Convert the buffer between two arbitrary profiles. */
+    bool convertProfile(ImageBuffer& buffer,
+                        const ColorProfile& sourceProfile,
+                        const ColorProfile& targetProfile);
+
+    /** Asynchronous version of convertProfile (submitted to TaskManager). */
+    void convertProfileAsync(ImageBuffer& buffer,
+                             const ColorProfile& sourceProfile,
+                             const ColorProfile& targetProfile);
 
 signals:
     void workspaceProfileChanged(const ColorProfile& newProfile);
@@ -94,9 +127,9 @@ private:
     ~ColorProfileManager();
     Q_DISABLE_COPY(ColorProfileManager)
 
-    ColorProfile m_workspaceProfile;
+    ColorProfile       m_workspaceProfile;
     AutoConversionMode m_autoConversionMode;
-    mutable QMutex m_mutex;
+    mutable QMutex     m_mutex;
 };
 
 } // namespace core

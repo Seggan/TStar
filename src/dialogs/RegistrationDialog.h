@@ -1,16 +1,14 @@
 /**
  * @file RegistrationDialog.h
- * @brief Dialog for image registration/alignment
- * 
+ * @brief Dialog for multi-image star-based registration and alignment.
+ *
  * Copyright (C) 2024-2026 TStar Team
  */
-
 #ifndef REGISTRATION_DIALOG_H
 #define REGISTRATION_DIALOG_H
 
 #include <QDialog>
 #include <QTableWidget>
-#include <QComboBox>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
@@ -28,67 +26,81 @@
 class MainWindow;
 
 /**
- * @brief Image registration dialog
+ * @brief Dialog for performing star-based image registration on a sequence.
+ *
+ * Provides controls for loading an image sequence, selecting a reference frame,
+ * configuring detection and matching parameters, and running the registration
+ * process in a background worker thread.
  */
-class RegistrationDialog : public QDialog {
+class RegistrationDialog : public QDialog
+{
     Q_OBJECT
-    
+
 public:
     explicit RegistrationDialog(MainWindow* parent = nullptr);
     ~RegistrationDialog() override;
-    
+
+    /**
+     * @brief Assigns an existing image sequence to the dialog and refreshes the UI.
+     * @param sequence Ownership is transferred to this dialog.
+     */
     void setSequence(std::unique_ptr<Stacking::ImageSequence> sequence);
+
+    /**
+     * @brief Returns a non-owning pointer to the current image sequence.
+     */
     Stacking::ImageSequence* sequence() { return m_sequence.get(); }
-    
+
 private slots:
     void onLoadSequence();
     void onSetReference();
     void onAutoFindReference();
-    
+
     void onStartRegistration();
     void onCancel();
-    
+
     void onProgressChanged(const QString& message, double progress);
     void onLogMessage(const QString& message, const QString& color);
     void onImageRegistered(int index, bool success);
     void onFinished(int successCount);
-    
+
 private:
     void setupUI();
     void updateTable();
     void updateReferenceLabel();
     Stacking::RegistrationParams gatherParams() const;
-    
-    // UI
-    QGroupBox* m_sequenceGroup;
+
+    // Sequence group widgets
+    QGroupBox*    m_sequenceGroup;
     QTableWidget* m_imageTable;
-    QPushButton* m_loadBtn;
-    QPushButton* m_setRefBtn;
-    QPushButton* m_autoRefBtn;
-    QLabel* m_referenceLbl;
-    
-    QGroupBox* m_paramsGroup;
-    QLineEdit* m_outputDir; // New output directory field
+    QPushButton*  m_loadBtn;
+    QPushButton*  m_setRefBtn;
+    QPushButton*  m_autoRefBtn;
+    QLabel*       m_referenceLbl;
+
+    // Parameters group widgets
+    QGroupBox*      m_paramsGroup;
+    QLineEdit*      m_outputDir;
     QDoubleSpinBox* m_detectionSigma;
-    QSpinBox* m_minStars;
-    QSpinBox* m_maxStars;
+    QSpinBox*       m_minStars;
+    QSpinBox*       m_maxStars;
     QDoubleSpinBox* m_matchTolerance;
-    QCheckBox* m_allowRotation;
-    QCheckBox* m_highPrecision;
-    
-    QGroupBox* m_progressGroup;
+    QCheckBox*      m_allowRotation;
+    QCheckBox*      m_highPrecision;
+
+    // Progress group widgets
+    QGroupBox*   m_progressGroup;
     QProgressBar* m_progressBar;
-    QTextEdit* m_logText;
+    QTextEdit*   m_logText;
     QPushButton* m_startBtn;
     QPushButton* m_cancelBtn;
-    
-    QLabel* m_summaryLabel;
-    
-    // Data
-    std::unique_ptr<Stacking::ImageSequence> m_sequence;
+    QLabel*      m_summaryLabel;
+
+    // Data members
+    std::unique_ptr<Stacking::ImageSequence>    m_sequence;
     std::unique_ptr<Stacking::RegistrationWorker> m_worker;
     MainWindow* m_mainWindow;
-    bool m_isRunning = false;
+    bool        m_isRunning = false;
 };
 
 #endif // REGISTRATION_DIALOG_H

@@ -1063,6 +1063,10 @@
             <translation type="finished">Ajuster</translation>
         </message>
         <message>
+            <source>Manual blink</source>
+            <translation type="finished">Blink manual</translation>
+        </message>
+        <message>
             <source>No Image</source>
             <translation type="finished">Aucune Image</translation>
         </message>
@@ -1112,6 +1116,14 @@
         <message>
             <source>Cache Cleared</source>
             <translation type="finished">Cache vidé</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Cancelling...</source>
+            <translation type="finished">Annulation...</translation>
         </message>
         <message>
             <source>Catalog Background Extraction</source>
@@ -3532,6 +3544,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Aligner les Canaux</translation>
         </message>
         <message>
+            <source>Align images in sequence</source>
+            <translation type="finished">Aligner les images en séquence</translation>
+        </message>
+        <message>
             <source>Aligns a sequence of calibrated images to a common reference frame using star-based registration with sub-pixel accuracy:</source>
             <translation type="finished">Aligne une séquence d'images calibrées sur un image de référence commune en utilisant l'enregistrement basé sur les étoiles avec une précision sub-pixel :</translation>
         </message>
@@ -3562,6 +3578,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Analyzes the difference between your image and the reference to build a highly accurate gradient model</source>
             <translation type="finished">Analyse la différence entre votre image et la référence pour construire un modèle de gradient très précis</translation>
+        </message>
+        <message>
+            <source>Appendix: Scripting Commands Reference</source>
+            <translation type="finished">Appendice : Référence des Commandes de Scripting</translation>
         </message>
         <message>
             <source>Applies Kappa-Sigma rejection multiple times for aggressive outlier removal.</source>
@@ -3652,6 +3672,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Suppression de fond : Appliquer ABE ou CBE pour éliminer les gradients</translation>
         </message>
         <message>
+            <source>Basic pixel math</source>
+            <translation type="finished">Opérations de base sur les pixels</translation>
+        </message>
+        <message>
             <source>Batch Crop: applies the same crop to all currently open images</source>
             <translation type="finished">Recadrage par lot : applique le même recadrage à toutes les images ouvertes</translation>
         </message>
@@ -3704,6 +3728,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">CLAHE</translation>
         </message>
         <message>
+            <source>Calibrate sequence</source>
+            <translation type="finished">Calibrer la séquence</translation>
+        </message>
+        <message>
             <source>Calibrates colors using star catalog data:</source>
             <translation type="finished">Calibre les couleurs à l'aide des données du catalogue d'étoiles :</translation>
         </message>
@@ -3718,6 +3746,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Catalog Background Extraction (CBE)</source>
             <translation type="finished">Extraction de Fond par Catalogue (CBE)</translation>
+        </message>
+        <message>
+            <source>Change working directory</source>
+            <translation type="finished">Changer le répertoire de travail</translation>
         </message>
         <message>
             <source>Channel Choice:</source>
@@ -3790,6 +3822,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Close</source>
             <translation type="finished">Fermer</translation>
+        </message>
+        <message>
+            <source>Close the current image</source>
+            <translation type="finished">Fermer l'image actuelle</translation>
         </message>
         <message>
             <source>Closing Project: Use File &gt; Close Project to deactivate the current project</source>
@@ -3952,6 +3988,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Créer des images maîtres : Moyenn ez les expositions bias/dark/flat multiples par filtre</translation>
         </message>
         <message>
+            <source>Create RGB from mono channels</source>
+            <translation type="finished">Créer RGB à partir de canaux mono</translation>
+        </message>
+        <message>
             <source>Create and apply masks for selective processing:</source>
             <translation type="finished">Créer et appliquer des masques pour un traitement sélectif :</translation>
         </message>
@@ -3972,6 +4012,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Recadrer et faire pivoter l'image avec précision :</translation>
         </message>
         <message>
+            <source>Crop image to box or selection</source>
+            <translation type="finished">Recadrer l'image sur la case ou la sélection</translation>
+        </message>
+        <message>
             <source>Ctrl+Z / Ctrl+Shift+Z</source>
             <translation type="finished">Ctrl+Z / Ctrl+Shift+Z</translation>
         </message>
@@ -3986,6 +4030,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Debayer</source>
             <translation type="finished">Debayer</translation>
+        </message>
+        <message>
+            <source>Debayer current image or sequence</source>
+            <translation type="finished">Debayer l'image actuelle ou la séquence</translation>
         </message>
         <message>
             <source>Debayer:</source>
@@ -4076,6 +4124,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Égalise l'intensité des canaux RGB en faisant correspondre leurs médianes. C'est essentiel pour obtenir une balance des couleurs neutre avant de combiner des canaux séparés en une image couleur.</translation>
         </message>
         <message>
+            <source>Execute PixelMath formula</source>
+            <translation type="finished">Exécuter la formule PixelMath</translation>
+        </message>
+        <message>
             <source>Execute Stack: Combine and output final integrated image</source>
             <translation type="finished">Exécuter Stack : Combinez et générez l'image intégrée finale</translation>
         </message>
@@ -4132,6 +4184,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Contour Progressif :</translation>
         </message>
         <message>
+            <source>File &amp; Directory</source>
+            <translation type="finished">Fichier et Répertoire</translation>
+        </message>
+        <message>
             <source>First image in sequence used as reference (or manually selected)</source>
             <translation type="finished">La première image de la séquence utilisée comme référence (ou sélectionnée manuellement)</translation>
         </message>
@@ -4162,6 +4218,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Generate masks using Binary, Range Selection, Lightness, Chrominance, Star Mask, and Color-based workflows</source>
             <translation type="finished">Générer des masques utilisant Binary, Range Selection, Lightness, Chrominance, Star Mask et workflows basés sur la couleur</translation>
+        </message>
+        <message>
+            <source>Geometric transformations</source>
+            <translation type="finished">Transformations géométriques</translation>
         </message>
         <message>
             <source>Getting Started</source>
@@ -4264,6 +4324,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Pondération d'image :</translation>
         </message>
         <message>
+            <source>Image math &amp; Geometry</source>
+            <translation type="finished">Mathématiques d'image et Géométrie</translation>
+        </message>
+        <message>
             <source>Improves signal-to-noise ratio by coherent data aggregation</source>
             <translation type="finished">Améliore le rapport signal/bruit par agrégation de données cohérente</translation>
         </message>
@@ -4350,6 +4414,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Load Registered Images: Select the aligned image sequence</source>
             <translation type="finished">Charger les images enregistrées : Sélectionnez la séquence d'images alignées</translation>
+        </message>
+        <message>
+            <source>Load an image into the script context</source>
+            <translation type="finished">Charger une image dans le contexte du script</translation>
         </message>
         <message>
             <source>Load and apply existing mask</source>
@@ -4612,6 +4680,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Flux de travail prédéfinis pour les tâches courantes d'astrophotographie</translation>
         </message>
         <message>
+            <source>Preprocessing &amp; Recovery</source>
+            <translation type="finished">Prétraitement et Récupération</translation>
+        </message>
+        <message>
             <source>Preserve Details:</source>
             <translation type="finished">Préserver les Détails :</translation>
         </message>
@@ -4712,6 +4784,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Supprimer Piédestal</translation>
         </message>
         <message>
+            <source>Remove gradients (ABE)</source>
+            <translation type="finished">Supprimer les gradients (ABE)</translation>
+        </message>
+        <message>
             <source>Removes chromatic aberration and optical artifacts.</source>
             <translation type="finished">Supprime les aberrations chromatiques et les artefacts optiques.</translation>
         </message>
@@ -4772,6 +4848,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Faire pivoter selon n'importe quel angle en degrés</translation>
         </message>
         <message>
+            <source>Run StarNet++ star removal</source>
+            <translation type="finished">Exécuter la suppression d'étoiles StarNet++</translation>
+        </message>
+        <message>
+            <source>Run full automated pipeline</source>
+            <translation type="finished">Exécuter le pipeline automatisé complet</translation>
+        </message>
+        <message>
             <source>SCNR (Selective Color Noise Reduction)</source>
             <translation type="finished">SCNR (Réduction Sélective du Bruit de Couleur)</translation>
         </message>
@@ -4790,6 +4874,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Save Image:</source>
             <translation type="finished">Enregistrer Image :</translation>
+        </message>
+        <message>
+            <source>Save current image (default 32-bit float)</source>
+            <translation type="finished">Enregistrer l'image actuelle (flottant 32 bits par défaut)</translation>
         </message>
         <message>
             <source>Save file</source>
@@ -4894,6 +4982,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Square Root / Logarithmic:</source>
             <translation type="finished">Racine Carrée / Logarithmique :</translation>
+        </message>
+        <message>
+            <source>Stack a sequence</source>
+            <translation type="finished">Empiler une séquence</translation>
+        </message>
+        <message>
+            <source>Stacking &amp; Sequencing</source>
+            <translation type="finished">Empilement et Séquençage</translation>
         </message>
         <message>
             <source>Stacking Workflow:</source>
@@ -5018,6 +5114,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>TStar includes workspace-level color management to keep display and processing behavior consistent across tools and sessions.</source>
             <translation type="finished">TStar inclut une gestion des couleurs au niveau de l'espace de travail pour garder un comportement d'affichage et de traitement cohérent entre outils et sessions.</translation>
+        </message>
+        <message>
+            <source>TStar scripts (.tss) use a simple command-based syntax. Parameters in [brackets] are optional.</source>
+            <translation type="finished">Les scripts TStar (.tss) utilisent une syntaxe simple basée sur des commandes. Les paramètres entre [crochets] sont facultatifs.</translation>
         </message>
         <message>
             <source>TStar supports FITS/FIT, XISF, TIFF/TIF, PNG, JPG/JPEG, BMP and (when LibRaw support is available) major camera RAW formats such as CR2/CR3/NEF/ARW/DNG/ORF/RW2/RAF and others.</source>
@@ -8465,10 +8565,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Détection Étoiles Image...</translation>
         </message>
         <message>
-            <source>Image data buffer is inconsistent.</source>
-            <translation type="finished">Le tampon de données de l'image est incohérent.</translation>
-        </message>
-        <message>
             <source>Initial match: %1 pairs, offset=(%2, %3) arcsec</source>
             <translation type="finished">Correspondance initiale : %1 paires, offset=(%2, %3) arcsec</translation>
         </message>
@@ -8505,10 +8601,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Pas assez d'étoiles de catalogue trouvées (%1).</translation>
         </message>
         <message>
-            <source>Not enough image stars detected (%1).</source>
-            <translation type="finished">Pas assez d'étoiles d'image détectées (%1).</translation>
-        </message>
-        <message>
             <source>Pixel scale is invalid or missing; proceeding without strict scale constraints.</source>
             <translation type="finished">L'échelle des pixels est invalide ou manquante ; poursuite sans contraintes d'échelle strictes.</translation>
         </message>
@@ -8519,6 +8611,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Querying Catalog (VizieR)...</source>
             <translation type="finished">Interrogation Catalogue (VizieR)...</translation>
+        </message>
+        <message>
+            <source>Recalculation resulted in flat match set.</source>
+            <translation type="finished">Le recalcul a donné un ensemble de correspondances plat.</translation>
         </message>
         <message>
             <source>Search radius %1 deg &gt; 3.0 deg: using Gaia 1.0 deg for online query. Recommend ASTAP for wide fields.</source>
@@ -8533,8 +8629,8 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Démarrage Solver Natif. Centre: %1, %2 Rayon: %3 deg</translation>
         </message>
         <message>
-            <source>Starting native solve pipeline...</source>
-            <translation type="finished">Démarrage du pipeline de résolution native...</translation>
+            <source>Starting native solve pipeline in background...</source>
+            <translation type="finished">Démarrage du pipeline de résolution native en arrière-plan...</translation>
         </message>
         <message>
             <source>Too few valid pairs after culling (%1).</source>
@@ -8627,6 +8723,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Échec Calibration.</translation>
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Cancelling...</source>
+            <translation type="finished">Annulation...</translation>
+        </message>
+        <message>
             <source>Catalog Error: %1</source>
             <translation type="finished">Erreur Catalogue : %1</translation>
         </message>
@@ -8657,10 +8761,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Factors (K):\nR: %1\nG: %2\nB: %3\n\nBackground Ref (Detected):\nR: %4\nG: %5\nB: %6\n\nComputed Offsets:\nR: %7\nG: %8\nB: %9</source>
             <translation type="finished">Facteurs (K) :\nR : %1\nV : %2\nB : %3\n\nRéf Fond (Détecté) :\nR : %4\nV : %5\nB : %6\n\nDécalages Calculés :\nR : %7\nV : %8\nB : %9</translation>
-        </message>
-        <message>
-            <source>Image must be plate solved first.</source>
-            <translation type="finished">L'image doit d'abord être résolue astrométriquement.</translation>
         </message>
         <message>
             <source>PCC</source>
@@ -8983,8 +9083,8 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Risolveur interne</translation>
         </message>
         <message>
-            <source>Native solver cancel not supported.</source>
-            <translation type="finished">L'annulation du résolveur natif n'est pas supportée.</translation>
+            <source>Native solver cancel requested.</source>
+            <translation type="finished">Annulation du résolveur natif demandée.</translation>
         </message>
         <message>
             <source>Object Name (e.g. M31)</source>
@@ -10332,6 +10432,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Une deuxième courbe de filtre optionnelle (par ex. en combinant L-Pro con un filtre IR-cut).</translation>
         </message>
         <message>
+            <source>Active image has no plate solution. Solve with ASTAP first.</source>
+            <translation type="finished">L'image active n'a pas de solution astrométrique. Résolvez d'abord avec ASTAP.</translation>
+        </message>
+        <message>
             <source>Applies a single global multiplier per channel. If unchecked, applies a non-linear polynomial warping based on the fitted model.</source>
             <translation type="finished">Applique un multiplicateur global unique par canal. Si désélectionné, applique une déformation polynomiale non linéaire basée sur le modèle ajusté.</translation>
         </message>
@@ -10350,6 +10454,14 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Calibration failed.</source>
             <translation type="finished">Échec de l'étalonnage.</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="finished">Annuler</translation>
+        </message>
+        <message>
+            <source>Cancelling...</source>
+            <translation type="finished">Annulation...</translation>
         </message>
         <message>
             <source>Catalog Error</source>
@@ -10390,10 +10502,6 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Gradient Surface Method:</source>
             <translation type="finished">Méthode de Surface de Gradient :</translation>
-        </message>
-        <message>
-            <source>Image must be plate-solved first.</source>
-            <translation type="finished">L'image doit d'abord être résolue astrométriquement.</translation>
         </message>
         <message>
             <source>LP / Cut Filter 1:</source>
@@ -10781,6 +10889,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Ajouter</translation>
         </message>
         <message>
+            <source>Available commands:\n</source>
+            <translation type="finished">Commandes disponibles:\n</translation>
+        </message>
+        <message>
             <source>Cannot open script file: %1</source>
             <translation type="finished">Impossible d'ouvrir le fichier script : %1</translation>
         </message>
@@ -10867,6 +10979,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Variables</source>
             <translation type="finished">Variables</translation>
+        </message>
+        <message>
+            <source>\nVariables: ${VAR_NAME} or $VAR_NAME</source>
+            <translation type="finished">\nVariables: ${VAR_NAME} ou $VAR_NAME</translation>
         </message>
         <message>
             <source>→ %1</source>
@@ -11137,6 +11253,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">Display Stretch par Défaut :</translation>
         </message>
         <message>
+            <source>Default: inside each project folder</source>
+            <translation type="finished">Par défaut : à l'intérieur de chaque dossier de projet</translation>
+        </message>
+        <message>
             <source>Display</source>
             <translation type="finished">Affichage</translation>
         </message>
@@ -11229,6 +11349,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
             <translation type="finished">ProPhoto RGB</translation>
         </message>
         <message>
+            <source>Project Files Root:</source>
+            <translation type="finished">Racine des fichiers de projet :</translation>
+        </message>
+        <message>
             <source>Restart Required</source>
             <translation type="finished">Redémarrage Requis</translation>
         </message>
@@ -11239,6 +11363,10 @@ Choisissez Non pour appliquer uniquement en mémoire (vous pourrez Enregistrer s
         <message>
             <source>Select GraXpert Executable</source>
             <translation type="finished">Sélectionner Exécutable GraXpert</translation>
+        </message>
+        <message>
+            <source>Select Project Files Root Directory</source>
+            <translation type="finished">Sélectionner le répertoire racine des file di progetto</translation>
         </message>
         <message>
             <source>Select StarNet++ Executable</source>

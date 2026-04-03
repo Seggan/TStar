@@ -1,10 +1,16 @@
 #ifndef UPDATEDIALOG_H
 #define UPDATEDIALOG_H
 
-#include <QDialog>
+// =============================================================================
+// UpdateDialog.h
+// Dialog that presents release notes for a new application version and
+// manages the download-and-install workflow.
+// =============================================================================
+
+#include "DialogBase.h"
+
 #include <QDialog>
 #include <QtNetwork>
-#include <QFile>
 #include <QFile>
 
 class QTextBrowser;
@@ -12,12 +18,14 @@ class QProgressBar;
 class QLabel;
 class QPushButton;
 
-#include "DialogBase.h"
-
 class UpdateDialog : public DialogBase {
     Q_OBJECT
+
 public:
-    UpdateDialog(QWidget* parent, const QString& version, const QString& changelog, const QString& downloadUrl);
+    UpdateDialog(QWidget* parent,
+                 const QString& version,
+                 const QString& changelog,
+                 const QString& downloadUrl);
     ~UpdateDialog();
 
 private slots:
@@ -27,20 +35,24 @@ private slots:
     void onReadyRead();
 
 private:
+    /// Launches the downloaded installer and quits the application.
+    void launchInstaller();
+
+    // Download state
     QString m_downloadUrl;
     QString m_destinationPath;
-    
+
+    // UI widgets
     QTextBrowser* m_changelogView;
     QProgressBar* m_progressBar;
-    QLabel* m_statusLabel;
-    QPushButton* m_updateBtn;
-    QPushButton* m_cancelBtn;
-    
+    QLabel*       m_statusLabel;
+    QPushButton*  m_updateBtn;
+    QPushButton*  m_cancelBtn;
+
+    // Network objects
     QNetworkAccessManager* m_nam;
-    QNetworkReply* m_reply;
-    QFile* m_file;
-    
-    void launchInstaller();
+    QNetworkReply*         m_reply;
+    QFile*                 m_file;
 };
 
 #endif // UPDATEDIALOG_H

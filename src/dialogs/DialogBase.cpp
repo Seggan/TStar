@@ -1,10 +1,15 @@
 #include "DialogBase.h"
 #include "MainWindowCallbacks.h"
+
+#include <QGuiApplication>
 #include <QIcon>
+#include <QScreen>
 #include <QSettings>
 #include <QShowEvent>
-#include <QScreen>
-#include <QGuiApplication>
+
+// ---------------------------------------------------------------------------
+// Construction
+// ---------------------------------------------------------------------------
 
 DialogBase::DialogBase(QWidget* parent,
                        const QString& title,
@@ -12,80 +17,97 @@ DialogBase::DialogBase(QWidget* parent,
                        int defaultHeight,
                        bool deleteOnClose,
                        bool showIcon)
-    : QDialog(parent) {
+    : QDialog(parent)
+{
     initialize(title, defaultWidth, defaultHeight, deleteOnClose, showIcon);
 }
 
+// ---------------------------------------------------------------------------
+// Private initialization
+// ---------------------------------------------------------------------------
+
 void DialogBase::initialize(const QString& title,
-                           int width,
-                           int height,
-                           bool deleteOnClose,
-                           bool showIcon) {
-    // Set up standard properties
+                            int width,
+                            int height,
+                            bool deleteOnClose,
+                            bool showIcon)
+{
+    // Apply the application icon if requested.
     if (showIcon) {
         setWindowIcon(getStandardIcon());
     }
-    
-    
-    // Set delete on close for transient dialogs
+
+    // Mark dialog for automatic deletion when closed (useful for modeless dialogs).
     if (deleteOnClose) {
         setAttribute(Qt::WA_DeleteOnClose);
     }
-    
-    // Set initial properties
+
+    // Apply title and initial dimensions.
     setWindowProperties(title, width, height);
-    
-    // Allow subclass to configure UI
+
+    // Allow the concrete subclass to populate its layout.
     setupDialogUI();
-    
-    // Try to restore saved geometry
-    QString settingsKey = parent() ? parent()->objectName() : metaObject()->className();
+
+    // Attempt to restore geometry from a previous session.
+    QString settingsKey = parent() ? parent()->objectName()
+                                   : metaObject()->className();
     if (!settingsKey.isEmpty()) {
         restoreWindowGeometry(settingsKey);
     }
 }
 
-void DialogBase::showEvent(QShowEvent* event) {
+// ---------------------------------------------------------------------------
+// Event overrides
+// ---------------------------------------------------------------------------
+
+void DialogBase::showEvent(QShowEvent* event)
+{
     QDialog::showEvent(event);
-    
-    // Center on parent window or screen
+
+    // Center on parent window if available, otherwise on the primary screen.
     QWidget* p = parentWidget();
     if (p) {
         p = p->window();
-        QRect parentRect = p->frameGeometry();
-        QRect dlgRect = frameGeometry();
-        
-        // Compute center position
-        int x = parentRect.x() + (parentRect.width() - dlgRect.width()) / 2;
-        int y = parentRect.y() + (parentRect.height() - dlgRect.height()) / 2;
+        const QRect parentRect = p->frameGeometry();
+        const QRect dlgRect    = frameGeometry();
+
+        const int x = parentRect.x() + (parentRect.width()  - dlgRect.width())  / 2;
+        const int y = parentRect.y() + (parentRect.height() - dlgRect.height()) / 2;
         move(x, y);
     } else {
         if (QScreen* screen = QGuiApplication::primaryScreen()) {
-            QRect screenRect = screen->availableGeometry();
-            QRect dlgRect = frameGeometry();
-            int x = screenRect.x() + (screenRect.width() - dlgRect.width()) / 2;
-            int y = screenRect.y() + (screenRect.height() - dlgRect.height()) / 2;
+            const QRect screenRect = screen->availableGeometry();
+            const QRect dlgRect    = frameGeometry();
+
+            const int x = screenRect.x() + (screenRect.width()  - dlgRect.width())  / 2;
+            const int y = screenRect.y() + (screenRect.height() - dlgRect.height()) / 2;
             move(x, y);
         }
     }
 }
 
-void DialogBase::setWindowProperties(const QString& title, int width, int height) {
+// ---------------------------------------------------------------------------
+// Public helpers
+// ---------------------------------------------------------------------------
+
+void DialogBase::setWindowProperties(const QString& title, int width, int height)
+{
     if (!title.isEmpty()) {
         setWindowTitle(title);
     }
-    
     if (width > 0 || height > 0) {
-        resize(width > 0 ? width : size().width(), 
+        resize(width  > 0 ? width  : size().width(),
                height > 0 ? height : size().height());
     }
 }
 
-void DialogBase::setDeleteOnClose(bool enabled) {
+void DialogBase::setDeleteOnClose(bool enabled)
+{
     setAttribute(Qt::WA_DeleteOnClose, enabled);
 }
 
-QIcon DialogBase::getStandardIcon() {
+QIcon DialogBase::getStandardIcon()
+{
     static QIcon icon;
     if (icon.isNull()) {
         icon = QIcon(":/images/Logo.png");
@@ -93,34 +115,43 @@ QIcon DialogBase::getStandardIcon() {
     return icon;
 }
 
-void DialogBase::restoreWindowGeometry(const QString& settingsKey) {
+MainWindowCallbacks* DialogBase::getCallbacks()
+{
+    QWidget* w = this;
+    while (w) {
+        if (auto* mw = dynamic_cast<MainWindowCallbacks*>(w)) {
+            return mw;
+        }
+        w = w->parentWidget();
+    }
+    return nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Geometry persistence
+// ---------------------------------------------------------------------------
+
+void DialogBase::restoreWindowGeometry(const QString& settingsKey)
+{
     if (settingsKey.isEmpty()) {
         return;
     }
-    
+
     QSettings settings("TStar", "TStar");
-    QString geometryKey = settingsKey + "/geometry";
-    
+    const QString geometryKey = settingsKey + "/geometry";
+
     if (settings.contains(geometryKey)) {
         restoreGeometry(settings.value(geometryKey).toByteArray());
     }
 }
 
-void DialogBase::saveWindowGeometry(const QString& settingsKey) {
+void DialogBase::saveWindowGeometry(const QString& settingsKey)
+{
     if (settingsKey.isEmpty()) {
         return;
     }
-    
-    QSettings settings("TStar", "TStar");
-    QString geometryKey = settingsKey + "/geometry";
-    settings.setValue(geometryKey, saveGeometry());
-}
 
-MainWindowCallbacks* DialogBase::getCallbacks() {
-    QWidget* w = this;
-    while (w) {
-        if (MainWindowCallbacks* mw = dynamic_cast<MainWindowCallbacks*>(w)) return mw;
-        w = w->parentWidget();
-    }
-    return nullptr;
+    QSettings settings("TStar", "TStar");
+    const QString geometryKey = settingsKey + "/geometry";
+    settings.setValue(geometryKey, saveGeometry());
 }

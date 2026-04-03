@@ -1,424 +1,629 @@
 #include "SimpleTiffReader.h"
-#include <QFile>
+
+#include <QCoreApplication>
 #include <QDataStream>
 #include <QDebug>
-#include <QCoreApplication>
+#include <QFile>
 
-// Structs for internal use
-struct TiffTag {
-    quint16 tag;
-    quint16 type;
-    quint32 count;
-    quint32 valueOrOffset; // If count*size > 4, this is offset
-};
+// =============================================================================
+// Internal types and TIFF tag constants
+// =============================================================================
 
-// Tag Constants
-const quint16 TAG_ImageWidth = 256;
-const quint16 TAG_ImageLength = 257;
-const quint16 TAG_BitsPerSample = 258;
-const quint16 TAG_Compression = 259;
-// const quint16 TAG_PhotometricInterpretation = 262;
-const quint16 TAG_StripOffsets = 273;
-const quint16 TAG_SamplesPerPixel = 277;
-// const quint16 TAG_RowsPerStrip = 278;
-const quint16 TAG_StripByteCounts = 279;
-const quint16 TAG_SampleFormat = 339; // 3 = Float
-const quint16 TAG_PlanarConfiguration = 284; // 1 = Chunky, 2 = Planar
-const quint16 TAG_TileWidth = 322;
-const quint16 TAG_TileLength = 323;
-const quint16 TAG_TileOffsets = 324;
-const quint16 TAG_TileByteCounts = 325;
+namespace {
 
-bool SimpleTiffReader::readInfo(const QString& path, int& width, int& height, int& channels, int& bitsPerSample, QString* errorMsg) {
+// Baseline TIFF tag identifiers (TIFF 6.0 specification).
+const quint16 TAG_ImageWidth             = 256;
+const quint16 TAG_ImageLength            = 257;
+const quint16 TAG_BitsPerSample          = 258;
+const quint16 TAG_Compression            = 259;
+const quint16 TAG_StripOffsets           = 273;
+const quint16 TAG_SamplesPerPixel        = 277;
+const quint16 TAG_StripByteCounts        = 279;
+const quint16 TAG_PlanarConfiguration    = 284;  // 1 = chunky, 2 = planar
+const quint16 TAG_SampleFormat          = 339;  // 1 = uint, 3 = float
+const quint16 TAG_TileWidth              = 322;
+const quint16 TAG_TileLength             = 323;
+const quint16 TAG_TileOffsets            = 324;
+const quint16 TAG_TileByteCounts         = 325;
+
+// TIFF data type sizes in bytes.
+const int TYPE_SIZES[] = { 0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8 };
+
+} // anonymous namespace
+
+// =============================================================================
+// readInfo: header-only inspection
+// =============================================================================
+
+bool SimpleTiffReader::readInfo(const QString& path,
+                                int&           width,
+                                int&           height,
+                                int&           channels,
+                                int&           bitsPerSample,
+                                QString*       errorMsg)
+{
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        if (errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "File open failed: %1").arg(file.errorString());
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        if (errorMsg)
+            *errorMsg = QCoreApplication::translate(
+                "SimpleTiffReader", "File open failed: %1").arg(file.errorString());
         return false;
     }
 
     QDataStream stream(&file);
     stream.setByteOrder(QDataStream::LittleEndian);
 
+    // Read byte-order indicator ("II" = little-endian, "MM" = big-endian).
     quint16 byteOrder;
     stream >> byteOrder;
-    if (byteOrder == 0x4949) stream.setByteOrder(QDataStream::LittleEndian);
-    else if (byteOrder == 0x4D4D) stream.setByteOrder(QDataStream::BigEndian);
-    else return false;
+    if (byteOrder == 0x4949)
+        stream.setByteOrder(QDataStream::LittleEndian);
+    else if (byteOrder == 0x4D4D)
+        stream.setByteOrder(QDataStream::BigEndian);
+    else
+        return false;
 
+    // Validate the TIFF version magic number (must be 42).
     quint16 version;
     stream >> version;
-    if (version != 42) return false;
+    if (version != 42)
+        return false;
 
+    // Seek to the first Image File Directory (IFD).
     quint32 ifdOffset;
     stream >> ifdOffset;
-    if (!file.seek(ifdOffset)) return false;
+    if (!file.seek(ifdOffset))
+        return false;
 
     quint16 numEntries;
     stream >> numEntries;
 
-    quint32 t_width = 0, t_height = 0;
-    quint16 t_bits = 0, t_channels = 1;
+    quint32 t_width    = 0;
+    quint32 t_height   = 0;
+    quint16 t_bits     = 0;
+    quint16 t_channels = 1;
 
-    for (int i = 0; i < numEntries; ++i) {
+    for (int i = 0; i < numEntries; ++i)
+    {
         quint16 tag, type;
         quint32 count, val;
         stream >> tag >> type >> count >> val;
 
-        if (tag == TAG_ImageWidth) t_width = val;
-        else if (tag == TAG_ImageLength) t_height = val;
-        else if (tag == TAG_SamplesPerPixel) t_channels = val;
-        else if (tag == TAG_BitsPerSample) {
-            if (count == 1) t_bits = val;
-            else if (count == 2) t_bits = val & 0xFFFF;
-            else {
-                qint64 savePos = file.pos();
-                if (file.seek(val)) {
-                    quint16 v; stream >> v; t_bits = v;
+        switch (tag)
+        {
+        case TAG_ImageWidth:      t_width    = val;            break;
+        case TAG_ImageLength:     t_height   = val;            break;
+        case TAG_SamplesPerPixel: t_channels = static_cast<quint16>(val); break;
+
+        case TAG_BitsPerSample:
+            if (count == 1)
+            {
+                t_bits = static_cast<quint16>(val);
+            }
+            else if (count == 2)
+            {
+                t_bits = static_cast<quint16>(val & 0xFFFF);
+            }
+            else
+            {
+                // Value field contains an offset to the actual data.
+                const qint64 savePos = file.pos();
+                if (file.seek(val))
+                {
+                    quint16 v;
+                    stream >> v;
+                    t_bits = v;
                 }
                 file.seek(savePos);
             }
+            break;
+
+        default:
+            break;
         }
     }
 
-    width = t_width;
-    height = t_height;
-    channels = t_channels;
-    bitsPerSample = t_bits;
+    width         = static_cast<int>(t_width);
+    height        = static_cast<int>(t_height);
+    channels      = static_cast<int>(t_channels);
+    bitsPerSample = static_cast<int>(t_bits);
 
     return (width > 0 && height > 0);
 }
 
-bool SimpleTiffReader::readFloat32(const QString& path, int& width, int& height, int& channels, std::vector<float>& data, QString* errorMsg, QString* debugInfo) {
+// =============================================================================
+// readFloat32: full pixel data decode
+// =============================================================================
+
+bool SimpleTiffReader::readFloat32(const QString&      path,
+                                   int&                width,
+                                   int&                height,
+                                   int&                channels,
+                                   std::vector<float>& data,
+                                   QString*            errorMsg,
+                                   QString*            debugInfo)
+{
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        if (errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "File open failed: %1").arg(file.errorString());
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        if (errorMsg)
+            *errorMsg = QCoreApplication::translate(
+                "SimpleTiffReader", "File open failed: %1").arg(file.errorString());
         return false;
     }
 
     QDataStream stream(&file);
-    stream.setByteOrder(QDataStream::LittleEndian); // Default attempt
+    stream.setByteOrder(QDataStream::LittleEndian);
 
-    // 1. Header (8 bytes)
+    // -------------------------------------------------------------------------
+    // 1. Parse TIFF header
+    // -------------------------------------------------------------------------
     quint16 byteOrder;
     stream >> byteOrder;
 
-    if (byteOrder == 0x4949) {
+    if (byteOrder == 0x4949)
         stream.setByteOrder(QDataStream::LittleEndian);
-    } else if (byteOrder == 0x4D4D) {
+    else if (byteOrder == 0x4D4D)
         stream.setByteOrder(QDataStream::BigEndian);
-    } else {
-        if (errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "Invalid TIFF byte order marker.");
+    else
+    {
+        if (errorMsg)
+            *errorMsg = QCoreApplication::translate(
+                "SimpleTiffReader", "Invalid TIFF byte order marker.");
         return false;
     }
 
     quint16 version;
     stream >> version;
-    if (version != 42) {
-        if (errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "Invalid TIFF version (not 42).");
+    if (version != 42)
+    {
+        if (errorMsg)
+            *errorMsg = QCoreApplication::translate(
+                "SimpleTiffReader", "Invalid TIFF version (expected 42).");
         return false;
     }
 
     quint32 ifdOffset;
     stream >> ifdOffset;
 
-    // 2. Read IFD
-    if (!file.seek(ifdOffset)) {
-        if (errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "Could not seek to IFD.");
+    // -------------------------------------------------------------------------
+    // 2. Read and parse the first IFD
+    // -------------------------------------------------------------------------
+    if (!file.seek(ifdOffset))
+    {
+        if (errorMsg)
+            *errorMsg = QCoreApplication::translate(
+                "SimpleTiffReader", "Could not seek to IFD.");
         return false;
     }
 
     quint16 numEntries;
     stream >> numEntries;
 
-    // Parsed properties
-    quint32 t_width = 0;
-    quint32 t_height = 0;
-    quint16 t_bitsPerSample = 0;
+    // Parsed IFD fields
+    quint32 t_width          = 0;
+    quint32 t_height         = 0;
+    quint16 t_bitsPerSample  = 0;
     quint16 t_samplesPerPixel = 1;
-    quint16 t_compression = 1;
-    quint16 t_sampleFormat = 1; // Default uint
-    quint16 t_planarConfig = 1; // Default Chunky
-    quint32 t_tileWidth = 0;
+    quint16 t_compression    = 1;   // 1 = no compression
+    quint16 t_sampleFormat   = 1;   // 1 = unsigned int, 3 = float
+    quint16 t_planarConfig   = 1;   // 1 = chunky, 2 = planar
+
+    quint32 t_tileWidth  = 0;
     quint32 t_tileLength = 0;
+
     std::vector<quint32> stripOffsets;
     std::vector<quint32> stripByteCounts;
     std::vector<quint32> tileOffsets;
     std::vector<quint32> tileByteCounts;
 
-    for (int i = 0; i < numEntries; ++i) {
+    for (int i = 0; i < numEntries; ++i)
+    {
         quint16 tag, type;
         quint32 count, val;
         stream >> tag >> type >> count >> val;
 
-        if (tag == TAG_ImageWidth) t_width = val;
-        else if (tag == TAG_ImageLength) t_height = val;
-        else if (tag == TAG_SamplesPerPixel) t_samplesPerPixel = val;
-        else if (tag == TAG_Compression) t_compression = val; // 1 = None
-        else if (tag == TAG_SampleFormat) t_sampleFormat = val; // 3 = Float
-        else if (tag == TAG_PlanarConfiguration) t_planarConfig = val;
-        else if (tag == TAG_BitsPerSample) {
-            if (count == 1) {
-                t_bitsPerSample = val;
-            } else if (count == 2) {
-                t_bitsPerSample = val & 0xFFFF; 
-            } else {
-                qint64 savePos = file.pos();
-                if (file.seek(val)) {
-                    quint16 v; 
+        switch (tag)
+        {
+        case TAG_ImageWidth:
+            t_width = val;
+            break;
+
+        case TAG_ImageLength:
+            t_height = val;
+            break;
+
+        case TAG_SamplesPerPixel:
+            t_samplesPerPixel = static_cast<quint16>(val);
+            break;
+
+        case TAG_Compression:
+            t_compression = static_cast<quint16>(val);
+            break;
+
+        case TAG_SampleFormat:
+            t_sampleFormat = static_cast<quint16>(val);
+            break;
+
+        case TAG_PlanarConfiguration:
+            t_planarConfig = static_cast<quint16>(val);
+            break;
+
+        case TAG_BitsPerSample:
+            if (count == 1)
+            {
+                t_bitsPerSample = static_cast<quint16>(val);
+            }
+            else if (count == 2)
+            {
+                t_bitsPerSample = static_cast<quint16>(val & 0xFFFF);
+            }
+            else
+            {
+                const qint64 savePos = file.pos();
+                if (file.seek(val))
+                {
+                    quint16 v;
                     stream >> v;
                     t_bitsPerSample = v;
                 }
                 file.seek(savePos);
             }
+            break;
+
+        case TAG_StripOffsets:
+        {
+            if (count == 1)
+            {
+                stripOffsets.push_back(val);
+            }
+            else
+            {
+                const qint64 savePos = file.pos();
+                file.seek(val);
+                for (quint32 k = 0; k < count; ++k)
+                {
+                    quint32 off;
+                    stream >> off;
+                    stripOffsets.push_back(off);
+                }
+                file.seek(savePos);
+            }
+            break;
         }
-        else if (tag == TAG_StripOffsets) {
-             if (count == 1) stripOffsets.push_back(val);
-             else {
-                 // Value is offset to array of offsets
-                 qint64 savePos = file.pos();
-                 file.seek(val);
-                 for(quint32 k=0; k<count; ++k) {
-                     quint32 off; stream >> off;
-                     stripOffsets.push_back(off);
-                 }
-                 file.seek(savePos);
-             }
+
+        case TAG_StripByteCounts:
+        {
+            if (count == 1)
+            {
+                stripByteCounts.push_back(val);
+            }
+            else
+            {
+                const qint64 savePos = file.pos();
+                file.seek(val);
+                for (quint32 k = 0; k < count; ++k)
+                {
+                    quint32 cnt;
+                    stream >> cnt;
+                    stripByteCounts.push_back(cnt);
+                }
+                file.seek(savePos);
+            }
+            break;
         }
-        else if (tag == TAG_StripByteCounts) {
-             if (count == 1) stripByteCounts.push_back(val);
-             else {
-                 qint64 savePos = file.pos();
-                 file.seek(val);
-                 for(quint32 k=0; k<count; ++k) {
-                     quint32 cnt; stream >> cnt;
-                     stripByteCounts.push_back(cnt);
-                 }
-                 file.seek(savePos);
-             }
+
+        case TAG_TileWidth:
+            t_tileWidth = val;
+            break;
+
+        case TAG_TileLength:
+            t_tileLength = val;
+            break;
+
+        case TAG_TileOffsets:
+        {
+            if (count == 1)
+            {
+                tileOffsets.push_back(val);
+            }
+            else
+            {
+                const qint64 savePos = file.pos();
+                file.seek(val);
+                for (quint32 k = 0; k < count; ++k)
+                {
+                    quint32 off;
+                    stream >> off;
+                    tileOffsets.push_back(off);
+                }
+                file.seek(savePos);
+            }
+            break;
         }
-        else if (tag == TAG_TileWidth) t_tileWidth = val;
-        else if (tag == TAG_TileLength) t_tileLength = val;
-        else if (tag == TAG_TileOffsets) {
-             if (count == 1) tileOffsets.push_back(val);
-             else {
-                 qint64 savePos = file.pos();
-                 file.seek(val);
-                 for(quint32 k=0; k<count; ++k) { quint32 off; stream >> off; tileOffsets.push_back(off); }
-                 file.seek(savePos);
-             }
+
+        case TAG_TileByteCounts:
+        {
+            if (count == 1)
+            {
+                tileByteCounts.push_back(val);
+            }
+            else
+            {
+                const qint64 savePos = file.pos();
+                file.seek(val);
+                for (quint32 k = 0; k < count; ++k)
+                {
+                    quint32 cnt;
+                    stream >> cnt;
+                    tileByteCounts.push_back(cnt);
+                }
+                file.seek(savePos);
+            }
+            break;
         }
-        else if (tag == TAG_TileByteCounts) {
-             if (count == 1) tileByteCounts.push_back(val);
-             else {
-                 qint64 savePos = file.pos();
-                 file.seek(val);
-                 for(quint32 k=0; k<count; ++k) { quint32 cnt; stream >> cnt; tileByteCounts.push_back(cnt); }
-                 file.seek(savePos);
-             }
+
+        default:
+            break;
         }
     }
 
-    // Validation
-    if (t_compression != 1) {
-        if (errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "Compressed TIFFs not supported (only Uncompressed).");
+    // -------------------------------------------------------------------------
+    // 3. Validate parsed parameters
+    // -------------------------------------------------------------------------
+    if (t_compression != 1)
+    {
+        if (errorMsg)
+            *errorMsg = QCoreApplication::translate(
+                "SimpleTiffReader",
+                "Compressed TIFFs are not supported (only uncompressed).");
         return false;
     }
-    // Primarily supports 32-bit float; warning if otherwise
-    if (t_sampleFormat != 3) {
-        // If it's not float, warned.
-        // It might be 1 (uint), if 16-bit or 8-bit.
-    }
-    
-    // 3. Read Data (Raw)
-    width = t_width;
-    height = t_height;
-    channels = t_samplesPerPixel;
-    
-    // We'll read into a raw buffer first
-    std::vector<float> rawData;
-    rawData.resize(width * height * channels, 0.0f);
 
+    width    = static_cast<int>(t_width);
+    height   = static_cast<int>(t_height);
+    channels = static_cast<int>(t_samplesPerPixel);
 
-    
-    // Debug Stats
-    float dMin = 1e9f, dMax = -1e9f;
-    int nanCount = 0;
-    // double sum = 0.0; // Optimized out for speed if large
+    // -------------------------------------------------------------------------
+    // 4. Decode pixel data into a flat float buffer
+    // -------------------------------------------------------------------------
+    std::vector<float> rawData(static_cast<size_t>(width) * height * channels, 0.0f);
 
-    bool isTiled = (!tileOffsets.empty());
-    
-    if (isTiled) {
-        if (tileOffsets.size() != tileByteCounts.size()) { if(errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "Tile offset/count mismatch."); return false; }
-        
-        // Rows / Cols of TILES
-        int tilesAcross = (width + t_tileWidth - 1) / t_tileWidth;
-        int tilesDown = (height + t_tileLength - 1) / t_tileLength;
-        int tilesPerPlane = tilesAcross * tilesDown;
-        
-        // Loop Tiles
-        for (size_t t = 0; t < tileOffsets.size(); ++t) {
-            if (!file.seek(tileOffsets[t])) continue;
+    float dMin     =  1e9f;
+    float dMax     = -1e9f;
+    int   nanCount = 0;
+
+    const bool isTiled = !tileOffsets.empty();
+
+    // Helper: read a single sample value from a QDataStream and convert to float.
+    auto readSample = [&](QDataStream& ds, int bps, int fmt) -> float
+    {
+        if (fmt == 3) // IEEE float
+        {
+            if (bps == 4) { float f;  ds >> f; return f; }
+            if (bps == 8) { double d; ds >> d; return static_cast<float>(d); }
+        }
+        else if (fmt == 1) // unsigned integer
+        {
+            if (bps == 1) { quint8  v; ds >> v; return v / 255.0f; }
+            if (bps == 2) { quint16 v; ds >> v; return v / 65535.0f; }
+            if (bps == 4) { quint32 v; ds >> v; return v / 4294967295.0f; }
+        }
+        return 0.0f;
+    };
+
+    const int bytesPerSample = (t_bitsPerSample > 0)
+        ? (t_bitsPerSample / 8)
+        : 4; // Default to float32
+
+    if (isTiled)
+    {
+        // -----------------------------------------------------------------
+        // Tiled image layout
+        // -----------------------------------------------------------------
+        if (tileOffsets.size() != tileByteCounts.size())
+        {
+            if (errorMsg)
+                *errorMsg = QCoreApplication::translate(
+                    "SimpleTiffReader", "Tile offset/count mismatch.");
+            return false;
+        }
+
+        const int tilesAcross   = (width  + t_tileWidth  - 1) / t_tileWidth;
+        const int tilesDown     = (height + t_tileLength - 1) / t_tileLength;
+        const int tilesPerPlane = tilesAcross * tilesDown;
+
+        // For chunky images each tile holds all channels; for planar images
+        // each tile holds exactly one channel (plane).
+        const int samplesInTile = (t_planarConfig == 1) ? channels : 1;
+
+        for (size_t t = 0; t < tileOffsets.size(); ++t)
+        {
+            if (!file.seek(tileOffsets[t]))
+                continue;
+
             QByteArray bytes = file.read(tileByteCounts[t]);
             QDataStream ds(bytes);
             ds.setByteOrder(stream.byteOrder());
             ds.setFloatingPointPrecision(QDataStream::SinglePrecision);
-            
-            // Tile Coordinates
-            // If Planar, Tile Index includes planes.
-            // If Chunky, 1 plane of tiles.
-            int planeIdx = 0;
-            int tileInPlane = t;
-            
-            if (t_planarConfig == 2) {
-                planeIdx = t / tilesPerPlane;
-                tileInPlane = t % tilesPerPlane;
+
+            // Determine which plane and tile position this tile index corresponds to.
+            int planeIdx   = 0;
+            int tileInPlane = static_cast<int>(t);
+
+            if (t_planarConfig == 2)
+            {
+                planeIdx    = static_cast<int>(t) / tilesPerPlane;
+                tileInPlane = static_cast<int>(t) % tilesPerPlane;
             }
-            
-            int ty = (tileInPlane / tilesAcross) * t_tileLength;
-            int tx = (tileInPlane % tilesAcross) * t_tileWidth;
-            
-            // Read Tile Data
-            // Tile is W x H x (Samples if Chunky, 1 if Planar)
-            int samplesInTile = (t_planarConfig == 1) ? channels : 1;
-            int bytesPerSample = (t_bitsPerSample > 0) ? (t_bitsPerSample/8) : 4;
-            if (t_bitsPerSample == 0 && t_sampleFormat == 3) bytesPerSample=4;
-            
-            // Iterate Tile Rows
-            // Total samples in tile buffer
-            int totalTileSamples = bytes.size() / bytesPerSample;
-            int readIdx = 0;
 
-            for (int r = 0; r < (int)t_tileLength; ++r) {
-                int imgY = ty + r;
-                if (imgY >= height) break;
-                
-                for (int c = 0; c < (int)t_tileWidth; ++c) {
-                    int imgX = tx + c;
-                    if (imgX >= width) {
-                        // Skip samples for rest of row in tile
-                         // But we must advance readIdx by samplesInTile
+            const int ty = (tileInPlane / tilesAcross) * static_cast<int>(t_tileLength);
+            const int tx = (tileInPlane % tilesAcross) * static_cast<int>(t_tileWidth);
+
+            const int totalTileSamples = static_cast<int>(bytes.size()) / bytesPerSample;
+            int       readIdx          = 0;
+
+            for (int r = 0; r < static_cast<int>(t_tileLength); ++r)
+            {
+                const int imgY = ty + r;
+                if (imgY >= height)
+                    break;
+
+                for (int c = 0; c < static_cast<int>(t_tileWidth); ++c)
+                {
+                    const int imgX = tx + c;
+
+                    // Pixels beyond the right image edge are padding; skip them.
+                    if (imgX >= width)
+                    {
                         readIdx += samplesInTile;
-                        continue; 
+                        continue;
                     }
-                    
-                    for (int sIdx = 0; sIdx < samplesInTile; ++sIdx) {
-                        if (readIdx >= totalTileSamples) break;
-                        
-                        float f = 0.0f;
-                        // Read float
-                        if (t_sampleFormat == 3) {
-                             if (bytesPerSample==4) ds >> f;
-                             else if (bytesPerSample==8) { double d; ds >> d; f=(float)d; }
-                        } else if (t_sampleFormat == 1) {
-                             if (bytesPerSample == 1) { quint8 v; ds >> v; f = v / 255.0f; }
-                             else if (bytesPerSample == 2) { quint16 v; ds >> v; f = v / 65535.0f; }
-                             else if (bytesPerSample == 4) { quint32 v; ds >> v; f = v / 4294967295.0f; } 
-                        }
-                        readIdx++;
 
-                        // Write to rawData
-                        // If Planar (Config 2): rawData is Plane0, Plane1...
-                        // If Chunky (Config 1): rawData is RGB, RGB...
-                        
+                    for (int s = 0; s < samplesInTile; ++s)
+                    {
+                        if (readIdx >= totalTileSamples)
+                            break;
+
+                        float f = readSample(ds, bytesPerSample, t_sampleFormat);
+                        ++readIdx;
+
                         size_t destIdx = 0;
-                        if (t_planarConfig == 2) {
-                            // Plane Offset + Y*W + X
-                            // samplesInTile is 1. sIdx is 0. planeIdx is current Channel.
-                            destIdx = (size_t)planeIdx * (width * height) + (imgY * width + imgX);
-                        } else {
-                            // Chunky: (Y*W + X)*Channels + sIdx
-                            destIdx = ((size_t)imgY * width + imgX) * channels + sIdx;
+                        if (t_planarConfig == 2)
+                        {
+                            // Planar: plane N occupies a separate tile set.
+                            destIdx = static_cast<size_t>(planeIdx) * (width * height)
+                                    + static_cast<size_t>(imgY) * width + imgX;
                         }
-                        
-                        if (destIdx < rawData.size()) rawData[destIdx] = f;
-                        
-                        if (std::isnan(f)) { nanCount++; if (destIdx < rawData.size()) rawData[destIdx] = 0.0f; }
-                        else {
+                        else
+                        {
+                            // Chunky: samples interleaved per pixel.
+                            destIdx = (static_cast<size_t>(imgY) * width + imgX)
+                                    * channels + s;
+                        }
+
+                        if (std::isnan(f))
+                        {
+                            ++nanCount;
+                            f = 0.0f;
+                        }
+                        else
+                        {
                             if (f < dMin) dMin = f;
                             if (f > dMax) dMax = f;
                         }
+
+                        if (destIdx < rawData.size())
+                            rawData[destIdx] = f;
                     }
                 }
             }
         }
-        
-    } else {
-        // STRIPS Logic (Existing but refined for Planar)
-        if (stripOffsets.size() != stripByteCounts.size()) {
-            if (errorMsg) *errorMsg = QCoreApplication::translate("SimpleTiffReader", "Strip offset/count mismatch.");
+    }
+    else
+    {
+        // -----------------------------------------------------------------
+        // Strip-based image layout
+        //
+        // For planar images the strips for plane 0 precede those for plane 1,
+        // etc. Sequential reading into rawData is correct for both chunky and
+        // planar layouts because the planar-to-interleaved reorder happens
+        // as a post-processing step below.
+        // -----------------------------------------------------------------
+        if (stripOffsets.size() != stripByteCounts.size())
+        {
+            if (errorMsg)
+                *errorMsg = QCoreApplication::translate(
+                    "SimpleTiffReader", "Strip offset/count mismatch.");
             return false;
         }
-        
-        // Similar simplified loop but purely sequential IF Chunky.
-        // If Planar, multiple strips per plane.
-        // TIFF 6.0: "If SamplesPerPixel > 1, PlanarConfig=2, then each component is stored in a separate strip or strips..."
-        // Format: All strips for Plane 0, then All strips for Plane 1.
-        
-        // Sequential read into rawData functions correctly for both Chunky and Planar Strips
-        // Planar re-ordering is handled in post-processing step
-        
+
         size_t currentOutIdx = 0;
-        for (size_t s = 0; s < stripOffsets.size(); ++s) {
-            if (!file.seek(stripOffsets[s])) continue;
-            QByteArray bytes = file.read(stripByteCounts[s]);
+
+        for (size_t s = 0; s < stripOffsets.size(); ++s)
+        {
+            if (!file.seek(stripOffsets[s]))
+                continue;
+
+            QByteArray  bytes = file.read(stripByteCounts[s]);
             QDataStream ds(bytes);
             ds.setByteOrder(stream.byteOrder());
             ds.setFloatingPointPrecision(QDataStream::SinglePrecision);
-            
-            int bytesPerSample = (t_bitsPerSample > 0) ? (t_bitsPerSample / 8) : 4; 
-            if (t_bitsPerSample == 0 && t_sampleFormat == 3) bytesPerSample = 4;
-            int numSamples = bytes.size() / bytesPerSample;
-            
-            for (int k = 0; k < numSamples; ++k) {
-                if (currentOutIdx >= rawData.size()) break;
-                
-                 float f = 0.0f;
-                 if (t_sampleFormat == 3) {
-                     if (bytesPerSample==4) ds >> f;
-                     else if (bytesPerSample==8) { double d; ds >> d; f=(float)d; }
-                 } else if (t_sampleFormat == 1) {
-                     if (bytesPerSample == 1) { quint8 v; ds >> v; f = v / 255.0f; }
-                     else if (bytesPerSample == 2) { quint16 v; ds >> v; f = v / 65535.0f; }
-                     else if (bytesPerSample == 4) { quint32 v; ds >> v; f = v / 4294967295.0f; } 
-                 }
-                 
-                 if (std::isnan(f)) { nanCount++; f=0.0f; }
-                 else {
-                     if (f < dMin) dMin = f;
-                     if (f > dMax) dMax = f;
-                 }
-                 rawData[currentOutIdx++] = f;
+
+            const int numSamples = static_cast<int>(bytes.size()) / bytesPerSample;
+
+            for (int k = 0; k < numSamples; ++k)
+            {
+                if (currentOutIdx >= rawData.size())
+                    break;
+
+                float f = readSample(ds, bytesPerSample, t_sampleFormat);
+
+                if (std::isnan(f))
+                {
+                    ++nanCount;
+                    f = 0.0f;
+                }
+                else
+                {
+                    if (f < dMin) dMin = f;
+                    if (f > dMax) dMax = f;
+                }
+
+                rawData[currentOutIdx++] = f;
             }
         }
-    }
-    
-    // Auto-Normalization
-    qDebug() << "TIFF Stats:" << path << "Min:" << dMin << "Max:" << dMax << "NaNs:" << nanCount;
-    if (debugInfo) {
-        *debugInfo = QString("TIFF Stats: Min=%1 Max=%2 NaNs=%3").arg(dMin).arg(dMax).arg(nanCount);
-    }
-    
-    if (dMax > 1.0f) {
-        float scale = 1.0f / dMax;
-        qDebug() << "Auto-Normalizing with scale:" << scale;
-        if (debugInfo) *debugInfo += QString(" [Normalized 1/%1]").arg(dMax);
-        for(float& v : rawData) v *= scale;
     }
 
-    // Handle Planar -> Interleaved
-    if (t_planarConfig == 2 && channels > 1) {
-        data.resize(width * height * channels);
-        int planeSize = width * height;
-        for (int i = 0; i < planeSize; ++i) {
-            for (int ch = 0; ch < channels; ++ch) {
-                int srcIdx = ch * planeSize + i;
-                int dstIdx = i * channels + ch;
-                if ((int)srcIdx < (int)rawData.size()) {
+    // -------------------------------------------------------------------------
+    // 5. Diagnostic output and optional auto-normalization
+    // -------------------------------------------------------------------------
+    qDebug() << "SimpleTiffReader stats:" << path
+             << "min:" << dMin << "max:" << dMax << "NaNs:" << nanCount;
+
+    if (debugInfo)
+    {
+        *debugInfo = QString("TIFF Stats: Min=%1 Max=%2 NaNs=%3")
+                        .arg(dMin).arg(dMax).arg(nanCount);
+    }
+
+    // Normalize values that appear to be in an integer ADU range rather than [0, 1].
+    if (dMax > 1.0f)
+    {
+        const float scale = 1.0f / dMax;
+
+        qDebug() << "SimpleTiffReader: auto-normalizing with scale" << scale;
+
+        if (debugInfo)
+            *debugInfo += QString(" [Normalized by 1/%1]").arg(dMax);
+
+        for (float& v : rawData)
+            v *= scale;
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. Convert planar layout to interleaved (chunky) if required
+    // -------------------------------------------------------------------------
+    if (t_planarConfig == 2 && channels > 1)
+    {
+        const int planeSize = width * height;
+        data.resize(static_cast<size_t>(planeSize) * channels);
+
+        for (int i = 0; i < planeSize; ++i)
+        {
+            for (int ch = 0; ch < channels; ++ch)
+            {
+                const int srcIdx = ch * planeSize + i;
+                const int dstIdx = i * channels + ch;
+
+                if (srcIdx < static_cast<int>(rawData.size()))
                     data[dstIdx] = rawData[srcIdx];
-                }
             }
         }
-    } else {
+    }
+    else
+    {
         data = std::move(rawData);
     }
 

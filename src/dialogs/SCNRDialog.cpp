@@ -1,21 +1,28 @@
 #include "SCNRDialog.h"
+
 #include "MainWindowCallbacks.h"
+#include "../ImageViewer.h"
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QIcon>
-#include <QPointer>
-#include "../ImageViewer.h"
 
-SCNRDialog::SCNRDialog(QWidget* parent) : DialogBase(parent, tr("SCNR (Remove Green Noise)"), 350, 160) {
+// ----------------------------------------------------------------------------
+// Constructor / Destructor
+// ----------------------------------------------------------------------------
+
+SCNRDialog::SCNRDialog(QWidget* parent)
+    : DialogBase(parent, tr("SCNR (Remove Green Noise)"), 350, 160)
+{
     setModal(false);
     setWindowModality(Qt::NonModal);
     setWindowIcon(QIcon(":/images/Logo.png"));
 
     QVBoxLayout* layout = new QVBoxLayout(this);
 
-    // Method
+    // Protection method selection
     QHBoxLayout* methodLayout = new QHBoxLayout();
     methodLayout->addWidget(new QLabel(tr("Protection Method:")));
     m_methodCombo = new QComboBox();
@@ -35,32 +42,32 @@ SCNRDialog::SCNRDialog(QWidget* parent) : DialogBase(parent, tr("SCNR (Remove Gr
     methodLayout->addWidget(m_methodCombo);
     layout->addLayout(methodLayout);
 
-    // Amount
+    // Reduction amount control (slider and spin box synchronized)
     QHBoxLayout* amountLayout = new QHBoxLayout();
     amountLayout->addWidget(new QLabel(tr("Amount:")));
-    
+
     m_amountSlider = new QSlider(Qt::Horizontal);
     m_amountSlider->setRange(0, 100);
-    m_amountSlider->setValue(100); // Default 1.0
-    
+    m_amountSlider->setValue(100); // Default: full reduction
+
     m_amountSpin = new QDoubleSpinBox();
     m_amountSpin->setRange(0.0, 1.0);
     m_amountSpin->setSingleStep(0.1);
     m_amountSpin->setValue(1.0);
-    
+
     amountLayout->addWidget(m_amountSlider);
     amountLayout->addWidget(m_amountSpin);
     layout->addLayout(amountLayout);
 
-    // Sync
-    connect(m_amountSlider, &QSlider::valueChanged, [this](int val){
+    // Keep slider and spin box synchronized bidirectionally
+    connect(m_amountSlider, &QSlider::valueChanged, this, [this](int val) {
         m_amountSpin->setValue(val / 100.0);
     });
-    connect(m_amountSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double val){
+    connect(m_amountSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         m_amountSlider->setValue(static_cast<int>(val * 100));
     });
 
-    // Buttons
+    // Dialog action buttons
     QHBoxLayout* btnLayout = new QHBoxLayout();
     QPushButton* applyBtn = new QPushButton(tr("Apply"));
     QPushButton* closeBtn = new QPushButton(tr("Close"));
@@ -71,19 +78,25 @@ SCNRDialog::SCNRDialog(QWidget* parent) : DialogBase(parent, tr("SCNR (Remove Gr
 
     connect(applyBtn, &QPushButton::clicked, this, &SCNRDialog::apply);
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::close);
-
 }
 
 SCNRDialog::~SCNRDialog() {}
 
-void SCNRDialog::setViewer(ImageViewer* v) {
+// ----------------------------------------------------------------------------
+// Public Methods
+// ----------------------------------------------------------------------------
+
+void SCNRDialog::setViewer(ImageViewer* v)
+{
     m_viewer = v;
 }
 
-float SCNRDialog::getAmount() const {
+float SCNRDialog::getAmount() const
+{
     return static_cast<float>(m_amountSpin->value());
 }
 
-SCNRDialog::ProtectionMethod SCNRDialog::getMethod() const {
+SCNRDialog::ProtectionMethod SCNRDialog::getMethod() const
+{
     return static_cast<ProtectionMethod>(m_methodCombo->currentData().toInt());
 }

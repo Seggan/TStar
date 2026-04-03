@@ -1063,6 +1063,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Manual blink</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>No Image</source>
             <translation type="unfinished" />
         </message>
@@ -1111,6 +1115,14 @@
         </message>
         <message>
             <source>Cache Cleared</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancelling...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3530,6 +3542,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Align images in sequence</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Aligns a sequence of calibrated images to a common reference frame using star-based registration with sub-pixel accuracy:</source>
             <translation type="unfinished" />
         </message>
@@ -3559,6 +3575,10 @@
         </message>
         <message>
             <source>Analyzes the difference between your image and the reference to build a highly accurate gradient model</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Appendix: Scripting Commands Reference</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3650,6 +3670,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Basic pixel math</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Batch Crop: applies the same crop to all currently open images</source>
             <translation type="unfinished" />
         </message>
@@ -3702,6 +3726,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Calibrate sequence</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Calibrates colors using star catalog data:</source>
             <translation type="unfinished" />
         </message>
@@ -3715,6 +3743,10 @@
         </message>
         <message>
             <source>Catalog Background Extraction (CBE)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Change working directory</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3787,6 +3819,10 @@
         </message>
         <message>
             <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close the current image</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -3950,6 +3986,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Create RGB from mono channels</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Create and apply masks for selective processing:</source>
             <translation type="unfinished" />
         </message>
@@ -3970,6 +4010,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Crop image to box or selection</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Ctrl+Z / Ctrl+Shift+Z</source>
             <translation type="unfinished" />
         </message>
@@ -3983,6 +4027,10 @@
         </message>
         <message>
             <source>Debayer</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Debayer current image or sequence</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4074,6 +4122,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Execute PixelMath formula</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Execute Stack: Combine and output final integrated image</source>
             <translation type="unfinished" />
         </message>
@@ -4130,6 +4182,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>File &amp; Directory</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>First image in sequence used as reference (or manually selected)</source>
             <translation type="unfinished" />
         </message>
@@ -4159,6 +4215,10 @@
         </message>
         <message>
             <source>Generate masks using Binary, Range Selection, Lightness, Chrominance, Star Mask, and Color-based workflows</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Geometric transformations</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4262,6 +4322,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Image math &amp; Geometry</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Improves signal-to-noise ratio by coherent data aggregation</source>
             <translation type="unfinished" />
         </message>
@@ -4347,6 +4411,10 @@
         </message>
         <message>
             <source>Load Registered Images: Select the aligned image sequence</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Load an image into the script context</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4610,6 +4678,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Preprocessing &amp; Recovery</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Preserve Details:</source>
             <translation type="unfinished" />
         </message>
@@ -4710,6 +4782,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Remove gradients (ABE)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Removes chromatic aberration and optical artifacts.</source>
             <translation type="unfinished" />
         </message>
@@ -4770,6 +4846,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Run StarNet++ star removal</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Run full automated pipeline</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>SCNR (Selective Color Noise Reduction)</source>
             <translation type="unfinished" />
         </message>
@@ -4787,6 +4871,10 @@
         </message>
         <message>
             <source>Save Image:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Save current image (default 32-bit float)</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -4891,6 +4979,14 @@
         </message>
         <message>
             <source>Square Root / Logarithmic:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stack a sequence</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stacking &amp; Sequencing</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -5015,6 +5111,10 @@
         </message>
         <message>
             <source>TStar includes workspace-level color management to keep display and processing behavior consistent across tools and sessions.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>TStar scripts (.tss) use a simple command-based syntax. Parameters in [brackets] are optional.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8462,10 +8562,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Image data buffer is inconsistent.</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Initial match: %1 pairs, offset=(%2, %3) arcsec</source>
             <translation type="unfinished" />
         </message>
@@ -8502,10 +8598,6 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Not enough image stars detected (%1).</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Pixel scale is invalid or missing; proceeding without strict scale constraints.</source>
             <translation type="unfinished" />
         </message>
@@ -8515,6 +8607,10 @@
         </message>
         <message>
             <source>Querying Catalog (VizieR)...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Recalculation resulted in flat match set.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8530,7 +8626,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Starting native solve pipeline...</source>
+            <source>Starting native solve pipeline in background...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8624,6 +8720,14 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancelling...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Catalog Error: %1</source>
             <translation type="unfinished" />
         </message>
@@ -8653,10 +8757,6 @@
         </message>
         <message>
             <source>Factors (K):\nR: %1\nG: %2\nB: %3\n\nBackground Ref (Detected):\nR: %4\nG: %5\nB: %6\n\nComputed Offsets:\nR: %7\nG: %8\nB: %9</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Image must be plate solved first.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -8980,7 +9080,7 @@
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Native solver cancel not supported.</source>
+            <source>Native solver cancel requested.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10329,6 +10429,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Active image has no plate solution. Solve with ASTAP first.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Applies a single global multiplier per channel. If unchecked, applies a non-linear polynomial warping based on the fitted model.</source>
             <translation type="unfinished" />
         </message>
@@ -10346,6 +10450,14 @@
         </message>
         <message>
             <source>Calibration failed.</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Cancelling...</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10386,10 +10498,6 @@
         </message>
         <message>
             <source>Gradient Surface Method:</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Image must be plate-solved first.</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -10778,6 +10886,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Available commands:\n</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Cannot open script file: %1</source>
             <translation type="unfinished" />
         </message>
@@ -10863,6 +10975,10 @@
         </message>
         <message>
             <source>Variables</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>\nVariables: ${VAR_NAME} or $VAR_NAME</source>
             <translation type="unfinished" />
         </message>
         <message>
@@ -11134,6 +11250,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Default: inside each project folder</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Display</source>
             <translation type="unfinished" />
         </message>
@@ -11226,6 +11346,10 @@
             <translation type="unfinished" />
         </message>
         <message>
+            <source>Project Files Root:</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
             <source>Restart Required</source>
             <translation type="unfinished" />
         </message>
@@ -11235,6 +11359,10 @@
         </message>
         <message>
             <source>Select GraXpert Executable</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Select Project Files Root Directory</source>
             <translation type="unfinished" />
         </message>
         <message>

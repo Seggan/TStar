@@ -1,19 +1,24 @@
 #!/bin/bash
 # =============================================================================
 # TStar Installer Builder for macOS
-# Equivalent of build_installer.bat + installer.iss for Windows
-# =============================================================================
-# Creates a DMG disk image with the app and Applications shortcut
+#
+# Creates a DMG disk image containing the application bundle and an
+# Applications folder symlink for drag-and-drop installation.
+# This is the macOS equivalent of build_installer.bat + installer.iss
+# on Windows.
 # =============================================================================
 
 set -e
+
+# -----------------------------------------------------------------------------
+# Script initialization
+# -----------------------------------------------------------------------------
 
 echo "==========================================="
 echo " TStar Installer Builder (macOS)"
 echo "==========================================="
 echo ""
 
-# Move to project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 PROJECT_ROOT="$(pwd)"
@@ -32,11 +37,14 @@ else
     exit 1
 fi
 
-# --- Read version ---
+# Read version from project configuration
 VERSION=$(get_version)
 log_info "Building version: $VERSION"
 
-# --- STEP 0: Verify Prerequisites ---
+# -----------------------------------------------------------------------------
+# STEP 0: Verify prerequisites
+# -----------------------------------------------------------------------------
+
 echo "[STEP 0] Verifying prerequisites..."
 
 check_command hdiutil || {
@@ -45,7 +53,7 @@ check_command hdiutil || {
 }
 echo "  - hdiutil: OK"
 
-# Check for create-dmg (optional, better DMG aesthetics)
+# Check for create-dmg (optional tool for enhanced DMG aesthetics)
 CREATE_DMG=""
 if check_command create-dmg; then
     CREATE_DMG="create-dmg"
@@ -55,7 +63,10 @@ else
     echo "  - TIP: Install with 'brew install create-dmg' for prettier DMGs"
 fi
 
-# --- STEP 1: Build Application ---
+# -----------------------------------------------------------------------------
+# STEP 1: Build the application
+# -----------------------------------------------------------------------------
+
 echo ""
 log_step 1 "Building application..."
 
@@ -64,17 +75,22 @@ if [ ! -f "build/TStar.app/Contents/MacOS/TStar" ]; then
 fi
 echo "  - Build: OK"
 
-# --- STEP 2: Create Distribution Package ---
+# -----------------------------------------------------------------------------
+# STEP 2: Create distribution package
+# -----------------------------------------------------------------------------
+
 echo ""
 log_step 2 "Creating distribution package..."
 
 ./src/package_macos.sh --silent
 echo "  - Distribution: OK"
 
-# Verify distribution
 verify_dir "dist/TStar.app" "Distribution" || exit 1
 
-# --- STEP 3: Clean Previous Output ---
+# -----------------------------------------------------------------------------
+# STEP 3: Clean previous installer output
+# -----------------------------------------------------------------------------
+
 echo ""
 log_step 3 "Cleaning previous installer output..."
 
@@ -82,7 +98,10 @@ ensure_dir "installer_output"
 rm -f "installer_output/TStar_Setup_"*.dmg
 echo "  - Cleaned"
 
-# --- STEP 4: Create DMG ---
+# -----------------------------------------------------------------------------
+# STEP 4: Create DMG installer image
+# -----------------------------------------------------------------------------
+
 echo ""
 log_step 4 "Creating DMG installer..."
 
@@ -90,36 +109,29 @@ DMG_NAME="TStar_Setup_${VERSION}.dmg"
 DMG_PATH="installer_output/$DMG_NAME"
 DMG_TEMP="installer_output/TStar_temp.dmg"
 
-# Prepare staging directory
+# Prepare a staging directory with the app bundle and Applications symlink
 STAGING_DIR="installer_output/dmg_staging"
 safe_rm_rf "$STAGING_DIR"
 ensure_dir "$STAGING_DIR"
 
-# Copy app to staging
 cp -R "dist/TStar.app" "$STAGING_DIR/"
-
-# Create Applications symlink
 ln -s /Applications "$STAGING_DIR/Applications"
-
-# Copy README
 cp "dist/README.txt" "$STAGING_DIR/" 2>/dev/null || true
 
 if [ -n "$CREATE_DMG" ]; then
-    # Use create-dmg for fancy DMG
+    # --- Styled DMG via create-dmg ---
     echo "  - Using create-dmg for styled DMG..."
-    
-    # Check for background image
+
     BG_IMAGE=""
     if [ -f "src/images/dmg_background.png" ]; then
         BG_IMAGE="--background src/images/dmg_background.png"
     fi
-    
-    # Check for volume icon
+
     VOL_ICON=""
     if [ -f "src/images/TStar.icns" ]; then
         VOL_ICON="--volicon src/images/TStar.icns"
     fi
-    
+
     create-dmg \
         --volname "TStar $VERSION" \
         $VOL_ICON \
@@ -134,28 +146,31 @@ if [ -n "$CREATE_DMG" ]; then
         "$DMG_PATH" \
         "$STAGING_DIR"
 else
-    # Use basic hdiutil
+    # --- Basic DMG via hdiutil ---
     echo "  - Using hdiutil for basic DMG..."
-    
-    # Create temporary DMG
+
+    # Create a read-write temporary image
     hdiutil create -volname "TStar $VERSION" \
         -srcfolder "$STAGING_DIR" \
         -ov -format UDRW \
         "$DMG_TEMP"
-    
-    # Convert to compressed DMG
+
+    # Convert to a compressed, read-only final image
     hdiutil convert "$DMG_TEMP" \
         -format UDZO \
         -imagekey zlib-level=9 \
         -o "$DMG_PATH"
-    
+
     rm -f "$DMG_TEMP"
 fi
 
-# Clean staging
+# Remove temporary staging directory
 safe_rm_rf "$STAGING_DIR"
 
-# --- STEP 5: Verify DMG ---
+# -----------------------------------------------------------------------------
+# STEP 5: Verify the created DMG
+# -----------------------------------------------------------------------------
+
 echo ""
 log_step 5 "Verifying DMG..."
 
@@ -165,17 +180,20 @@ DMG_SIZE=$(du -h "$DMG_PATH" | cut -f1)
 echo "  - DMG created: $DMG_NAME"
 echo "  - Size: $DMG_SIZE"
 
-# --- SUCCESS ---
+# -----------------------------------------------------------------------------
+# Summary
+# -----------------------------------------------------------------------------
+
 echo ""
 echo "==========================================="
 echo " SUCCESS! Installer Build Complete"
 echo "==========================================="
 echo ""
 echo " Output File:"
-echo "   $DMG_PATH"
+echo "    $DMG_PATH"
 echo ""
 echo " Version: $VERSION"
-echo " Size: $DMG_SIZE"
+echo " Size:    $DMG_SIZE"
 echo ""
 echo " Next steps:"
 echo "   1. Test the DMG on another Mac"

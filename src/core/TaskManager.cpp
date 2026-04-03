@@ -1,3 +1,9 @@
+// ============================================================================
+// TaskManager.cpp
+// Central task scheduler: submits tasks to a private QThreadPool, manages
+// lifecycle signals, and provides per-task and global cancellation.
+// ============================================================================
+
 #include "TaskManager.h"
 #include "ResourceManager.h"
 #include "Logger.h"
@@ -7,55 +13,73 @@
 
 namespace Threading {
 
-// ── Singleton ─────────────────────────────────────────────────────────────────
+// ============================================================================
+// Singleton Access
+// ============================================================================
+
 TaskManager& TaskManager::instance()
 {
     static TaskManager _instance;
     return _instance;
 }
 
+// ============================================================================
+// Construction / Destruction
+// ============================================================================
+
 TaskManager::TaskManager(QObject* parent)
     : QObject(parent)
 {
-    // Sensible default before init() is called.
-    m_pool.setMaxThreadCount(std::max(1, QThread::idealThreadCount() - 1));
+    // Sensible default before init() is called
+    m_pool.setMaxThreadCount(
+        std::max(1, QThread::idealThreadCount() - 1));
 }
 
 TaskManager::~TaskManager()
 {
-    // Best-effort: cancel pending work and wait for running tasks.
+    // Best-effort cleanup: cancel pending work and wait for running tasks
     cancelAll();
     m_pool.waitForDone(5000);
 }
 
-// ── Initialization ────────────────────────────────────────────────────────────
+// ============================================================================
+// Initialization
+// ============================================================================
+
 void TaskManager::init()
 {
     const int n = ResourceManager::instance().maxThreads();
     m_pool.setMaxThreadCount(n);
-    Logger::info(QString("TaskManager: pool size = %1 thread(s)").arg(n), "Threading");
+
+    Logger::info(
+        QString("TaskManager: pool size = %1 thread(s)").arg(n),
+        "Threading");
 }
 
-// ── Submit ────────────────────────────────────────────────────────────────────
+// ============================================================================
+// Task Submission
+// ============================================================================
+
 Task::Id TaskManager::submit(std::shared_ptr<Task> task)
 {
     Q_ASSERT(task);
 
     const Task::Id id = task->id();
 
-    // ── Register under lock ───────────────────────────────────────────────────
+    // -- Register the task under lock -----------------------------------------
     {
         QMutexLocker lk(&m_mutex);
         m_tasks.insert(id, task);
     }
 
-    // ── Wire task signals → manager signals ──────────────────────────────────
-    // Connections use Qt::AutoConnection; since the Task QObject was created in
-    // the GUI thread and run() fires in a pool thread, Qt routes these as
-    // queued connections automatically.
+    // -- Wire per-task signals to manager-level signals -----------------------
+    // Qt::AutoConnection routes these as queued connections since the Task
+    // QObject lives in the GUI thread while run() executes in a pool thread.
 
     connect(task.get(), &Task::started,
-            this, [this](quint64 tid) { emit taskStarted(tid); });
+            this, [this](quint64 tid) {
+                emit taskStarted(tid);
+            });
 
     connect(task.get(), &Task::progress,
             this, [this](quint64 tid, int pct, const QString& msg) {
@@ -80,13 +104,17 @@ Task::Id TaskManager::submit(std::shared_ptr<Task> task)
                 onTaskDone(tid);
             });
 
-    // ── Submit to pool – higher enum value = higher QThreadPool priority ──────
+    // -- Submit to thread pool ------------------------------------------------
+    // Higher enum value = higher QThreadPool scheduling priority
     m_pool.start(task.get(), static_cast<int>(task->priority()));
 
     return id;
 }
 
-// ── Cancel one task ───────────────────────────────────────────────────────────
+// ============================================================================
+// Cancellation
+// ============================================================================
+
 void TaskManager::cancel(Task::Id id)
 {
     QMutexLocker lk(&m_mutex);
@@ -96,11 +124,10 @@ void TaskManager::cancel(Task::Id id)
     }
 }
 
-// ── Cancel all tasks ──────────────────────────────────────────────────────────
 void TaskManager::cancelAll()
 {
-    // Collect snapshot under lock, then cancel without holding the lock
-    // (cancel() itself is lock-free).
+    // Take a snapshot under lock, then cancel without holding it
+    // (Task::cancel() is lock-free and thread-safe)
     QList<std::shared_ptr<Task>> snapshot;
     {
         QMutexLocker lk(&m_mutex);
@@ -109,12 +136,16 @@ void TaskManager::cancelAll()
             snapshot.append(t);
         }
     }
+
     for (auto& t : snapshot) {
         t->cancel();
     }
 }
 
-// ── Housekeeping: remove a completed/failed/cancelled task ────────────────────
+// ============================================================================
+// Internal: Task Completion Cleanup
+// ============================================================================
+
 void TaskManager::onTaskDone(quint64 id)
 {
     bool empty = false;
@@ -123,12 +154,16 @@ void TaskManager::onTaskDone(quint64 id)
         m_tasks.remove(id);
         empty = m_tasks.isEmpty();
     }
+
     if (empty) {
         emit allTasksDone();
     }
 }
 
-// ── Status queries ────────────────────────────────────────────────────────────
+// ============================================================================
+// Status Queries
+// ============================================================================
+
 int TaskManager::activeCount() const
 {
     return m_pool.activeThreadCount();

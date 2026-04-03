@@ -2,7 +2,6 @@
 #define MULTISCALE_DECOMP_DIALOG_H
 
 #include <QVBoxLayout>
-#include "../MainWindowCallbacks.h"
 #include <QHBoxLayout>
 #include <QSplitter>
 #include <QGroupBox>
@@ -22,21 +21,31 @@
 #include <QGraphicsScene>
 #include <QGraphicsPixmapItem>
 #include <QScrollBar>
+
 #include "DialogBase.h"
 #include "../ImageBuffer.h"
 #include "../algos/ChannelOps.h"
+#include "../MainWindowCallbacks.h"
 
 class ImageViewer;
 
-// ============================================================================
-// MultiscaleDecompDialog — Multiscale Decomposition Tool
-// ============================================================================
-class MultiscaleDecompDialog : public DialogBase {
+// =============================================================================
+// MultiscaleDecompDialog
+//
+// Interactive multiscale decomposition tool. Decomposes an image into a
+// configurable number of Gaussian detail layers plus a residual, then allows
+// per-layer gain, threshold, amount, and denoise adjustments before
+// reconstructing and optionally applying the result.
+// =============================================================================
+class MultiscaleDecompDialog : public DialogBase
+{
     Q_OBJECT
+
 public:
     explicit MultiscaleDecompDialog(QWidget* parent = nullptr);
     ~MultiscaleDecompDialog();
 
+    // Attach a viewer; loads its buffer and triggers an initial decomposition.
     void setViewer(ImageViewer* v);
 
 protected:
@@ -59,80 +68,84 @@ private slots:
     void rebuildPreview();
 
 private:
+    // --- UI construction ---
     void buildUI();
+
+    // --- Decomposition ---
     void recomputeDecomp(bool force = false);
     void syncCfgsAndUI();
+    void buildTunedLayers(std::vector<std::vector<float>>& tuned,
+                          std::vector<float>& residual);
+
+    // --- Table management ---
     void rebuildTable();
     void refreshPreviewCombo();
     void loadLayerIntoEditor(int idx);
     void updateParamWidgetsForMode();
     void schedulePreview();
 
-    // Convert float image to QPixmap
+    // --- Rendering ---
     QPixmap floatToPixmap(const std::vector<float>& img, int w, int h, int ch);
 
-    // Build tuned layers from current settings
-    void buildTunedLayers(std::vector<std::vector<float>>& tuned,
-                          std::vector<float>& residual);
+    // --- Viewer ---
+    ImageViewer*          m_viewer     = nullptr;
+    MainWindowCallbacks*  m_mainWindow = nullptr;
 
-    ImageViewer* m_viewer = nullptr;
-
-    // Original image data (float32 [0,1], always 3ch for display)
+    // --- Source image data (float32 [0,1], always 3ch internally) ---
     std::vector<float> m_image;
-    int m_imgW = 0, m_imgH = 0, m_imgCh = 3;
+    int  m_imgW   = 0;
+    int  m_imgH   = 0;
+    int  m_imgCh  = 3;
     bool m_origMono = false;
-    int m_origCh = 0;
+    int  m_origCh   = 0;
 
-    // Decomposition cache
+    // --- Decomposition cache ---
     std::vector<std::vector<float>> m_cachedDetails;
-    std::vector<float> m_cachedResidual;
-    std::vector<float> m_layerNoise;
-    float m_cachedSigma = -1.0f;
-    int m_cachedLayers = -1;
+    std::vector<float>              m_cachedResidual;
+    std::vector<float>              m_layerNoise;
+    float m_cachedSigma  = -1.0f;
+    int   m_cachedLayers = -1;
 
-    // Per-layer configs
-    int m_layers = 4;
+    // --- Per-layer configuration ---
+    int   m_layers    = 4;
     float m_baseSigma = 1.0f;
     std::vector<ChannelOps::LayerCfg> m_cfgs;
     bool m_residualEnabled = true;
 
-    // Selected layer in table
+    // --- UI state ---
     int m_selectedLayer = -1;
 
-    // Preview debounce
+    // --- Preview debounce ---
     QTimer* m_previewTimer = nullptr;
 
-    // --- UI Widgets ---
-    // Left: preview
-    QGraphicsScene* m_scene = nullptr;
-    QGraphicsView* m_view = nullptr;
+    // --- Left panel: preview ---
+    QGraphicsScene*      m_scene   = nullptr;
+    QGraphicsView*       m_view    = nullptr;
     QGraphicsPixmapItem* m_pixBase = nullptr;
 
-    // Right: controls
-    QSpinBox* m_spinLayers = nullptr;
-    QDoubleSpinBox* m_spinSigma = nullptr;
-    QCheckBox* m_cbLinkedRGB = nullptr;
-    QComboBox* m_comboMode = nullptr;
-    QComboBox* m_comboPreview = nullptr;
+    // --- Right panel: global controls ---
+    QSpinBox*       m_spinLayers   = nullptr;
+    QDoubleSpinBox* m_spinSigma    = nullptr;
+    QCheckBox*      m_cbLinkedRGB  = nullptr;
+    QComboBox*      m_comboMode    = nullptr;
+    QComboBox*      m_comboPreview = nullptr;
+    QTableWidget*   m_table        = nullptr;
 
-    QTableWidget* m_table = nullptr;
+    // --- Per-layer editor ---
+    QLabel*         m_lblSel       = nullptr;
+    QDoubleSpinBox* m_spinGain     = nullptr;
+    QDoubleSpinBox* m_spinThr      = nullptr;
+    QDoubleSpinBox* m_spinAmt      = nullptr;
+    QDoubleSpinBox* m_spinDenoise  = nullptr;
+    QSlider*        m_sliderGain   = nullptr;
+    QSlider*        m_sliderThr    = nullptr;
+    QSlider*        m_sliderAmt    = nullptr;
+    QSlider*        m_sliderDenoise = nullptr;
 
-    // Per-layer editor
-    QLabel* m_lblSel = nullptr;
-    QDoubleSpinBox* m_spinGain = nullptr;
-    QDoubleSpinBox* m_spinThr = nullptr;
-    QDoubleSpinBox* m_spinAmt = nullptr;
-    QDoubleSpinBox* m_spinDenoise = nullptr;
-    QSlider* m_sliderGain = nullptr;
-    QSlider* m_sliderThr = nullptr;
-    QSlider* m_sliderAmt = nullptr;
-    QSlider* m_sliderDenoise = nullptr;
-
-    MainWindowCallbacks* m_mainWindow = nullptr;
-
-    QPushButton* m_btnApply = nullptr;
+    // --- Action buttons ---
+    QPushButton* m_btnApply  = nullptr;
     QPushButton* m_btnNewDoc = nullptr;
-    QPushButton* m_btnClose = nullptr;
+    QPushButton* m_btnClose  = nullptr;
 };
 
 #endif // MULTISCALE_DECOMP_DIALOG_H

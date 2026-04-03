@@ -1,4 +1,16 @@
+/**
+ * @file ModelDownloader.cpp
+ * @brief Implementation of AI model downloader
+ *
+ * Downloads Cosmic Clarity AI models from Google Drive or GitHub mirror,
+ * extracts the ZIP archive, and verifies installation. Handles Google Drive's
+ * virus scan interstitial page for large files.
+ *
+ * Copyright (C) 2024-2026 TStar Team
+ */
+
 #include "ModelDownloader.h"
+
 #include <QStandardPaths>
 #include <QDir>
 #include <QFile>
@@ -12,239 +24,363 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QRegularExpression>
-#include <QCryptographicHash>
-#include <QDebug>
-#include <QCoreApplication>
 #include <QProcess>
 #include <QUrlQuery>
 #include <QUrl>
 #include <QDateTime>
-#include <QOverload>
+#include <QDebug>
+#include <QCoreApplication>
 
-// Third-party ZIP support via Qt (minizip is not available, so we use a
-// simple approach: call the bundled Python to unzip, or do a manual unzip
-// using QProcess + built-in tools).
-// For robustness we implement a minimal ZIP reader using Qt's built-in
-// support or delegate to platform tools.
+/* ============================================================================
+ * Constants
+ * ============================================================================ */
 
-// Download URLs
-static const QString PRIMARY_GDRIVE =
+namespace {
+
+/** Primary Google Drive download URL */
+const QString PRIMARY_GDRIVE_URL =
     "https://drive.google.com/file/d/1d0wQr8Oau9UH3IalMW5anC0_oddxBjh3/view?usp=drive_link";
-static const QString BACKUP_GDRIVE =
+
+/** Backup Google Drive download URL */
+const QString BACKUP_GDRIVE_URL =
     "https://drive.google.com/file/d/1XgqKNd8iBgV3LW8CfzGyS4jigxsxIf86/view?usp=drive_link";
-static const QString GITHUB_MIRROR =
+
+/** GitHub mirror download URL (direct HTTP) */
+const QString GITHUB_MIRROR_URL =
     "https://github.com/setiastro/setiastrosuitepro/releases/download/benchmarkFIT/SASPro_Models_AI4.zip";
 
-// ============================================================================
-// ModelDownloaderWorker
-// ============================================================================
+/** Timeout for initial Google Drive request (15 seconds) */
+constexpr int GDRIVE_INITIAL_TIMEOUT_MS = 15000;
+
+/** Timeout for Google Drive confirmation request (30 seconds) */
+constexpr int GDRIVE_CONFIRM_TIMEOUT_MS = 30000;
+
+/** Timeout for large file downloads (10 minutes) */
+constexpr int DOWNLOAD_TIMEOUT_MS = 600000;
+
+/** Timeout for ZIP extraction (5 minutes) */
+constexpr int EXTRACTION_TIMEOUT_MS = 300000;
+
+/** Sentinel file to verify model installation */
+const QString SENTINEL_MODEL_FILE = "deep_sharp_stellar_AI4.pth";
+
+/** ZIP file magic bytes */
+constexpr unsigned char ZIP_MAGIC_0 = 0x50;  // 'P'
+constexpr unsigned char ZIP_MAGIC_1 = 0x4B;  // 'K'
+constexpr unsigned char ZIP_MAGIC_2 = 0x03;
+constexpr unsigned char ZIP_MAGIC_3 = 0x04;
+
+}  // anonymous namespace
+
+/* ============================================================================
+ * ModelDownloaderWorker Implementation
+ * ============================================================================ */
 
 ModelDownloaderWorker::ModelDownloaderWorker(QObject* parent)
-    : QObject(parent) {}
+    : QObject(parent)
+{
+}
 
-void ModelDownloaderWorker::cancel() {
+void ModelDownloaderWorker::cancel()
+{
     m_cancel = true;
 }
 
-QString ModelDownloaderWorker::extractDriveFileId(const QString& urlOrId) {
-    // Try /file/d/ID pattern
-    QRegularExpression re("/file/d/([a-zA-Z0-9_-]+)");
-    auto m = re.match(urlOrId);
-    if (m.hasMatch()) return m.captured(1);
+/* ----------------------------------------------------------------------------
+ * Google Drive Helpers
+ * ---------------------------------------------------------------------------- */
 
-    // Try ?id=ID pattern
-    QRegularExpression re2("[?&]id=([a-zA-Z0-9_-]+)");
-    m = re2.match(urlOrId);
-    if (m.hasMatch()) return m.captured(1);
+QString ModelDownloaderWorker::extractDriveFileId(const QString& urlOrId)
+{
+    /* Pattern 1: /file/d/FILE_ID/... */
+    QRegularExpression filePattern("/file/d/([a-zA-Z0-9_-]+)");
+    auto match = filePattern.match(urlOrId);
+    if (match.hasMatch()) {
+        return match.captured(1);
+    }
 
-    // Raw ID
-    QRegularExpression re3("^[0-9A-Za-z_-]{10,}$");
-    if (re3.match(urlOrId).hasMatch()) return urlOrId;
+    /* Pattern 2: ?id=FILE_ID or &id=FILE_ID */
+    QRegularExpression idPattern("[?&]id=([a-zA-Z0-9_-]+)");
+    match = idPattern.match(urlOrId);
+    if (match.hasMatch()) {
+        return match.captured(1);
+    }
 
-    return {};
+    /* Pattern 3: Raw file ID (10+ alphanumeric characters) */
+    QRegularExpression rawPattern("^[0-9A-Za-z_-]{10,}$");
+    if (rawPattern.match(urlOrId).hasMatch()) {
+        return urlOrId;
+    }
+
+    return QString();
 }
 
 bool ModelDownloaderWorker::parseGDriveInterstitial(const QByteArray& html,
-                                                     QString& action,
-                                                     QMap<QString, QString>& params) {
-    QString h = QString::fromUtf8(html);
+                                                    QString& action,
+                                                    QMap<QString, QString>& params)
+{
+    QString content = QString::fromUtf8(html);
 
-    // Find form action
-    QRegularExpression reForm("<form[^>]+id=\"download-form\"[^>]+action=\"([^\"]+)\"");
-    auto m = reForm.match(h);
-    if (!m.hasMatch()) return false;
-    action = m.captured(1);
+    /* Extract form action URL */
+    QRegularExpression formPattern(
+        "<form[^>]+id=\"download-form\"[^>]+action=\"([^\"]+)\"");
+    auto match = formPattern.match(content);
 
-    // Find hidden inputs
-    QRegularExpression reInput("<input[^>]+type=\"hidden\"[^>]+name=\"([^\"]+)\"[^>]*value=\"([^\"]*)\"");
-    auto it = reInput.globalMatch(h);
-    while (it.hasNext()) {
-        auto match = it.next();
-        params[match.captured(1)] = match.captured(2);
+    if (!match.hasMatch()) {
+        return false;
     }
 
-    // Also find hidden inputs without value attribute
-    QRegularExpression reInput2("<input[^>]+type=\"hidden\"[^>]+name=\"([^\"]+)\"(?![^>]*value=)");
-    auto it2 = reInput2.globalMatch(h);
-    while (it2.hasNext()) {
-        auto match = it2.next();
-        if (!params.contains(match.captured(1)))
-            params[match.captured(1)] = "";
+    action = match.captured(1);
+
+    /* Extract hidden input fields with values */
+    QRegularExpression inputPattern(
+        "<input[^>]+type=\"hidden\"[^>]+name=\"([^\"]+)\"[^>]*value=\"([^\"]*)\"");
+    auto iterator = inputPattern.globalMatch(content);
+
+    while (iterator.hasNext()) {
+        auto inputMatch = iterator.next();
+        params[inputMatch.captured(1)] = inputMatch.captured(2);
+    }
+
+    /* Extract hidden inputs without value attribute */
+    QRegularExpression inputNoValuePattern(
+        "<input[^>]+type=\"hidden\"[^>]+name=\"([^\"]+)\"(?![^>]*value=)");
+    auto iterator2 = inputNoValuePattern.globalMatch(content);
+
+    while (iterator2.hasNext()) {
+        auto inputMatch = iterator2.next();
+        if (!params.contains(inputMatch.captured(1))) {
+            params[inputMatch.captured(1)] = QString();
+        }
     }
 
     return true;
 }
 
-bool ModelDownloaderWorker::downloadGoogleDrive(const QString& fileId, const QString& destPath) {
-    if (fileId.isEmpty()) return false;
+/* ----------------------------------------------------------------------------
+ * Download Methods
+ * ---------------------------------------------------------------------------- */
 
-    // Usa una singola NAM statica per mantenere sessione e cookie tra le richieste
-    // Questo evita che Google Drive chieda di nuovo la conferma
-    static QNetworkAccessManager nam;
+/**
+ * @brief Validate that a file is a valid ZIP archive
+ *
+ * @param filePath Path to the file to validate
+ * @return true if file has ZIP magic bytes, false otherwise
+ */
+static bool isValidZipFile(const QString& filePath)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+
+    QByteArray header = file.read(4);
+    file.close();
+
+    if (header.size() < 4) {
+        return false;
+    }
+
+    return (static_cast<unsigned char>(header[0]) == ZIP_MAGIC_0 &&
+            static_cast<unsigned char>(header[1]) == ZIP_MAGIC_1 &&
+            static_cast<unsigned char>(header[2]) == ZIP_MAGIC_2 &&
+            static_cast<unsigned char>(header[3]) == ZIP_MAGIC_3);
+}
+
+/**
+ * @brief Check if downloaded content is an HTML error page
+ *
+ * @param filePath Path to the file to check
+ * @return true if file appears to be HTML, false otherwise
+ */
+static bool isHtmlErrorPage(const QString& filePath)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+
+    QByteArray header = file.read(512);
+    file.close();
+
+    return (header.contains("<html") ||
+            header.contains("<!doctype") ||
+            header.contains("class=\"a-box"));
+}
+
+bool ModelDownloaderWorker::downloadGoogleDrive(const QString& fileId,
+                                                const QString& destPath)
+{
+    if (fileId.isEmpty()) {
+        return false;
+    }
+
+    /*
+     * Use a static NAM to maintain session cookies across requests.
+     * This prevents Google Drive from re-requesting confirmation.
+     */
+    static QNetworkAccessManager networkManager;
     static bool initialized = false;
+
     if (!initialized) {
-        nam.setCookieJar(new QNetworkCookieJar(&nam));
+        networkManager.setCookieJar(new QNetworkCookieJar(&networkManager));
         initialized = true;
     }
-    
-    QString url = QString("https://drive.google.com/uc?export=download&id=%1").arg(fileId);
 
-    emit progress(tr("Connecting to Google Drive…"));
+    QString downloadUrl = QString("https://drive.google.com/uc?export=download&id=%1").arg(fileId);
 
-    // First request with timeout
-    QNetworkRequest req{QUrl(url)};
-    req.setHeader(QNetworkRequest::UserAgentHeader, "TStar-ModelDownloader");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    emit progress(tr("Connecting to Google Drive..."));
 
-    QNetworkReply* reply = nam.get(req);
-    QEventLoop loop;
-    QTimer timeout1;
-    timeout1.setSingleShot(true);
+    /* Initial request */
+    QNetworkRequest request{QUrl(downloadUrl)};
+    request.setHeader(QNetworkRequest::UserAgentHeader, "TStar-ModelDownloader");
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+
+    QNetworkReply* reply = networkManager.get(request);
+
+    /* Wait for initial response */
+    QEventLoop eventLoop;
+    QTimer timeoutTimer;
+    timeoutTimer.setSingleShot(true);
     bool timedOut = false;
-    connect(&timeout1, &QTimer::timeout, [&](){ timedOut = true; loop.quit(); });
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    timeout1.start(15000); // 15 sec timeout
-    loop.exec();
-    timeout1.stop();
+
+    connect(&timeoutTimer, &QTimer::timeout, [&]() {
+        timedOut = true;
+        eventLoop.quit();
+    });
+    connect(reply, &QNetworkReply::finished, &eventLoop, &QEventLoop::quit);
+
+    timeoutTimer.start(GDRIVE_INITIAL_TIMEOUT_MS);
+    eventLoop.exec();
+    timeoutTimer.stop();
 
     if (timedOut || reply->error() != QNetworkReply::NoError) {
-        qWarning() << "Google Drive first request failed or timed out";
+        qWarning() << "Google Drive initial request failed or timed out";
         reply->deleteLater();
-        return downloadHttp(GITHUB_MIRROR, destPath);
+        return downloadHttp(GITHUB_MIRROR_URL, destPath);
     }
 
-    // Check if we got HTML (virus scan interstitial)
-    QString contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString().toLower();
-    QByteArray data = reply->readAll();
+    /* Check if we received an HTML interstitial page */
+    QString contentType = reply->header(QNetworkRequest::ContentTypeHeader)
+                              .toString().toLower();
+    QByteArray responseData = reply->readAll();
     reply->deleteLater();
 
     if (contentType.contains("text/html")) {
-        QString action;
-        QMap<QString, QString> params;
-        if (!parseGDriveInterstitial(data, action, params)) {
+        /* Parse the virus scan confirmation form */
+        QString formAction;
+        QMap<QString, QString> formParams;
+
+        if (!parseGDriveInterstitial(responseData, formAction, formParams)) {
             qWarning() << "Failed to parse Google Drive confirmation form";
-            emit progress(tr("Google Drive form parsing failed, trying GitHub mirror…"));
-            return downloadHttp(GITHUB_MIRROR, destPath);
+            emit progress(tr("Google Drive form parsing failed, trying GitHub mirror..."));
+            return downloadHttp(GITHUB_MIRROR_URL, destPath);
         }
 
-        if (action.isEmpty()) {
+        if (formAction.isEmpty()) {
             qWarning() << "Google Drive form action is empty";
-            return downloadHttp(GITHUB_MIRROR, destPath);
+            return downloadHttp(GITHUB_MIRROR_URL, destPath);
         }
 
-        emit progress(tr("Google Drive interstitial detected — confirming…"));
+        emit progress(tr("Google Drive interstitial detected - confirming..."));
         emit progressValue(-1);
 
-        // Build and send confirmation request with timeout
-        QUrl confirmUrl(action);
+        /* Build confirmation request */
+        QUrl confirmUrl(formAction);
         QUrlQuery query;
-        for (auto it = params.begin(); it != params.end(); ++it)
+        for (auto it = formParams.begin(); it != formParams.end(); ++it) {
             query.addQueryItem(it.key(), it.value());
+        }
         confirmUrl.setQuery(query);
 
-        QNetworkRequest req2(confirmUrl);
-        req2.setHeader(QNetworkRequest::UserAgentHeader, "TStar-ModelDownloader");
-        req2.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+        QNetworkRequest confirmRequest(confirmUrl);
+        confirmRequest.setHeader(QNetworkRequest::UserAgentHeader, "TStar-ModelDownloader");
+        confirmRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                                    QNetworkRequest::NoLessSafeRedirectPolicy);
 
-        reply = nam.get(req2);
-        QEventLoop loop2;
-        QTimer timeout2;
-        timeout2.setSingleShot(true);
-        bool timedOut2 = false;
-        connect(&timeout2, &QTimer::timeout, [&](){ timedOut2 = true; loop2.quit(); });
-        connect(reply, &QNetworkReply::finished, &loop2, &QEventLoop::quit);
-        timeout2.start(30000); // 30 sec timeout
-        loop2.exec();
-        timeout2.stop();
+        reply = networkManager.get(confirmRequest);
 
-        if (timedOut2 || reply->error() != QNetworkReply::NoError) {
+        /* Wait for confirmation response */
+        QEventLoop confirmLoop;
+        QTimer confirmTimer;
+        confirmTimer.setSingleShot(true);
+        bool confirmTimedOut = false;
+
+        connect(&confirmTimer, &QTimer::timeout, [&]() {
+            confirmTimedOut = true;
+            confirmLoop.quit();
+        });
+        connect(reply, &QNetworkReply::finished, &confirmLoop, &QEventLoop::quit);
+
+        confirmTimer.start(GDRIVE_CONFIRM_TIMEOUT_MS);
+        confirmLoop.exec();
+        confirmTimer.stop();
+
+        if (confirmTimedOut || reply->error() != QNetworkReply::NoError) {
             qWarning() << "Google Drive confirmation failed or timed out";
-            emit progress(tr("Google Drive confirmation failed, trying GitHub mirror…"));
+            emit progress(tr("Google Drive confirmation failed, trying GitHub mirror..."));
             reply->deleteLater();
-            return downloadHttp(GITHUB_MIRROR, destPath);
+            return downloadHttp(GITHUB_MIRROR_URL, destPath);
         }
     }
 
-    // Stream main file to temporary location
-    QString partPath = destPath + ".part";
-    QFile file(partPath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        qWarning() << "Cannot create file:" << partPath;
+    /* Stream file content to disk */
+    QString partialPath = destPath + ".part";
+    QFile outputFile(partialPath);
+
+    if (!outputFile.open(QIODevice::WriteOnly)) {
+        qWarning() << "Cannot create file:" << partialPath;
         reply->deleteLater();
         return false;
     }
 
-    qint64 total = reply->header(QNetworkRequest::ContentLengthHeader).toLongLong();
-    qint64 done = 0;
-    
-    // Read data in chunks as it becomes available
+    qint64 totalBytes = reply->header(QNetworkRequest::ContentLengthHeader).toLongLong();
+    qint64 receivedBytes = 0;
+
+    /* Read and write in chunks */
     QByteArray chunk;
     while (!(chunk = reply->read(1024 * 1024)).isEmpty()) {
         if (m_cancel) {
-            file.close();
-            QFile::remove(partPath);
+            outputFile.close();
+            QFile::remove(partialPath);
             reply->deleteLater();
             return false;
         }
 
-        file.write(chunk);
-        done += chunk.size();
-        
-        if (total > 0) {
-            int pct = qBound(0, static_cast<int>((double(done) / double(total)) * 100.0), 100);
-            emit progress(tr("Downloading… %1%").arg(pct));
-            emit progressValue(pct);
+        outputFile.write(chunk);
+        receivedBytes += chunk.size();
+
+        /* Report progress */
+        if (totalBytes > 0) {
+            int percentage = qBound(0,
+                static_cast<int>((double(receivedBytes) / double(totalBytes)) * 100.0),
+                100);
+            emit progress(tr("Downloading... %1%").arg(percentage));
+            emit progressValue(percentage);
         } else {
-            emit progress(tr("Downloading… %1 MB").arg(done / (1024.0 * 1024.0), 0, 'f', 1));
+            double megabytes = receivedBytes / (1024.0 * 1024.0);
+            emit progress(tr("Downloading... %1 MB").arg(megabytes, 0, 'f', 1));
             emit progressValue(-1);
         }
     }
 
-    file.close();
+    outputFile.close();
     reply->deleteLater();
 
-    // Validate file is ZIP (check magic bytes)
-    QFile checkFile(partPath);
-    if (checkFile.open(QIODevice::ReadOnly)) {
-        QByteArray head = checkFile.read(512);
-        checkFile.close();
-        
-        // Check for ZIP magic bytes: PK\x03\x04
-        if (head.size() >= 4 && (unsigned char)head[0] == 0x50 && (unsigned char)head[1] == 0x4B && 
-            (unsigned char)head[2] == 0x03 && (unsigned char)head[3] == 0x04) {
-            // Valid ZIP file
-        } else if (head.contains("<html") || head.contains("<!doctype") || head.contains("class=\"a-box")) {
-            // HTML error page from Google Drive
+    /* Validate the downloaded file */
+    if (!isValidZipFile(partialPath)) {
+        if (isHtmlErrorPage(partialPath)) {
             qWarning() << "Downloaded file is HTML, not ZIP. Falling back to GitHub.";
-            QFile::remove(partPath);
-            return downloadHttp(GITHUB_MIRROR, destPath);
+            QFile::remove(partialPath);
+            return downloadHttp(GITHUB_MIRROR_URL, destPath);
         }
     }
 
-    // Atomic rename
+    /* Atomic rename from partial to final path */
     QFile::remove(destPath);
-    if (!QFile::rename(partPath, destPath)) {
-        QFile::remove(partPath);
+    if (!QFile::rename(partialPath, destPath)) {
+        QFile::remove(partialPath);
         return false;
     }
 
@@ -252,93 +388,101 @@ bool ModelDownloaderWorker::downloadGoogleDrive(const QString& fileId, const QSt
     return true;
 }
 
-bool ModelDownloaderWorker::downloadHttp(const QString& url, const QString& destPath) {
-    QNetworkAccessManager nam;
+bool ModelDownloaderWorker::downloadHttp(const QString& url, const QString& destPath)
+{
+    QNetworkAccessManager networkManager;
 
-    emit progress(tr("Connecting to GitHub mirror…"));
+    emit progress(tr("Connecting to GitHub mirror..."));
 
-    QNetworkRequest req{QUrl(url)};
-    req.setHeader(QNetworkRequest::UserAgentHeader, "TStar-ModelDownloader");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    QNetworkRequest request{QUrl(url)};
+    request.setHeader(QNetworkRequest::UserAgentHeader, "TStar-ModelDownloader");
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
 
-    QNetworkReply* reply = nam.get(req);
-    
-    // Connect to start reading data as soon as first bytes arrive
-    QString partPath = destPath + ".part";
-    QFile file(partPath);
+    QNetworkReply* reply = networkManager.get(request);
+
+    QString partialPath = destPath + ".part";
+    QFile outputFile(partialPath);
     bool fileOpened = false;
-    
-    qint64 total = 0;
-    qint64 done = 0;
-    
+
+    qint64 totalBytes = 0;
+    qint64 receivedBytes = 0;
+
+    /* Open file when metadata arrives */
     connect(reply, &QNetworkReply::metaDataChanged, [&]() {
-        if (!fileOpened && file.open(QIODevice::WriteOnly)) {
+        if (!fileOpened && outputFile.open(QIODevice::WriteOnly)) {
             fileOpened = true;
-            total = reply->header(QNetworkRequest::ContentLengthHeader).toLongLong();
-            if (total > 0) {
-                emit progress(tr("Downloading… 0%"));
+            totalBytes = reply->header(QNetworkRequest::ContentLengthHeader).toLongLong();
+            if (totalBytes > 0) {
+                emit progress(tr("Downloading... 0%"));
             }
         }
     });
-    
+
+    /* Stream data to file */
     connect(reply, &QNetworkReply::readyRead, [&]() {
-        if (!fileOpened) return;
+        if (!fileOpened) {
+            return;
+        }
+
         QByteArray chunk = reply->read(1024 * 1024);
-        file.write(chunk);
-        done += chunk.size();
-        
-        if (total > 0) {
-            int pct = qBound(0, static_cast<int>((double(done) / double(total)) * 100.0), 100);
-            emit progress(tr("Downloading… %1%").arg(pct));
-            emit progressValue(pct);
+        outputFile.write(chunk);
+        receivedBytes += chunk.size();
+
+        if (totalBytes > 0) {
+            int percentage = qBound(0,
+                static_cast<int>((double(receivedBytes) / double(totalBytes)) * 100.0),
+                100);
+            emit progress(tr("Downloading... %1%").arg(percentage));
+            emit progressValue(percentage);
         } else {
-            emit progress(tr("Downloading… %1 MB").arg(done / (1024.0 * 1024.0), 0, 'f', 1));
+            double megabytes = receivedBytes / (1024.0 * 1024.0);
+            emit progress(tr("Downloading... %1 MB").arg(megabytes, 0, 'f', 1));
             emit progressValue(-1);
         }
     });
 
-    // Wait with timeout
-    QEventLoop loop;
-    QTimer timeout;
-    timeout.setSingleShot(true);
+    /* Wait for completion */
+    QEventLoop eventLoop;
+    QTimer timeoutTimer;
+    timeoutTimer.setSingleShot(true);
     bool timedOut = false;
-    connect(&timeout, &QTimer::timeout, [&](){ timedOut = true; loop.quit(); });
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    timeout.start(600000); // 10 min timeout for GitHub
-    loop.exec();
-    timeout.stop();
-    
-    if (fileOpened) file.close();
+
+    connect(&timeoutTimer, &QTimer::timeout, [&]() {
+        timedOut = true;
+        eventLoop.quit();
+    });
+    connect(reply, &QNetworkReply::finished, &eventLoop, &QEventLoop::quit);
+
+    timeoutTimer.start(DOWNLOAD_TIMEOUT_MS);
+    eventLoop.exec();
+    timeoutTimer.stop();
+
+    if (fileOpened) {
+        outputFile.close();
+    }
 
     if (timedOut || reply->error() != QNetworkReply::NoError) {
         emit progress(tr("GitHub mirror download failed or timed out."));
         qWarning() << "GitHub download failed:" << reply->errorString();
-        QFile::remove(partPath);
+        QFile::remove(partialPath);
         reply->deleteLater();
         return false;
     }
 
     reply->deleteLater();
 
-    // Validate ZIP
-    QFile checkFile(partPath);
-    if (checkFile.open(QIODevice::ReadOnly)) {
-        QByteArray head = checkFile.read(512);
-        checkFile.close();
-        
-        if (head.size() >= 4 && (unsigned char)head[0] == 0x50 && (unsigned char)head[1] == 0x4B && 
-            (unsigned char)head[2] == 0x03 && (unsigned char)head[3] == 0x04) {
-            // Valid ZIP
-        } else {
-            qWarning() << "GitHub file is not a valid ZIP";
-            QFile::remove(partPath);
-            return false;
-        }
+    /* Validate ZIP file */
+    if (!isValidZipFile(partialPath)) {
+        qWarning() << "GitHub file is not a valid ZIP";
+        QFile::remove(partialPath);
+        return false;
     }
 
+    /* Atomic rename */
     QFile::remove(destPath);
-    if (!QFile::rename(partPath, destPath)) {
-        QFile::remove(partPath);
+    if (!QFile::rename(partialPath, destPath)) {
+        QFile::remove(partialPath);
         return false;
     }
 
@@ -346,219 +490,285 @@ bool ModelDownloaderWorker::downloadHttp(const QString& url, const QString& dest
     return true;
 }
 
-bool ModelDownloaderWorker::extractZip(const QString& zipPath, const QString& destDir) {
-    emit progress(tr("Extracting models…"));
+/* ----------------------------------------------------------------------------
+ * Extraction Methods
+ * ---------------------------------------------------------------------------- */
+
+bool ModelDownloaderWorker::extractZip(const QString& zipPath, const QString& destDir)
+{
+    emit progress(tr("Extracting models..."));
     emit progressValue(-1);
 
-    // Create temp dir for extraction
+    /* Create temporary directory for extraction */
     QString tempDir = destDir + "_extract_temp";
     QDir().mkpath(tempDir);
-    
-    // Use platform tools to extract ZIP
-    QProcess proc;
+
+    QProcess extractProcess;
     bool success = false;
 
 #ifdef Q_OS_WIN
-    // Try tar first (Windows 10+) - more reliable than PowerShell for large zips
-    proc.setProgram("tar");
-    proc.setArguments({"-xf", zipPath, "-C", tempDir});
-    
-    proc.start();
-    if (!proc.waitForFinished(300000)) { // 5 min timeout
+    /*
+     * Windows extraction strategy:
+     * 1. Try 'tar' (available on Windows 10+, more reliable)
+     * 2. Fall back to PowerShell Expand-Archive
+     */
+    extractProcess.setProgram("tar");
+    extractProcess.setArguments({"-xf", zipPath, "-C", tempDir});
+    extractProcess.start();
+
+    if (!extractProcess.waitForFinished(EXTRACTION_TIMEOUT_MS)) {
         emit progress(tr("Extraction timed out."));
         QDir(tempDir).removeRecursively();
         return false;
     }
 
-    if (proc.exitCode() == 0) {
+    if (extractProcess.exitCode() == 0) {
         success = true;
     } else {
-        // Fallback to PowerShell Expand-Archive
+        /* Fallback to PowerShell */
         qWarning() << "tar failed, falling back to PowerShell Expand-Archive";
-        proc.start("powershell", {"-NoProfile", "-NoExit", "-Command",
-            QString("$ProgressPreference='SilentlyContinue'; Expand-Archive -Path \"%1\" -DestinationPath \"%2\" -Force").arg(zipPath, tempDir)});
-        
-        if (!proc.waitForFinished(300000)) {
+
+        QString psCommand = QString(
+            "$ProgressPreference='SilentlyContinue'; "
+            "Expand-Archive -Path \"%1\" -DestinationPath \"%2\" -Force"
+        ).arg(zipPath, tempDir);
+
+        extractProcess.start("powershell",
+            {"-NoProfile", "-NoExit", "-Command", psCommand});
+
+        if (!extractProcess.waitForFinished(EXTRACTION_TIMEOUT_MS)) {
             emit progress(tr("Extraction timed out."));
             QDir(tempDir).removeRecursively();
             return false;
         }
-        
-        if (proc.exitCode() == 0) {
-            success = true;
-        }
-    }
-#elif defined(Q_OS_MAC)
-    // macOS uses bsdtar by default, which natively supports ZIP and is very robust
-    proc.setProgram("tar");
-    proc.setArguments({"-xf", zipPath, "-C", tempDir});
 
-    proc.start();
-    if (!proc.waitForFinished(300000)) { // 5 min timeout
+        success = (extractProcess.exitCode() == 0);
+    }
+
+#elif defined(Q_OS_MAC)
+    /*
+     * macOS extraction strategy:
+     * 1. Try 'bsdtar' (system default, natively supports ZIP)
+     * 2. Fall back to 'unzip'
+     */
+    extractProcess.setProgram("tar");
+    extractProcess.setArguments({"-xf", zipPath, "-C", tempDir});
+    extractProcess.start();
+
+    if (!extractProcess.waitForFinished(EXTRACTION_TIMEOUT_MS)) {
         emit progress(tr("Extraction timed out."));
         QDir(tempDir).removeRecursively();
         return false;
     }
 
-    if (proc.exitCode() == 0) {
+    if (extractProcess.exitCode() == 0) {
         success = true;
     } else {
-        // Fallback to unzip
+        /* Fallback to unzip */
         qWarning() << "tar failed on macOS, falling back to unzip";
-        proc.start("unzip", {"-o", zipPath, "-d", tempDir});
-         if (!proc.waitForFinished(300000)) {
+
+        extractProcess.start("unzip", {"-o", zipPath, "-d", tempDir});
+
+        if (!extractProcess.waitForFinished(EXTRACTION_TIMEOUT_MS)) {
             emit progress(tr("Extraction timed out."));
             QDir(tempDir).removeRecursively();
             return false;
         }
-        if (proc.exitCode() == 0) success = true;
-    }
-#else
-    // Linux/Other: unzip is the standard tool
-    proc.setProgram("unzip");
-    proc.setArguments({"-o", zipPath, "-d", tempDir});
-    
-    proc.start();
-    if (!proc.waitForFinished(300000)) { // 5 min timeout
-        emit progress(tr("Extraction timed out."));
-        // ... cleanup handled below
+
+        success = (extractProcess.exitCode() == 0);
     }
 
-    if (proc.exitCode() == 0) {
-        success = true;
+#else
+    /* Linux: Use 'unzip' as the standard tool */
+    extractProcess.setProgram("unzip");
+    extractProcess.setArguments({"-o", zipPath, "-d", tempDir});
+    extractProcess.start();
+
+    if (!extractProcess.waitForFinished(EXTRACTION_TIMEOUT_MS)) {
+        emit progress(tr("Extraction timed out."));
+        QDir(tempDir).removeRecursively();
+        return false;
     }
+
+    success = (extractProcess.exitCode() == 0);
 #endif
 
     if (!success) {
-        QString errMsg = QString::fromUtf8(proc.readAllStandardError()).trimmed();
-        if (errMsg.isEmpty()) {
-            errMsg = "Unknown extraction error";
+        QString errorMsg = QString::fromUtf8(extractProcess.readAllStandardError()).trimmed();
+        if (errorMsg.isEmpty()) {
+            errorMsg = "Unknown extraction error";
         }
-        emit progress(tr("Extraction failed: %1").arg(errMsg));
-        qWarning() << "Extraction error:" << errMsg;
+
+        emit progress(tr("Extraction failed: %1").arg(errorMsg));
+        qWarning() << "Extraction error:" << errorMsg;
         QDir(tempDir).removeRecursively();
         return false;
     }
-    
-    // Move extracted files to destDir
-    emit progress(tr("Finalizing installation…"));
+
+    /* Move extracted files to destination */
+    emit progress(tr("Finalizing installation..."));
+
     QDir temp(tempDir);
-    for (const auto& entry : temp.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
-        QString src = temp.filePath(entry);
-        QString dst = QDir(destDir).filePath(entry);
-        QFile::remove(dst);
-        QDir(dst).removeRecursively();
-        if (!QFile::rename(src, dst)) {
-            qWarning() << "Failed to move" << src << "to" << dst;
+    QStringList entries = temp.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+
+    for (const QString& entry : entries) {
+        QString srcPath = temp.filePath(entry);
+        QString dstPath = QDir(destDir).filePath(entry);
+
+        /* Remove existing file/directory at destination */
+        QFile::remove(dstPath);
+        QDir(dstPath).removeRecursively();
+
+        if (!QFile::rename(srcPath, dstPath)) {
+            qWarning() << "Failed to move" << srcPath << "to" << dstPath;
         }
     }
+
     QDir(tempDir).removeRecursively();
 
-    // Some ZIPs contain a top-level folder; normalize by moving contents up
+    /*
+     * Handle ZIPs with a single top-level folder.
+     * Move contents up if the folder contains model files.
+     */
     QDir dest(destDir);
-    QStringList entries = dest.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-    if (entries.size() == 1) {
-        QDir subDir(dest.filePath(entries.first()));
-        // Check if this single dir contains model files
+    QStringList topEntries = dest.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+
+    if (topEntries.size() == 1) {
+        QDir subDir(dest.filePath(topEntries.first()));
+
+        /* Check if this directory contains model files */
         bool hasModels = false;
-        for (const auto& f : subDir.entryList(QDir::Files)) {
-            if (f.endsWith(".pth") || f.endsWith(".onnx")) {
+        for (const QString& file : subDir.entryList(QDir::Files)) {
+            if (file.endsWith(".pth") || file.endsWith(".onnx")) {
                 hasModels = true;
                 break;
             }
         }
+
         if (hasModels) {
-            // Move all contents from subDir to destDir
-            for (const auto& entry : subDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
-                QString src = subDir.filePath(entry);
-                QString dst = dest.filePath(entry);
-                QFile::remove(dst);
-                if (!QFile::rename(src, dst)) {
-                    qWarning() << "Failed to move" << src << "to" << dst;
+            /* Move all contents from subdirectory to destination */
+            for (const QString& entry : subDir.entryList(
+                     QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+
+                QString srcPath = subDir.filePath(entry);
+                QString dstPath = dest.filePath(entry);
+
+                QFile::remove(dstPath);
+
+                if (!QFile::rename(srcPath, dstPath)) {
+                    qWarning() << "Failed to move" << srcPath << "to" << dstPath;
                 }
             }
+
             subDir.removeRecursively();
         }
     }
 
     emit progress(tr("Extraction complete."));
     emit progressValue(100);
+
     return true;
 }
 
-void ModelDownloaderWorker::run() {
+/* ----------------------------------------------------------------------------
+ * Main Download Workflow
+ * ---------------------------------------------------------------------------- */
+
+void ModelDownloaderWorker::run()
+{
     m_cancel = false;
     emit progressValue(-1);
 
     QString modelsDir = ModelDownloader::cosmicClarityRoot();
     QDir().mkpath(modelsDir);
 
-    QString tmpZip = QDir::tempPath() + "/tstar_models_latest.zip";
+    QString tempZipPath = QDir::tempPath() + "/tstar_models_latest.zip";
 
-    bool ok = false;
+    bool downloadSuccess = false;
     QString usedSource;
 
-    // 1) Try primary Google Drive
-    QString fid1 = extractDriveFileId(PRIMARY_GDRIVE);
-    if (!fid1.isEmpty() && !m_cancel) {
-        emit progress(tr("Downloading from primary (Google Drive)…"));
-        ok = downloadGoogleDrive(fid1, tmpZip);
-        if (ok) usedSource = "google_drive_primary";
-        else QFile::remove(tmpZip); // Clean up failed download
-    }
+    /* Attempt 1: Primary Google Drive */
+    QString primaryFileId = extractDriveFileId(PRIMARY_GDRIVE_URL);
 
-    // 2) Try backup Google Drive
-    if (!ok && !m_cancel) {
-        QString fid2 = extractDriveFileId(BACKUP_GDRIVE);
-        if (!fid2.isEmpty()) {
-            emit progress(tr("Primary failed. Trying backup (Google Drive)…"));
-            ok = downloadGoogleDrive(fid2, tmpZip);
-            if (ok) usedSource = "google_drive_backup";
-            else QFile::remove(tmpZip); // Clean up failed download
+    if (!primaryFileId.isEmpty() && !m_cancel) {
+        emit progress(tr("Downloading from primary (Google Drive)..."));
+        downloadSuccess = downloadGoogleDrive(primaryFileId, tempZipPath);
+
+        if (downloadSuccess) {
+            usedSource = "google_drive_primary";
+        } else {
+            QFile::remove(tempZipPath);
         }
     }
 
-    // 3) Try GitHub HTTP mirror
-    if (!ok && !m_cancel) {
-        emit progress(tr("Google Drive failed. Trying GitHub mirror…"));
-        ok = downloadHttp(GITHUB_MIRROR, tmpZip);
-        if (ok) usedSource = "github_http";
-        else QFile::remove(tmpZip); // Clean up failed download
+    /* Attempt 2: Backup Google Drive */
+    if (!downloadSuccess && !m_cancel) {
+        QString backupFileId = extractDriveFileId(BACKUP_GDRIVE_URL);
+
+        if (!backupFileId.isEmpty()) {
+            emit progress(tr("Primary failed. Trying backup (Google Drive)..."));
+            downloadSuccess = downloadGoogleDrive(backupFileId, tempZipPath);
+
+            if (downloadSuccess) {
+                usedSource = "google_drive_backup";
+            } else {
+                QFile::remove(tempZipPath);
+            }
+        }
     }
 
+    /* Attempt 3: GitHub HTTP mirror */
+    if (!downloadSuccess && !m_cancel) {
+        emit progress(tr("Google Drive failed. Trying GitHub mirror..."));
+        downloadSuccess = downloadHttp(GITHUB_MIRROR_URL, tempZipPath);
+
+        if (downloadSuccess) {
+            usedSource = "github_http";
+        } else {
+            QFile::remove(tempZipPath);
+        }
+    }
+
+    /* Handle cancellation */
     if (m_cancel) {
-        QFile::remove(tmpZip);
+        QFile::remove(tempZipPath);
         emit finished(false, tr("Download cancelled."));
         return;
     }
 
-    if (!ok) {
-        QFile::remove(tmpZip);
-        emit finished(false, tr("All download sources failed. Please check your internet connection."));
+    /* Handle download failure */
+    if (!downloadSuccess) {
+        QFile::remove(tempZipPath);
+        emit finished(false,
+            tr("All download sources failed. Please check your internet connection."));
         return;
     }
 
-    // 4) Clear existing models
-    emit progress(tr("Installing models…"));
-    QDir md(modelsDir);
-    for (const auto& entry : md.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
-        QString path = md.filePath(entry);
-        QFileInfo fi(path);
-        if (fi.isDir()) {
+    /* Clear existing models before extraction */
+    emit progress(tr("Installing models..."));
+
+    QDir modelsDirectory(modelsDir);
+    for (const QString& entry : modelsDirectory.entryList(
+             QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+
+        QString path = modelsDirectory.filePath(entry);
+        QFileInfo fileInfo(path);
+
+        if (fileInfo.isDir()) {
             QDir(path).removeRecursively();
         } else {
             QFile::remove(path);
         }
     }
 
-    // 5) Extract ZIP
-    if (!extractZip(tmpZip, modelsDir)) {
-        QFile::remove(tmpZip);
+    /* Extract the downloaded ZIP */
+    if (!extractZip(tempZipPath, modelsDir)) {
+        QFile::remove(tempZipPath);
         emit finished(false, tr("Failed to extract models ZIP."));
         return;
     }
 
-    // 6) Write manifest
+    /* Write installation manifest */
     QJsonObject manifest;
     manifest["source"] = usedSource;
     manifest["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
@@ -569,33 +779,44 @@ void ModelDownloaderWorker::run() {
         manifestFile.close();
     }
 
-    // 7) Cleanup
-    QFile::remove(tmpZip);
+    /* Clean up temporary file */
+    QFile::remove(tempZipPath);
     emit progressValue(100);
 
-    // 8) Verify
+    /* Verify installation */
     if (ModelDownloader::modelsInstalled()) {
         emit finished(true, tr("Models downloaded and installed successfully."));
     } else {
-        // Detailed error message showing what was actually extracted
+        /* Provide detailed error information */
         QDir dest(ModelDownloader::cosmicClarityRoot());
         QStringList files = dest.entryList(QDir::Files);
         QString fileList = files.isEmpty() ? "No files found" : files.join(", ");
-        
-        qWarning() << "Model verification failed. Expected deep_sharp_stellar_AI4.pth but found:" << fileList;
-        emit finished(false, tr("Models extraction completed but verification failed - expected file 'deep_sharp_stellar_AI4.pth' not found. Files extracted: %1").arg(fileList));
+
+        qWarning() << "Model verification failed. Expected" << SENTINEL_MODEL_FILE
+                   << "but found:" << fileList;
+
+        emit finished(false,
+            tr("Models extraction completed but verification failed - "
+               "expected file '%1' not found. Files extracted: %2")
+               .arg(SENTINEL_MODEL_FILE, fileList));
     }
 }
 
-// ============================================================================
-// ModelDownloader (main-thread wrapper)
-// ============================================================================
+/* ============================================================================
+ * ModelDownloader Implementation
+ * ============================================================================ */
 
-ModelDownloader::ModelDownloader(QObject* parent) : QObject(parent) {}
+ModelDownloader::ModelDownloader(QObject* parent)
+    : QObject(parent)
+{
+}
 
-ModelDownloader::~ModelDownloader() {
+ModelDownloader::~ModelDownloader()
+{
+    /* Ensure worker thread is properly terminated */
     if (m_thread) {
         m_thread->quit();
+
         if (!m_thread->wait(5000)) {
             m_thread->terminate();
             m_thread->wait();
@@ -603,49 +824,86 @@ ModelDownloader::~ModelDownloader() {
     }
 }
 
-QString ModelDownloader::modelsRoot() {
-    QString dataDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+/* ----------------------------------------------------------------------------
+ * Static Utility Methods
+ * ---------------------------------------------------------------------------- */
+
+QString ModelDownloader::modelsRoot()
+{
+    QString dataDir = QStandardPaths::writableLocation(
+        QStandardPaths::GenericDataLocation);
+
     QString path = dataDir + "/TStar/models";
     QDir().mkpath(path);
+
     return path;
 }
 
-QString ModelDownloader::cosmicClarityRoot() {
+QString ModelDownloader::cosmicClarityRoot()
+{
     QString path = modelsRoot() + "/CosmicClarity";
     QDir().mkpath(path);
+
     return path;
 }
 
-bool ModelDownloader::modelsInstalled() {
-    QString sentinel = cosmicClarityRoot() + "/deep_sharp_stellar_AI4.pth";
-    return QFile::exists(sentinel);
+bool ModelDownloader::modelsInstalled()
+{
+    QString sentinelPath = cosmicClarityRoot() + "/" + SENTINEL_MODEL_FILE;
+    return QFile::exists(sentinelPath);
 }
 
-void ModelDownloader::startDownload() {
-    if (m_thread) return; // already running
+/* ----------------------------------------------------------------------------
+ * Download Control
+ * ---------------------------------------------------------------------------- */
 
+void ModelDownloader::startDownload()
+{
+    /* Prevent multiple concurrent downloads */
+    if (m_thread) {
+        return;
+    }
+
+    /* Create worker and thread */
     m_thread = new QThread(this);
     m_worker = new ModelDownloaderWorker();
     m_worker->moveToThread(m_thread);
 
-    connect(m_thread, &QThread::started, m_worker, &ModelDownloaderWorker::run);
-    connect(m_worker, &ModelDownloaderWorker::progress, this, &ModelDownloader::progress);
-    connect(m_worker, &ModelDownloaderWorker::finished, this, [this](bool ok, const QString& msg) {
-        emit finished(ok, msg);
-        m_thread->quit();
-    });
-    connect(m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
-    connect(m_thread, &QThread::finished, m_thread, &QObject::deleteLater);
-    connect(m_worker, &ModelDownloaderWorker::progressValue, this, &ModelDownloader::progressValue);
+    /* Connect thread lifecycle */
+    connect(m_thread, &QThread::started,
+            m_worker, &ModelDownloaderWorker::run);
+
+    /* Forward worker signals */
+    connect(m_worker, &ModelDownloaderWorker::progress,
+            this, &ModelDownloader::progress);
+
+    connect(m_worker, &ModelDownloaderWorker::progressValue,
+            this, &ModelDownloader::progressValue);
+
+    connect(m_worker, &ModelDownloaderWorker::finished,
+            this, [this](bool ok, const QString& msg) {
+                emit finished(ok, msg);
+                m_thread->quit();
+            });
+
+    /* Clean up when thread finishes */
+    connect(m_thread, &QThread::finished,
+            m_worker, &QObject::deleteLater);
+
+    connect(m_thread, &QThread::finished,
+            m_thread, &QObject::deleteLater);
+
     connect(m_thread, &QThread::finished, this, [this]() {
         m_thread = nullptr;
         m_worker = nullptr;
     });
 
+    /* Start the download */
     m_thread->start();
 }
 
-void ModelDownloader::cancel() {
+void ModelDownloader::cancel()
+{
     if (m_worker) {
         m_worker->cancel();
     }
