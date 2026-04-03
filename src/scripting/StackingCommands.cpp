@@ -1843,7 +1843,7 @@ bool StackingCommands::cmdConvert(const ScriptCommand& cmd)
 #if defined(Q_OS_LINUX)
                         static void callback(void*, const char*, const int) {}
 #else
-                        static void callback(void*, const char* const INT64) {}
+                        static void callback(void*, const char*, const INT64) {}
 #endif
                     };
                     libraw_set_dataerror_handler(
