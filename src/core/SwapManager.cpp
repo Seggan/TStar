@@ -111,7 +111,7 @@ double SwapManager::getMemoryUsagePercent()
 #else
     // Linux implementation
     long pages       = sysconf(_SC_PHYS_PAGES);
-    long avail_pages = sysconf(_SC_AV_PHYS_PAGES);
+    long avail_pages = sysconf(_SC_AVPHYS_PAGES);
     long page_size   = sysconf(_SC_PAGESIZE);
 
     if (pages <= 0 || page_size <= 0) return 0.0;
