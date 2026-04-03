@@ -14,9 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
-        uses: eclipse-score/apt-install@main
-        with:
-          packages: build-essential libgl1-mesa-dev cmake clazy g++ ninja-build pkg-config libopencv-dev libgsl-dev libcfitsio-dev libomp-dev libmd4c-dev liblcms2-dev libcurl4-gnutls-dev liblz4-dev libzstd-dev libraw-dev imagemagick
+        run: |
+          sudo apt update && sudo apt install -y build-essential libgl1-mesa-dev cmake clazy g++ ninja-build pkg-config libopencv-dev libgsl-dev libcfitsio-dev libomp-dev libmd4c-dev liblcms2-dev libcurl4-gnutls-dev liblz4-dev libzstd-dev libraw-dev imagemagick
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
