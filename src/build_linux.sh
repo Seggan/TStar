@@ -53,24 +53,17 @@ fi
 
 # --- 1. INSTALL PREREQUISITES ---
 echo ""
-echo "[STEP 1] Installing prerequisites..."
+echo "[STEP 1] Checking prerequisites..."
 
 # Check other dependencies
 DEPS=(build-essential libgl1-mesa-dev qt6-base-dev qt6-svg-dev qt6-tools-dev cmake clazy g++ ninja-build pkg-config libopencv-dev libgsl-dev libcfitsio-dev libomp-dev libmd4c-dev liblcms2-dev)
 for dep in "${DEPS[@]}"; do
     if ! dpkg -l "$dep" > /dev/null; then
         echo "[WARNING] $dep not found. Install with: sudo apt install $dep"
-        NOT_FOUND_DEPS=1
     else
         echo "  - $dep: OK"
     fi
 done
-
-if [ "$NOT_FOUND_DEPS" -eq 1 ]; then
-    echo ""
-    echo "[ERROR] Some dependencies are missing. Please install them and re-run the script."
-    exit 1
-fi
 
 # Optional deps
 for dep in liblz4-dev libzstd-dev libraw-dev; do
