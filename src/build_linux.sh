@@ -113,11 +113,11 @@ fi
 if [ -f "$BUILD_DIR/CMakeCache.txt" ] && [ $CLEAN_MODE -eq 0 ]; then
     echo "[INFO] CMakeCache.txt found. Skipping configuration."
 else
+    QT_PREFIX=$(qmake6 -query QT_INSTALL_PREFIX)
     "$CMAKE_CMD" -S . -B "$BUILD_DIR" \
         -G "$GENERATOR" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
         -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
-        -DCMAKE_OSX_DEPLOYMENT_TARGET="11.0" \
         -DENABLE_LTO="$LTO_MODE"
     
     if [ $? -ne 0 ]; then
